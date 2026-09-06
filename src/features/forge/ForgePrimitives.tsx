@@ -24,7 +24,7 @@ const FORGE_DARK = '#0A0B08';
 
 export function ForgeGrid({ color = FORGE_INK }: { color?: string }) {
   return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFillObject, styles.noPointerEvents]}>
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.noPointerEvents]}>
       {Array.from({ length: 14 }, (_, index) => (
         <View key={`h-${index}`} style={[styles.gridHorizontal, { backgroundColor: color, top: `${index * 8}%` }]} />
       ))}

@@ -2,7 +2,7 @@
 
 **A house-scale cooperative escape room in which every family phone becomes a different physical prop.**
 
-HOUSEWIRE is a complete Expo/React Native game for two to four people in the same home. Players do not answer bonding prompts or take turns on one screen. They hear different signals, hold private decoder fragments, scan one another's phones, carry devices between pre-cleared stations, route one-time voice bursts, and synchronize physical finales. The family bond is strengthened mechanically: the game is only solvable when people listen accurately, make their private information useful, recover from mistakes, and act together.
+HOUSEWIRE is a complete Expo SDK 57 / React Native game for two to four people in the same home. Players do not answer bonding prompts or take turns on one screen. They hear different signals, hold private decoder fragments, scan one another's phones, carry devices between pre-cleared stations, route one-time voice bursts, and synchronize physical finales. The family bond is strengthened mechanically: the game is only solvable when people listen accurately, make their private information useful, recover from mistakes, and act together.
 
 The app also includes a full one-phone rehearsal. It runs every role and every validator locally, clearly labels simulated family phones, and never requires a backend or API key.
 

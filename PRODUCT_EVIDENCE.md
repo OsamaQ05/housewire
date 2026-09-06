@@ -60,9 +60,9 @@ HOUSEWIRE sits inside several established traditions. The comparisons below desc
 
 ## Technical feasibility sources
 
-- [Expo SDK 54 Camera documentation](https://docs.expo.dev/versions/v54.0.0/sdk/camera/) documents `CameraView`, explicit camera permissions, and QR/barcode callbacks across Android, iOS, and web. HOUSEWIRE mounts one scanner only after a user press and retains manual entry after denial or mount failure.
-- [Expo SDK 54 DeviceMotion documentation](https://docs.expo.dev/versions/v54.0.0/sdk/devicemotion/) documents the motion stream used by the local calibration and rolling classifier. Actual classification thresholds, confidence rules, and fallbacks are HOUSEWIRE implementation choices and still require device-diverse field calibration.
-- [Expo SDK 54 Audio documentation](https://docs.expo.dev/versions/v54.0.0/sdk/audio/) documents explicit recording permissions, recording, and playback. HOUSEWIRE uses it only for a short player-triggered voice burst and local relative sound-pressure classification; neither path transcribes speech.
+- [Expo SDK 57 Camera documentation](https://docs.expo.dev/versions/v57.0.0/sdk/camera/) documents `CameraView`, explicit camera permissions, and QR/barcode callbacks across Android, iOS, and web. HOUSEWIRE mounts one scanner only after a user press and retains manual entry after denial or mount failure.
+- [Expo SDK 57 DeviceMotion documentation](https://docs.expo.dev/versions/v57.0.0/sdk/devicemotion/) documents the motion stream used by the local calibration and rolling classifier. Actual classification thresholds, confidence rules, and fallbacks are HOUSEWIRE implementation choices and still require device-diverse field calibration.
+- [Expo SDK 57 Audio documentation](https://docs.expo.dev/versions/v57.0.0/sdk/audio/) documents explicit recording permissions, recording, and playback. HOUSEWIRE uses it only for a short player-triggered voice burst and local relative sound-pressure classification; neither path transcribes speech.
 
 These sources establish API feasibility, not gameplay quality or sensor accuracy on every phone.
 

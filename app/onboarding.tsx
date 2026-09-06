@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: 280,
   },
-  houseImage: { ...StyleSheet.absoluteFillObject },
+  houseImage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   lens: { alignItems: 'center', backgroundColor: 'rgba(7,8,6,0.72)', borderRadius: 52, borderWidth: 2, height: 104, justifyContent: 'center', width: 104 },
   phone: {
     alignItems: 'center',

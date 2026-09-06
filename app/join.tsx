@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   scannerBody: { fontSize: 14, lineHeight: 20 },
   scannerPanel: { bottom: 0, gap: 5, left: 0, paddingBottom: 40, paddingHorizontal: 22, paddingTop: 22, position: 'absolute', right: 0 },
   scannerScreen: { flex: 1 },
-  scannerShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(7,8,6,0.28)', pointerEvents: 'none' },
+  scannerShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(7,8,6,0.28)', pointerEvents: 'none' },
   scannerTitle: { fontSize: 37, lineHeight: 38 },
   scannerTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 48 },
   scanSub: { fontSize: 13 },

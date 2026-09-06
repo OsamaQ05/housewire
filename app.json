@@ -8,7 +8,6 @@
     "scheme": "housewire",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0D0C",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.housewire.mobile",
@@ -25,7 +24,6 @@
         "foregroundImage": "./assets/images/icon.png"
       },
       "package": "app.housewire.mobile",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -62,11 +60,14 @@
           "backgroundColor": "#0A0D0C"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }

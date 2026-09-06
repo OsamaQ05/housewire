@@ -12,7 +12,7 @@ import {
   SplineSansMono_400Regular,
   SplineSansMono_600SemiBold,
 } from '@expo-google-fonts/spline-sans-mono';
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';

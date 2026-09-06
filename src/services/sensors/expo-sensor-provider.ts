@@ -1,5 +1,4 @@
 import { DeviceMotion, LightSensor } from 'expo-sensors';
-import type { EventSubscription } from 'expo-modules-core';
 import type { Capability } from '../../domain/types';
 import type {
   AudioLevelSample,
@@ -9,6 +8,8 @@ import type {
   SensorProviderOptions,
   SensorStream,
 } from './types';
+
+type EventSubscription = { remove(): void };
 
 /**
  * Expo-compatible raw stream provider. Microphone metering is pushed in from
