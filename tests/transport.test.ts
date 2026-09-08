@@ -116,7 +116,7 @@ function createSilentDirectSocket(): WebSocketLike {
       return readyState;
     },
     send(data: string) {
-      const message = JSON.parse(data) as { clientId?: string; sessionId?: string; type?: string };
+      const message = JSON.parse(data) as { clientId?: string; role?: string; sessionId?: string; type?: string };
       if (message.type !== 'join') return;
       queueMicrotask(() => emit('message', {
         data: JSON.stringify({
@@ -125,6 +125,8 @@ function createSilentDirectSocket(): WebSocketLike {
           clientId: message.clientId,
           latestSequence: 0,
           roomEpoch: 'room-silent',
+          role: message.role,
+          resumeCredential: 'A'.repeat(43),
           capabilities: ['direct-v1'],
           maximumMessageBytes: 140 * 1024,
           serverTime: Date.now(),

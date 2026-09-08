@@ -43,6 +43,7 @@ export interface ForgeRole {
 
 export type ForgeCluePayload =
   | { kind: 'text'; text: string }
+  | { kind: 'riddle-fragment'; fragmentId: string; text: string }
   | { kind: 'sequence'; items: readonly string[] }
   | { kind: 'mapping'; pairs: readonly { left: string; right: string }[] }
   | { kind: 'grid-edges'; edges: readonly (readonly [number, number])[] }
@@ -79,6 +80,18 @@ export interface DistributedOrderMechanic {
   kind: 'distributed-order';
   tokens: readonly { id: string; label: string }[];
   adjacentConstraints: readonly (readonly [string, string])[];
+}
+
+export interface SplitRiddleCandidate {
+  id: string;
+  label: string;
+  sigil: string;
+}
+
+export interface SplitRiddleMechanic {
+  kind: 'split-riddle';
+  candidates: readonly SplitRiddleCandidate[];
+  fragmentCount: 3 | 4;
 }
 
 export interface SymbolLockMechanic {
@@ -131,6 +144,7 @@ export interface MotionSyncMechanic {
 
 export type ForgeMechanic =
   | DistributedOrderMechanic
+  | SplitRiddleMechanic
   | SymbolLockMechanic
   | PrivateRelayMechanic
   | RouteGridMechanic
@@ -138,6 +152,7 @@ export type ForgeMechanic =
 
 export type ForgePlayerMechanic =
   | Omit<DistributedOrderMechanic, 'adjacentConstraints'>
+  | SplitRiddleMechanic
   | SymbolLockMechanic
   | PrivateRelayMechanic
   | Omit<RouteGridMechanic, 'openEdges'>
@@ -148,6 +163,7 @@ export type ForgePlayerMechanic =
 
 export type ForgeStageSolution =
   | { kind: 'sequence'; answer: readonly string[] }
+  | { kind: 'word'; answer: string }
   | { kind: 'code'; answer: string }
   | {
       kind: 'relay';
@@ -208,7 +224,7 @@ export interface ForgeRecipe {
 export interface ForgeCase {
   id: string;
   schemaVersion: 1;
-  generatorVersion: 'housewire-local-forge-v1';
+  generatorVersion: 'housewire-local-forge-v1' | 'housewire-local-forge-v2';
   providerId: string;
   seed: string | number;
   effectiveSeed: number;
@@ -235,6 +251,7 @@ export interface ForgeCase {
 
 export type ForgeStageSubmission =
   | { kind: 'sequence'; value: readonly string[] }
+  | { kind: 'word'; value: string }
   | { kind: 'code'; value: string }
   | {
       kind: 'relay';

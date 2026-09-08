@@ -37,7 +37,9 @@ type SoundName =
   | 'wordWindow'
   | 'wordOrbit'
   | 'deadAirOpen'
-  | 'nightGlassOpen';
+  | 'nightGlassOpen'
+  | 'circuitShort'
+  | 'circuitLong';
 
 const sources = {
   switch: require('@/assets/audio/switch.wav'),
@@ -65,6 +67,8 @@ const sources = {
   wordOrbit: require('@/assets/audio/word-orbit.wav'),
   deadAirOpen: require('@/assets/audio/dead-air-open.wav'),
   nightGlassOpen: require('@/assets/audio/night-glass-open.wav'),
+  circuitShort: require('@/assets/audio/circuit-short.wav'),
+  circuitLong: require('@/assets/audio/circuit-long.wav'),
 } as const;
 
 interface HousewireSoundValue {
@@ -106,6 +110,8 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
   const wordOrbitPlayer = useAudioPlayer(sources.wordOrbit);
   const deadAirOpenPlayer = useAudioPlayer(sources.deadAirOpen);
   const nightGlassOpenPlayer = useAudioPlayer(sources.nightGlassOpen);
+  const circuitShortPlayer = useAudioPlayer(sources.circuitShort);
+  const circuitLongPlayer = useAudioPlayer(sources.circuitLong);
   const mountedRef = useRef(true);
   const audioReadyRef = useRef(false);
   const requestGenerationRef = useRef<Partial<Record<SoundName, number>>>({});
@@ -157,6 +163,8 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
     wordOrbit: wordOrbitPlayer,
     deadAirOpen: deadAirOpenPlayer,
     nightGlassOpen: nightGlassOpenPlayer,
+    circuitShort: circuitShortPlayer,
+    circuitLong: circuitLongPlayer,
   };
 
   const play = useCallback(

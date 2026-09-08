@@ -24,18 +24,21 @@ const CASE_ART: Readonly<Record<MissionId, number>> = {
   'line-13': require('@/assets/art/line13-house-v2.png'),
   'dead-air': require('@/assets/art/dead-air-case.png'),
   'night-glass': require('@/assets/art/night-glass-case.png'),
+  'long-table': require('@/assets/art/long-table-case.png'),
 };
 
 const CASE_NUMBER: Readonly<Record<MissionId, string>> = {
   'line-13': '01',
   'dead-air': '02',
   'night-glass': '03',
+  'long-table': '04',
 };
 
 const CASE_PROMISE: Readonly<Record<MissionId, string>> = {
   'line-13': 'A CALL FROM 13 MINUTES AHEAD',
   'dead-air': 'A PRIVATE CHANNEL INSIDE THE WALLS',
   'night-glass': 'A SECOND HOUSE INSIDE THE CAMERA',
+  'long-table': 'ONE TABLE STRETCHED ACROSS GENERATIONS',
 };
 
 export default function HomeScreen() {
@@ -49,6 +52,7 @@ export default function HomeScreen() {
   const prepareSession = useHousewireStore((state) => state.prepareSession);
   const missionStartedAt = useHousewireStore((state) => state.missionStartedAt);
   const missionInProgressId = useHousewireStore((state) => state.missionInProgressId);
+  const tutorialComplete = useHousewireStore((state) => state.tutorialComplete);
   const reducedMotion = useHousewireStore((state) => state.settings.reducedMotion);
   const [activeId, setActiveId] = useState<MissionId>(selectedMission);
   const scroller = useRef<ScrollView>(null);
@@ -88,9 +92,10 @@ export default function HomeScreen() {
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(420)} style={styles.topline}>
           <View>
             <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>HOUSEWIRE</Text>
-            <Text style={[styles.collection, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>THE BLACKLINE FILES · THREE CASES</Text>
+            <Text style={[styles.collection, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>THE BLACKLINE FILES · FOUR CASES</Text>
           </View>
           <View style={styles.utilities}>
+            <IconButton label="House modes" name="grid-outline" onPress={() => router.push('/modes')} />
             <IconButton label="Case archive" name="archive-outline" onPress={() => router.push('/archive')} />
             <IconButton label="Settings" name="options-outline" onPress={() => router.push('/settings')} />
           </View>
@@ -111,6 +116,26 @@ export default function HomeScreen() {
             <Text style={[styles.resumeAction, { color: theme.colors.ready, fontFamily: theme.typography.families.monoMedium }]}>RE-ENTER →</Text>
           </Pressable>
         ) : null}
+
+        <Pressable
+          accessibilityHint="Opens the easy four-step First Light practice case"
+          accessibilityRole="button"
+          onPress={() => {
+            play('switch', 0.46);
+            router.push('/tutorial');
+          }}
+          style={({ pressed }) => [styles.tutorialBanner, { borderColor: tutorialComplete ? theme.colors.ready : '#FFD166' }, pressed && styles.pressed]}
+        >
+          <View style={[styles.tutorialSun, { borderColor: tutorialComplete ? theme.colors.ready : '#FFD166' }]}>
+            <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="sunny-outline" size={31} />
+          </View>
+          <View style={styles.tutorialCopy}>
+            <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.monoMedium }]}>{tutorialComplete ? 'CASE 00 · READY TO REPLAY' : 'NEW HERE? START WITH CASE 00'}</Text>
+            <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>FIRST LIGHT</Text>
+            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn room communication, private clues and phone movement in four friendly steps.</Text>
+          </View>
+          <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="arrow-forward" size={23} />
+        </Pressable>
 
         <Pressable
           accessibilityHint="Creates a new locally generated five-scene escape case"
@@ -185,7 +210,7 @@ export default function HomeScreen() {
             ))}
           </ScrollView>
 
-          <View style={styles.caseDots} accessibilityLabel={`Case ${CASE_NUMBER[activeId]} of 03`}>
+          <View style={styles.caseDots} accessibilityLabel={`Case ${CASE_NUMBER[activeId]} of 04`}>
             {missions.map((mission, index) => (
               <Pressable
                 accessibilityLabel={`Select ${mission.title}`}
@@ -296,5 +321,11 @@ const styles = StyleSheet.create({
   secondaryRow: { flexDirection: 'row', gap: 10 },
   secondaryText: { fontSize: 14 },
   topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
+  tutorialBanner: { alignItems: 'center', backgroundColor: '#101713', borderLeftWidth: 3, borderRightWidth: 1, borderTopWidth: 1, borderBottomWidth: 1, flexDirection: 'row', gap: 12, marginHorizontal: 20, minHeight: 122, paddingHorizontal: 14, paddingVertical: 14 },
+  tutorialBody: { fontSize: 12, lineHeight: 17 },
+  tutorialCopy: { flex: 1, gap: 2 },
+  tutorialOverline: { fontSize: 8, letterSpacing: 1.1 },
+  tutorialSun: { alignItems: 'center', borderRadius: 30, borderWidth: 1, height: 58, justifyContent: 'center', width: 58 },
+  tutorialTitle: { fontSize: 33, lineHeight: 32 },
   utilities: { flexDirection: 'row', gap: 8 },
 });

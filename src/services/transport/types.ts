@@ -72,6 +72,19 @@ export interface SessionTransport<T = unknown, D = unknown> {
 export type RelayClientRole = 'host' | 'guest' | 'probe';
 export type RelayCapability = 'direct-v1';
 
+/**
+ * Opaque proof that a relay issued to one exact room/client/role identity.
+ * Keep this object in private client storage only; it must never be published
+ * as a session event or included in a room snapshot.
+ */
+export interface RelayResumeCredentials {
+  readonly clientId: string;
+  readonly credential: string;
+  readonly role: RelayClientRole;
+  readonly roomEpoch: string;
+  readonly sessionId: string;
+}
+
 export type ClientRelayMessage<T = unknown, D = unknown> =
   | {
       type: 'join';
@@ -79,7 +92,8 @@ export type ClientRelayMessage<T = unknown, D = unknown> =
       clientId: string;
       lastSequence: number;
       lastRoomEpoch?: string;
-      role?: RelayClientRole;
+      role: RelayClientRole;
+      resumeCredential?: string;
       capabilities?: RelayCapability[];
     }
   | { type: 'publish'; sessionId: string; clientId: string; eventId: string; clientSentAt: number; payload: T }
@@ -100,7 +114,9 @@ export type ServerRelayMessage<T = unknown, D = unknown> =
       sessionId: string;
       clientId: string;
       latestSequence: number;
-      roomEpoch?: string;
+      roomEpoch: string;
+      role: RelayClientRole;
+      resumeCredential: string;
       capabilities?: RelayCapability[];
       maximumMessageBytes?: number;
       serverTime: number;

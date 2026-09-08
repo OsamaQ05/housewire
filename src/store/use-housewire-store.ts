@@ -10,7 +10,7 @@ export type RoomKind =
   | 'outdoor'
   | 'other';
 
-export type MissionId = 'line-13' | 'dead-air' | 'night-glass';
+export type MissionId = 'line-13' | 'dead-air' | 'night-glass' | 'long-table';
 export type SessionMode = 'preview' | 'lan' | 'cloud';
 export type RoleId = 'relay' | 'listener' | 'navigator' | 'breaker';
 
@@ -64,6 +64,7 @@ interface HousewireSettings {
 interface HousewireState {
   hydrated: boolean;
   onboardingComplete: boolean;
+  tutorialComplete: boolean;
   householdName: string;
   rooms: HouseRoom[];
   crew: CrewNode[];
@@ -81,6 +82,7 @@ interface HousewireState {
   settings: HousewireSettings;
   setHydrated: (hydrated: boolean) => void;
   finishOnboarding: () => void;
+  completeTutorial: () => void;
   setHouseholdName: (name: string) => void;
   setRooms: (rooms: HouseRoom[]) => void;
   toggleRoomSafety: (roomId: string) => void;
@@ -167,6 +169,7 @@ const SAFE_NODE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 export const useHousewireStore = create<HousewireState>()((set) => ({
       hydrated: false,
       onboardingComplete: false,
+      tutorialComplete: false,
       householdName: 'Our house',
       rooms: defaultRooms,
       crew: defaultCrew,
@@ -184,6 +187,7 @@ export const useHousewireStore = create<HousewireState>()((set) => ({
       settings: defaultSettings,
       setHydrated: (hydrated) => set({ hydrated }),
       finishOnboarding: () => set({ onboardingComplete: true }),
+      completeTutorial: () => set({ tutorialComplete: true }),
       setHouseholdName: (householdName) => set({ householdName: householdName.trim() || 'Our house' }),
       setRooms: (rooms) => set({ rooms }),
       toggleRoomSafety: (roomId) =>
@@ -231,6 +235,7 @@ export const useHousewireStore = create<HousewireState>()((set) => ({
       resetProduct: () =>
         set({
           onboardingComplete: false,
+          tutorialComplete: false,
           householdName: 'Our house',
           rooms: defaultRooms,
           crew: defaultCrew,
@@ -253,6 +258,7 @@ const STORAGE_KEY = 'housewire-product-state-v1';
 
 interface PersistedHousewireState {
   onboardingComplete: boolean;
+  tutorialComplete: boolean;
   householdName: string;
   rooms: HouseRoom[];
   crew: CrewNode[];
@@ -273,6 +279,7 @@ function persistedSlice(state: HousewireState): PersistedHousewireState {
   return {
     householdName: state.householdName,
     onboardingComplete: state.onboardingComplete,
+    tutorialComplete: state.tutorialComplete,
     crew: state.crew,
     localNodeId: state.localNodeId,
     missionStartedAt: state.missionStartedAt,
@@ -321,11 +328,12 @@ function isPersistedState(value: unknown): value is Partial<PersistedHousewireSt
   const candidate = value as Partial<PersistedHousewireState>;
   return (
     (candidate.onboardingComplete === undefined || typeof candidate.onboardingComplete === 'boolean') &&
+    (candidate.tutorialComplete === undefined || typeof candidate.tutorialComplete === 'boolean') &&
     (candidate.householdName === undefined || typeof candidate.householdName === 'string') &&
     (candidate.rooms === undefined || Array.isArray(candidate.rooms)) &&
     (candidate.crew === undefined || (Array.isArray(candidate.crew) && candidate.crew.length <= 4 && candidate.crew.every(isCrewNode))) &&
     (candidate.selectedMission === undefined ||
-      ['line-13', 'dead-air', 'night-glass', 'live-wire', 'phase-choir'].includes(
+      ['line-13', 'dead-air', 'night-glass', 'long-table', 'live-wire', 'phase-choir'].includes(
         candidate.selectedMission as string,
       )) &&
     (candidate.sessionMode === undefined || ['preview', 'lan', 'cloud'].includes(candidate.sessionMode)) &&
@@ -339,7 +347,7 @@ function isPersistedState(value: unknown): value is Partial<PersistedHousewireSt
         candidate.missionStartedAt > 0)) &&
     (candidate.missionInProgressId === undefined ||
       candidate.missionInProgressId === null ||
-      ['line-13', 'dead-air', 'night-glass'].includes(candidate.missionInProgressId)) &&
+      ['line-13', 'dead-air', 'night-glass', 'long-table'].includes(candidate.missionInProgressId)) &&
     (candidate.missionStageIndex === undefined ||
       (typeof candidate.missionStageIndex === 'number' &&
         Number.isInteger(candidate.missionStageIndex) &&
@@ -380,11 +388,12 @@ void AsyncStorage.getItem(STORAGE_KEY)
     useHousewireStore.setState({
       householdName: parsed.householdName ?? current.householdName,
       onboardingComplete: parsed.onboardingComplete ?? current.onboardingComplete,
+      tutorialComplete: parsed.tutorialComplete ?? current.tutorialComplete,
       crew: canRestoreLiveIdentity ? crew : current.crew,
       localNodeId: canRestoreLiveIdentity ? localNodeId : current.localNodeId,
       missionStartedAt: canRestoreMission ? persistedStartedAt : null,
       missionInProgressId: canRestoreMission
-        ? (parsed.missionInProgressId ?? (parsed.selectedMission === 'dead-air' || parsed.selectedMission === 'night-glass' ? parsed.selectedMission : 'line-13'))
+        ? (parsed.missionInProgressId ?? (parsed.selectedMission === 'dead-air' || parsed.selectedMission === 'night-glass' || parsed.selectedMission === 'long-table' ? parsed.selectedMission : 'line-13'))
         : null,
       missionStageIndex:
         canRestoreMission
@@ -398,7 +407,7 @@ void AsyncStorage.getItem(STORAGE_KEY)
       results: parsed.results ?? current.results,
       rooms: parsed.rooms ?? current.rooms,
       selectedMission:
-        parsed.selectedMission === 'dead-air' || parsed.selectedMission === 'night-glass'
+        parsed.selectedMission === 'dead-air' || parsed.selectedMission === 'night-glass' || parsed.selectedMission === 'long-table'
           ? parsed.selectedMission
           : 'line-13',
       sessionCode: canRestoreLiveIdentity ? (parsed.sessionCode ?? current.sessionCode) : null,

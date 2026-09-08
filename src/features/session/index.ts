@@ -6,5 +6,6 @@ export * from './use-housewire-session';
 export * from './use-shared-mission-coordinator';
 export * from './HousewireSessionProvider';
 export * from './join-room';
+export * from './relay-resume-vault';
 export * from './escape-mission-coordinator';
 export * from './use-escape-case-coordinator';

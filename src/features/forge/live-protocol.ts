@@ -19,6 +19,7 @@ const vocalCue = z.enum(['NONE', 'LOW_HUM', 'SHORT_TONE']);
 
 const submission = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('sequence'), value: z.array(safeId).max(8) }).strict(),
+  z.object({ kind: z.literal('word'), value: safeId }).strict(),
   z.object({ kind: z.literal('code'), value: z.string().max(12) }).strict(),
   z.object({
     kind: z.literal('relay'),

@@ -54,6 +54,7 @@ function correctSubmission(game: ForgeCase, stageIndex: number): ForgeStageSubmi
   const solution = game.stages[stageIndex].solution;
   switch (solution.kind) {
     case 'sequence': return { kind: 'sequence', value: solution.answer };
+    case 'word': return { kind: 'word', value: solution.answer };
     case 'code': return { kind: 'code', value: solution.answer };
     case 'relay': return { kind: 'relay', rounds: solution.rounds };
     case 'route': return { kind: 'route', value: solution.answer };
@@ -108,15 +109,15 @@ describe('generated live Case Forge coordinator', () => {
     expect(otherPrivateClue).toBeDefined();
     expect(serialized).not.toContain(otherPrivateClue!.id);
 
-    const orderMechanic = projection.stages[0].mechanic;
-    const routeMechanic = projection.stages[3].mechanic;
-    const syncMechanic = projection.stages[4].mechanic;
-    expect(orderMechanic.kind).toBe('distributed-order');
-    expect(routeMechanic.kind).toBe('route-grid');
-    expect(syncMechanic.kind).toBe('motion-sync');
-    expect(orderMechanic).not.toHaveProperty('adjacentConstraints');
-    expect(routeMechanic).not.toHaveProperty('openEdges');
-    if (syncMechanic.kind === 'motion-sync') {
+    const orderMechanic = projection.stages.find((stage) => stage.mechanic.kind === 'distributed-order')?.mechanic;
+    const routeMechanic = projection.stages.find((stage) => stage.mechanic.kind === 'route-grid')?.mechanic;
+    const riddleMechanic = projection.stages.find((stage) => stage.mechanic.kind === 'split-riddle')?.mechanic;
+    const syncMechanic = projection.stages.find((stage) => stage.mechanic.kind === 'motion-sync')?.mechanic;
+    if (orderMechanic) expect(orderMechanic).not.toHaveProperty('adjacentConstraints');
+    if (routeMechanic) expect(routeMechanic).not.toHaveProperty('openEdges');
+    expect(riddleMechanic?.kind).toBe('split-riddle');
+    expect(syncMechanic?.kind).toBe('motion-sync');
+    if (syncMechanic?.kind === 'motion-sync') {
       expect(syncMechanic.assignments).toHaveLength(1);
       expect(syncMechanic.assignments[0]?.playerId).toBe(projection.role.playerId);
       expect(syncMechanic.participantCount).toBe(game.playerCount);
@@ -126,7 +127,9 @@ describe('generated live Case Forge coordinator', () => {
   it('separates camera marker display from the decoder scanner on different phones', () => {
     const game = makeGame();
     const state = readyRuntime(game);
-    const symbolStage = game.stages[1];
+    const symbolStage = game.stages.find((stage) => stage.mechanic.kind === 'symbol-lock');
+    if (!symbolStage) throw new Error('Expected a symbol stage.');
+    const symbolIndex = symbolStage.index;
     const marker = symbolStage.clues.find((clue) => clue.payload.kind === 'camera-marker');
     if (!marker || marker.payload.kind !== 'camera-marker') throw new Error('Expected a camera marker.');
     const suffix = marker.id.replace('marker-', '');
@@ -140,23 +143,24 @@ describe('generated live Case Forge coordinator', () => {
 
     const ownerProjection = forgePlayerProjectionForNode(game, state, ownerNode)!;
     const decoderProjection = forgePlayerProjectionForNode(game, state, decoderNode)!;
-    const ownerClue = ownerProjection.stages[1].clues.find((clue) => clue.id === marker.id);
-    const scannerClue = decoderProjection.stages[1].clues.find((clue) => clue.id === `scanner-${suffix}`);
+    const ownerClue = ownerProjection.stages[symbolIndex].clues.find((clue) => clue.id === marker.id);
+    const scannerClue = decoderProjection.stages[symbolIndex].clues.find((clue) => clue.id === `scanner-${suffix}`);
     expect(ownerClue?.payload).toEqual({ kind: 'camera-display', markerToken: marker.payload.markerToken });
     expect(scannerClue?.payload).toEqual({
       kind: 'camera-scanner',
       markerToken: marker.payload.markerToken,
       symbol: marker.payload.symbol,
     });
-    expect(ownerProjection.stages[1].clues.some((clue) => clue.id === `scanner-${suffix}`)).toBe(false);
-    expect(decoderProjection.stages[1].clues.some((clue) => clue.id === marker.id)).toBe(false);
+    expect(ownerProjection.stages[symbolIndex].clues.some((clue) => clue.id === `scanner-${suffix}`)).toBe(false);
+    expect(decoderProjection.stages[symbolIndex].clues.some((clue) => clue.id === marker.id)).toBe(false);
   });
 
   it('keeps a manual-seal scanner beside the marker in a one-phone live case', () => {
     const game = makeGame(1);
     const state = readyRuntime(game);
     const projection = forgePlayerProjectionForNode(game, state, 'host')!;
-    const symbolClues = projection.stages[1].clues;
+    const symbolClues = projection.stages.find((stage) => stage.mechanic.kind === 'symbol-lock')?.clues;
+    if (!symbolClues) throw new Error('Expected a symbol stage.');
     expect(symbolClues.some((clue) => clue.payload.kind === 'camera-display')).toBe(true);
     expect(symbolClues.some((clue) => clue.payload.kind === 'camera-scanner')).toBe(true);
   });
@@ -165,26 +169,30 @@ describe('generated live Case Forge coordinator', () => {
     const game = makeGame();
     let state = readyRuntime(game);
     state = startForgeLiveRun(state, game, state.assignments.map((item) => item.nodeId), 2_000);
-    const stage = game.stages[0];
+    const stage = game.stages.find((candidate) => candidate.mechanic.kind === 'split-riddle');
+    if (!stage) throw new Error('Expected a split-riddle stage.');
+    state = { ...state, stageIndex: stage.index };
     const submitter = state.assignments.find((item) => stage.submitterPlayerIds.includes(item.playerId))!;
-    const spoofed = reduceForgeLiveSubmission(state, game, 'unassigned', 0, correctSubmission(game, 0), 2_100);
+    const spoofed = reduceForgeLiveSubmission(state, game, 'unassigned', stage.index, correctSubmission(game, stage.index), 2_100);
     expect(spoofed.result.code).toBe('WRONG_ACTOR');
     expect(spoofed.state).toBe(state);
-    const accepted = reduceForgeLiveSubmission(state, game, submitter.nodeId, 0, correctSubmission(game, 0), 2_100);
+    const accepted = reduceForgeLiveSubmission(state, game, submitter.nodeId, stage.index, correctSubmission(game, stage.index), 2_100);
     expect(accepted.result.accepted).toBe(true);
-    expect(accepted.state.stageIndex).toBe(1);
+    expect(accepted.state.stageIndex).toBe(stage.index + 1);
   });
 
   it('collects one synchronized proof per assigned phone and expires stale proof windows', () => {
     const game = makeGame();
+    const syncIndex = game.stages.findIndex((stage) => stage.mechanic.kind === 'motion-sync');
+    if (syncIndex < 0) throw new Error('Expected the generated sync finale.');
     let state = readyRuntime(game);
-    state = { ...startForgeLiveRun(state, game, state.assignments.map((item) => item.nodeId), 2_000), stageIndex: 4, revision: 8 };
-    const solution = game.stages[4].solution;
+    state = { ...startForgeLiveRun(state, game, state.assignments.map((item) => item.nodeId), 2_000), stageIndex: syncIndex, revision: 8 };
+    const solution = game.stages[syncIndex].solution;
     if (solution.kind !== 'sync') throw new Error('Expected the generated sync finale.');
     for (let index = 0; index < state.assignments.length; index += 1) {
       const assignment = state.assignments[index];
       const expected = solution.assignments.find((item) => item.playerId === assignment.playerId)!;
-      const reduced = reduceForgeLiveSubmission(state, game, assignment.nodeId, 4, {
+      const reduced = reduceForgeLiveSubmission(state, game, assignment.nodeId, syncIndex, {
         kind: 'sync',
         startedAt: 0,
         completedAt: 0,
@@ -196,11 +204,11 @@ describe('generated live Case Forge coordinator', () => {
     expect(state.stageIndex).toBe(5);
 
     let stale = readyRuntime(game);
-    stale = { ...startForgeLiveRun(stale, game, stale.assignments.map((item) => item.nodeId), 2_000), stageIndex: 4, revision: 8 };
+    stale = { ...startForgeLiveRun(stale, game, stale.assignments.map((item) => item.nodeId), 2_000), stageIndex: syncIndex, revision: 8 };
     for (let index = 0; index < stale.assignments.length; index += 1) {
       const assignment = stale.assignments[index];
       const expected = solution.assignments.find((item) => item.playerId === assignment.playerId)!;
-      stale = reduceForgeLiveSubmission(stale, game, assignment.nodeId, 4, {
+      stale = reduceForgeLiveSubmission(stale, game, assignment.nodeId, syncIndex, {
         kind: 'sync', startedAt: 0, completedAt: 0, proofs: [{ ...expected, evidenceMode: 'manual' }],
       }, index === 0 ? 3_000 : 3_000 + solution.windowMs + index * 20).state;
     }
@@ -210,9 +218,11 @@ describe('generated live Case Forge coordinator', () => {
 
   it('aggregates only recipient-bound relay rounds on the host without snapshotting tokens', () => {
     const game = makeGame();
+    const relayIndex = game.stages.findIndex((stage) => stage.mechanic.kind === 'private-relay');
+    if (relayIndex < 0) throw new Error('Expected the private relay stage.');
     let state = readyRuntime(game);
-    state = { ...startForgeLiveRun(state, game, state.assignments.map((item) => item.nodeId), 2_000), stageIndex: 2, revision: 5 };
-    const solution = game.stages[2].solution;
+    state = { ...startForgeLiveRun(state, game, state.assignments.map((item) => item.nodeId), 2_000), stageIndex: relayIndex, revision: 5 };
+    const solution = game.stages[relayIndex].solution;
     if (solution.kind !== 'relay') throw new Error('Expected the private relay stage.');
     const recipients = [...new Set(solution.rounds.map((round) => round.recipientPlayerId))];
 
@@ -220,14 +230,14 @@ describe('generated live Case Forge coordinator', () => {
       const nodeId = state.assignments.find((assignment) => assignment.playerId === recipientPlayerId)?.nodeId;
       if (!nodeId) throw new Error('Expected every relay recipient to have one phone.');
       const ownRounds = solution.rounds.filter((round) => round.recipientPlayerId === recipientPlayerId);
-      const reduced = reduceForgeLiveSubmission(state, game, nodeId, 2, { kind: 'relay', rounds: ownRounds }, 3_000 + index);
+      const reduced = reduceForgeLiveSubmission(state, game, nodeId, relayIndex, { kind: 'relay', rounds: ownRounds }, 3_000 + index);
       expect(reduced.result.code).toBe(index === recipients.length - 1 ? 'ACCEPTED' : 'INCOMPLETE');
       state = reduced.state;
       const publicSnapshot = JSON.stringify(forgeLiveSnapshot(state));
       for (const answer of solution.rounds) expect(publicSnapshot).not.toContain(answer.token);
     });
 
-    expect(state.stageIndex).toBe(3);
+    expect(state.stageIndex).toBe(relayIndex + 1);
     expect(state.relayAnswers).toEqual([]);
   });
 

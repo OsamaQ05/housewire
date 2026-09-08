@@ -121,8 +121,13 @@ describe('Case Forge providers and service', () => {
     expect(preservesForgeMechanicalContract(base, unsafe)).toBe(false);
 
     const answerChange = JSON.parse(JSON.stringify(narrative)) as ForgeCase;
-    const solution = answerChange.stages[1].solution;
-    if (solution.kind === 'code') (solution as { answer: string }).answer = '999';
+    const riddleStage = answerChange.stages.find((stage) => stage.solution.kind === 'word');
+    if (!riddleStage || riddleStage.solution.kind !== 'word' || riddleStage.mechanic.kind !== 'split-riddle') {
+      throw new Error('Expected a generated split-riddle stage.');
+    }
+    const originalAnswer = riddleStage.solution.answer;
+    (riddleStage.solution as { answer: string }).answer = riddleStage.mechanic.candidates
+      .find((candidate) => candidate.id !== originalAnswer)!.id;
     expect(preservesForgeMechanicalContract(base, answerChange)).toBe(false);
   });
 

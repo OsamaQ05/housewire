@@ -26,7 +26,7 @@ import { EscapeCaseBriefing } from '@/src/features/cases/EscapeCaseBriefing';
 
 export default function BriefingScreen() {
   const selectedMission = useHousewireStore((state) => state.selectedMission);
-  if (selectedMission === 'dead-air' || selectedMission === 'night-glass') {
+  if (selectedMission === 'dead-air' || selectedMission === 'night-glass' || selectedMission === 'long-table') {
     return <EscapeCaseBriefing missionId={selectedMission} />;
   }
   return <Line13BriefingScreen />;

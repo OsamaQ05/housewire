@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { MAXIMUM_RELAY_MESSAGE_BYTES } from '../src/services/transport/types';
 import type {
@@ -22,8 +22,14 @@ interface RelayRoom<T> {
   epoch: string;
   clients: Map<string, WebSocket>;
   hostClientId?: string;
+  identities: Map<string, RelayIdentityClaim>;
   history: TransportFrame<T>[];
   events: Map<string, TransportFrame<T>>;
+}
+
+interface RelayIdentityClaim {
+  credentialDigest: Buffer;
+  role: RelayClientRole;
 }
 
 export interface HousewireRelayOptions {
@@ -41,6 +47,7 @@ export interface RelayAddress {
 }
 
 const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const RESUME_CREDENTIAL = /^[a-zA-Z0-9_-]{43}$/;
 
 export class HousewireRelay<T = unknown, D = unknown> {
   private readonly options: HousewireRelayOptions;
@@ -129,6 +136,7 @@ export class HousewireRelay<T = unknown, D = unknown> {
         message.lastSequence,
         message.lastRoomEpoch,
         message.role,
+        message.resumeCredential,
         message.capabilities,
       );
       return;
@@ -166,15 +174,44 @@ export class HousewireRelay<T = unknown, D = unknown> {
     lastSequence: number,
     lastRoomEpoch?: string,
     requestedRole?: RelayClientRole,
+    resumeCredential?: string,
     requestedCapabilities?: RelayCapability[],
   ): void {
     this.leave(socket);
     const existingRoom = this.rooms.get(sessionId);
-    // Old clients did not identify a role. Preserve their first-client-wins
-    // behavior while all current Housewire clients make admission explicit.
-    const role = requestedRole ??
-      (!existingRoom || existingRoom.hostClientId === clientId ? 'host' : 'guest');
-    if (role !== 'host' && (!existingRoom || !this.hasActiveHost(existingRoom))) {
+    if (!requestedRole) {
+      this.rejectJoin(socket, 'ROLE_REQUIRED', 'Choose a host, guest, or probe role before joining.');
+      return;
+    }
+    const role = requestedRole;
+    const existingClaim = existingRoom?.identities.get(clientId);
+
+    if (existingClaim) {
+      if (existingClaim.role !== role) {
+        this.rejectJoin(socket, 'ROLE_MISMATCH', 'A reconnect cannot change this phone\'s room role.');
+        return;
+      }
+      if (!resumeCredential) {
+        this.rejectJoin(socket, 'RESUME_REQUIRED', 'This phone identity already exists and requires its private reconnect proof.');
+        return;
+      }
+      if (!matchesResumeCredential(existingClaim.credentialDigest, resumeCredential)) {
+        this.rejectJoin(socket, 'INVALID_RESUME', 'The reconnect proof does not match this phone identity.');
+        return;
+      }
+    } else if (resumeCredential) {
+      const roomWasReset = Boolean(lastRoomEpoch) && (!existingRoom || existingRoom.epoch !== lastRoomEpoch);
+      this.rejectJoin(
+        socket,
+        roomWasReset ? 'ROOM_RESET' : 'INVALID_RESUME',
+        roomWasReset
+          ? 'The relay restarted and no longer recognizes this private reconnect proof.'
+          : 'A reconnect proof cannot claim a different room or phone identity.',
+      );
+      return;
+    }
+
+    if (!existingClaim && role !== 'host' && (!existingRoom || !this.hasActiveHost(existingRoom))) {
       this.send(socket, {
         type: 'error',
         code: 'ROOM_NOT_FOUND',
@@ -185,10 +222,10 @@ export class HousewireRelay<T = unknown, D = unknown> {
     }
 
     if (
-      role !== 'host' &&
+      !existingClaim &&
+      role === 'guest' &&
       existingRoom &&
-      !existingRoom.clients.has(clientId) &&
-      this.activePlayerCount(existingRoom) >= 4
+      this.claimedPlayerCount(existingRoom) >= 4
     ) {
       this.send(socket, {
         type: 'error',
@@ -200,19 +237,20 @@ export class HousewireRelay<T = unknown, D = unknown> {
     }
 
     const room = existingRoom ?? this.room(sessionId);
-    if (role === 'host') {
-      const activeHost = room.hostClientId ? room.clients.get(room.hostClientId) : undefined;
-      if (activeHost && activeHost.readyState === WebSocket.OPEN) {
-        this.send(socket, {
-          type: 'error',
-          code: 'HOST_EXISTS',
-          message: 'That house code already has an active host. Wait for its connection to close before reconnecting.',
-        });
-        socket.close(4_409, 'Host already active');
+    if (!existingClaim && role === 'host') {
+      if (room.hostClientId !== undefined) {
+        this.rejectJoin(socket, 'HOST_EXISTS', 'That house code is permanently bound to its original host phone.');
         return;
       }
       room.hostClientId = clientId;
     }
+
+    const issuedCredential = existingClaim ? undefined : createResumeCredential();
+    const claim = existingClaim ?? {
+      credentialDigest: digestResumeCredential(issuedCredential!),
+      role,
+    };
+    if (!existingClaim) room.identities.set(clientId, claim);
 
     const previousSocket = room.clients.get(clientId);
     room.clients.set(clientId, socket);
@@ -230,6 +268,8 @@ export class HousewireRelay<T = unknown, D = unknown> {
       clientId,
       latestSequence: room.sequence,
       roomEpoch: room.epoch,
+      role,
+      resumeCredential: resumeCredential ?? issuedCredential!,
       capabilities: ['direct-v1'],
       maximumMessageBytes: this.maximumMessageBytes,
       serverTime: this.now(),
@@ -362,7 +402,11 @@ export class HousewireRelay<T = unknown, D = unknown> {
     const identity = this.identities.get(socket);
     if (!identity) return;
     const room = this.rooms.get(identity.sessionId);
-    if (room?.clients.get(identity.clientId) === socket) room.clients.delete(identity.clientId);
+    if (room?.clients.get(identity.clientId) === socket) {
+      room.clients.delete(identity.clientId);
+      // Probes are one-shot admission checks, not durable player identities.
+      if (identity.role === 'probe') room.identities.delete(identity.clientId);
+    }
     this.identities.delete(socket);
   }
 
@@ -373,6 +417,7 @@ export class HousewireRelay<T = unknown, D = unknown> {
         sequence: 0,
         epoch: `room-${randomUUID().replaceAll('-', '')}`,
         clients: new Map(),
+        identities: new Map(),
         history: [],
         events: new Map(),
       };
@@ -386,13 +431,15 @@ export class HousewireRelay<T = unknown, D = unknown> {
     return room.clients.get(room.hostClientId)?.readyState === WebSocket.OPEN;
   }
 
-  private activePlayerCount(room: RelayRoom<T>): number {
+  private claimedPlayerCount(room: RelayRoom<T>): number {
     let count = 0;
-    for (const socket of room.clients.values()) {
-      const identity = this.identities.get(socket);
-      if (identity && identity.role !== 'probe' && socket.readyState === WebSocket.OPEN) count += 1;
-    }
+    for (const claim of room.identities.values()) if (claim.role !== 'probe') count += 1;
     return count;
+  }
+
+  private rejectJoin(socket: WebSocket, code: string, message: string): void {
+    this.send(socket, { type: 'error', code, message });
+    socket.close(4_403, code);
   }
 
   private send(socket: WebSocket, message: ServerRelayMessage<T, D>): boolean {
@@ -429,9 +476,12 @@ function isClientRelayMessage<T, D>(value: unknown): value is ClientRelayMessage
     return (
       isSafeCounter(value.lastSequence) &&
       isOptionalSafeString(value.lastRoomEpoch) &&
-      (value.role === undefined || value.role === 'host' || value.role === 'guest' || value.role === 'probe') &&
+      (value.role === 'host' || value.role === 'guest' || value.role === 'probe') &&
+      (value.resumeCredential === undefined ||
+        (typeof value.resumeCredential === 'string' && RESUME_CREDENTIAL.test(value.resumeCredential))) &&
       (value.capabilities === undefined ||
-        (Array.isArray(value.capabilities) && value.capabilities.every((capability) => capability === 'direct-v1')))
+        (Array.isArray(value.capabilities) && value.capabilities.length <= 4 &&
+          value.capabilities.every((capability) => capability === 'direct-v1')))
     );
   }
   if (value.type === 'ping') {
@@ -453,4 +503,18 @@ function isClientRelayMessage<T, D>(value: unknown): value is ClientRelayMessage
     );
   }
   return false;
+}
+
+function createResumeCredential(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+function digestResumeCredential(credential: string): Buffer {
+  return createHash('sha256').update(credential, 'utf8').digest();
+}
+
+function matchesResumeCredential(expectedDigest: Buffer, credential: string): boolean {
+  if (!RESUME_CREDENTIAL.test(credential)) return false;
+  const candidateDigest = digestResumeCredential(credential);
+  return candidateDigest.length === expectedDigest.length && timingSafeEqual(candidateDigest, expectedDigest);
 }

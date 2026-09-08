@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compileDeadAirCase,
   compileEscapeCase,
+  compileLongTableCase,
   compileNightGlassCase,
   type DeadAirCountertoneProof,
   type DeadAirServiceScanProof,
@@ -195,7 +196,7 @@ describe('escape case compiler shared contract', () => {
         integer({ min: 2, max: 4 }),
         (seed, replayIndex, count) => {
           const nodeIds = nodes(count);
-          for (const caseId of ['dead-air', 'night-glass'] as const) {
+          for (const caseId of ['dead-air', 'night-glass', 'long-table'] as const) {
             const first = compileEscapeCase(caseId, seed, nodeIds, { replayIndex });
             const second = compileEscapeCase(caseId, seed, nodeIds, { replayIndex });
             expect(first).toEqual(second);
@@ -207,7 +208,7 @@ describe('escape case compiler shared contract', () => {
   });
 
   it('gives replay indexes their own stable generated state', () => {
-    for (const caseId of ['dead-air', 'night-glass'] as const) {
+    for (const caseId of ['dead-air', 'night-glass', 'long-table'] as const) {
       const variants = Array.from({ length: 24 }, (_, replayIndex) =>
         compileEscapeCase(caseId, 'HOUSE-13', ['a', 'b', 'c'], { replayIndex }),
       );
@@ -228,6 +229,7 @@ describe('escape case compiler shared contract', () => {
     expect(() => compileNightGlassCase(1, ['a', ' '])).toThrow(/distinct/i);
     expect(() => compileNightGlassCase(1, ['a', 'b'], { replayIndex: -1 })).toThrow(/replay/i);
     expect(() => compileNightGlassCase(1, ['a', 'b'], { replayIndex: 1.5 })).toThrow(/replay/i);
+    expect(() => compileLongTableCase(1, ['only'])).toThrow(/two to four/i);
   });
 
   it('reports complete, incomplete and mismatch prefixes without revealing the suffix', () => {

@@ -20,6 +20,7 @@ const CASE_CHECK_COPY = {
   'line-13': { eyebrow: 'BEFORE THE CALL', title: 'Wake this phone.', subtitle: 'Lift it. Turn it. That’s it.' },
   'dead-air': { eyebrow: 'BEFORE THE WALLS ANSWER', title: 'Tune this phone.', subtitle: 'Lift it. Turn it. Voice unlocks only inside its clue.' },
   'night-glass': { eyebrow: 'BEFORE THE GLASS OPENS', title: 'Make a pane.', subtitle: 'Lift it. Turn it. The lens stays closed until a door asks.' },
+  'long-table': { eyebrow: 'BEFORE MIDNIGHT SERVICE', title: 'Set this place.', subtitle: 'Lift it. Lay it flat. Camera and voice open only inside their puzzles.' },
 } as const;
 
 export default function CalibrateScreen() {

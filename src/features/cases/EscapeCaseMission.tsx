@@ -15,6 +15,8 @@ import {
   type EscapeCaseId,
 } from '@/src/domain/escape-case-compiler';
 import { assessStagePressure } from '@/src/domain/director';
+import { AdaptiveGuideButton, AdaptiveGuidePanel } from '@/src/features/director';
+import { HouseLineDock, useHouseLine } from '@/src/features/comms';
 import {
   escapeStageRequiresEveryNode,
   useEscapeCaseCoordinator,
@@ -29,6 +31,7 @@ import { formatClock } from '@/src/utils/format';
 
 import { ActionButton, StagePanel, TechnicalLabel } from './CaseMissionPrimitives';
 import { DeadAirStageView, type PrivateWordDelivery } from './DeadAirStages';
+import { LongTableStageView } from './LongTableStages';
 import { NightGlassStageView } from './NightGlassStages';
 
 const CASE_META = {
@@ -41,6 +44,11 @@ const CASE_META = {
     accent: '#9AE9F5',
     minutes: 18,
     stageNames: ['THRESHOLD', 'PARALLAX DOORS', 'FLOORPLAN', 'CORRIDOR', 'FINAL FOLD'],
+  },
+  'long-table': {
+    accent: '#E4A84A',
+    minutes: 22,
+    stageNames: ['TAKE YOUR PLACES', 'STOLEN PHOTOGRAPH', 'WHAT THE HOUSE KEPT', 'SERVICE PASS', 'LAST BELL'],
   },
 } as const;
 
@@ -55,9 +63,16 @@ const HINTS = {
   'night-glass': [
     ['Each phone is one segment of the red edge.', 'Hold the assigned gross pose.', 'All panes must lock inside one window.'],
     ['Frame shows, Hinge moves, Watcher sees.', 'The watcher scans the frame after the hinge locks.', 'Only the camera reveals the final bearing.'],
-    ['Labels, walls, and rotation are on different phones.', 'Rotate the wall layer before tracing.', 'Only connected neighboring cells may follow each other.'],
+    ['Room names, doors, rotation, and endpoints are on different phones.', 'Undo the glass turn before describing the doorways.', 'Touch named neighboring rooms from START to EXIT.'],
     ['Move with the screen dimmed; scan only after stopping.', 'The anchor phone displays the next seal.', 'A manual seal preserves the same ordered handoff.'],
     ['First lock the assigned pose.', 'Then hold the red edge.', 'Every required pane must close together.'],
+  ],
+  'long-table': [
+    ['Each object belongs to a different decade.', 'Describe the clue instead of showing your screen.', 'The service ledger reads oldest to newest; then every phone lies flat.'],
+    ['Every torn corner describes one hidden object.', 'The rule keeper owns the compass order.', 'Place the four solved objects into the photo in that order.'],
+    ['The seeker finds; a different person witnesses.', 'The camera is only a live frame and saves nothing.', 'Walk over and inspect the real object before confirming.'],
+    ['Courier and destination change after every pass.', 'Lock the assigned pose before moving.', 'Stop beside the named person, then scan their place seal.'],
+    ['Position first, sound second, rim last.', 'REST is a real sound assignment.', 'Every phone must hold the rim inside eight seconds.'],
   ],
 } as const;
 
@@ -89,6 +104,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   const sessionCode = useHousewireStore((state) => state.sessionCode);
   const localNodeId = useHousewireStore((state) => state.localNodeId);
   const crew = useHousewireStore((state) => state.crew);
+  const rooms = useHousewireStore((state) => state.rooms);
   const settings = useHousewireStore((state) => state.settings);
   const missionStartedAt = useHousewireStore((state) => state.missionStartedAt);
   const persistedStageIndex = useHousewireStore((state) => state.missionStageIndex);
@@ -122,6 +138,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   const [paused, setPaused] = useState(false);
   const [overtimeAccepted, setOvertimeAccepted] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
+  const [lineOpen, setLineOpen] = useState(false);
   const [privateDeliveries, setPrivateDeliveries] = useState<PrivateWordDelivery[]>([]);
   const [retries, setRetries] = useState(persistedRetries);
   const [stageAttempts, setStageAttempts] = useState(0);
@@ -136,6 +153,22 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   const stageEnteredAtRef = useRef(Date.now());
   const autoHintedStageRef = useRef<string | undefined>(undefined);
   const pausedAtRef = useRef<number | undefined>(undefined);
+  const houseLinePeers = useMemo(() => session.peers.map((peer) => ({
+    id: peer.id,
+    label: peer.label,
+    roomLabel: rooms.find((room) => crew.find((node) => node.id === peer.id)?.roomId === room.id)?.label,
+  })), [crew, rooms, session.peers]);
+  const houseLine = useHouseLine({
+    acoustic,
+    channelId: coordinator.operationId,
+    clockOffsetMs: coordinator.clockOffsetMs,
+    enabled: shared,
+    hapticsEnabled: settings.haptics,
+    localNodeId,
+    peers: houseLinePeers,
+    session,
+    trustedPeerIds: coordinator.liveNodeIds ?? nodeIds,
+  });
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -197,8 +230,10 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     if (paused || !pressure.offerHint || autoHintedStageRef.current === stageKey) return;
     autoHintedStageRef.current = stageKey;
     setHintLevel((current) => Math.max(1, current));
+    play('warning', 0.18);
+    if (settings.haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     eventLogRef.current.push(`The local director inferred a stall at ${meta.stageNames[stageIndex]} and exposed hint one.`);
-  }, [meta.stageNames, missionId, paused, pressure.offerHint, stageIndex]);
+  }, [meta.stageNames, missionId, paused, play, pressure.offerHint, settings.haptics, stageIndex]);
 
   const onMiss = useCallback(() => {
     setRetries((current) => current + 1);
@@ -213,7 +248,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     completeMission({
       completedAt: new Date().toISOString(),
       durationSeconds: Math.max(1, Math.round(((shared ? Date.now() + coordinator.clockOffsetMs : Date.now()) - startedAtRef.current) / 1_000)),
-      events: [...eventLogRef.current, missionId === 'dead-air' ? 'The Quiet Machine went silent.' : 'The Red Corridor folded shut.'],
+      events: [...eventLogRef.current, closingEvent(missionId)],
       missionId,
       retries,
       routeSeed: game.effectiveSeed,
@@ -423,20 +458,18 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
             </Pressable>
             <View style={styles.caseIdentity}>
               <View style={[styles.liveDot, { backgroundColor: meta.accent }]} />
-              <Text style={[styles.caseName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{missionId === 'dead-air' ? 'DEAD AIR' : 'NIGHT GLASS'}</Text>
+              <Text style={[styles.caseName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{caseName(missionId)}</Text>
             </View>
             <Text style={[styles.clock, { color: secondsLeft < 120 ? theme.colors.fault : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{secondsLeft === 0 && overtimeAccepted ? 'OVERTIME' : formatClock(secondsLeft)}</Text>
           </View>
           <View style={styles.progressRail}>{meta.stageNames.map((name, index) => <View key={name} style={[styles.progressSegment, { backgroundColor: index < stageIndex ? theme.colors.ready : index === stageIndex ? meta.accent : theme.colors.draft }]} />)}</View>
           <View style={styles.stageMeta}>
             <TechnicalLabel color={meta.accent}>STAGE {stageIndex + 1}/5 · {meta.stageNames[stageIndex]}</TechnicalLabel>
-            <Pressable accessibilityLabel="Show a hint" accessibilityRole="button" onPress={() => setHintLevel((current) => Math.min(3, current + 1))}>
-              <Text style={[styles.hintAction, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Hint {hintLevel}/3</Text>
-            </Pressable>
+            <AdaptiveGuideButton accent={meta.accent} assessment={pressure} hintLevel={hintLevel} onPress={() => setHintLevel((current) => Math.min(3, current + 1))} />
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, shared && styles.contentWithDock]} showsVerticalScrollIndicator={false}>
           {shared && coordinator.coordinationGuidance ? (
             <StagePanel tone={session.connectionState === 'connected' ? theme.colors.warning : theme.colors.fault}>
               <TechnicalLabel color={session.connectionState === 'connected' ? theme.colors.warning : theme.colors.fault}>
@@ -494,16 +527,50 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
               stageIndex={stageIndex}
             />
           ) : null}
+          {missionId === 'long-table' && game.id === 'long-table' ? (
+            <LongTableStageView
+              acoustic={acoustic}
+              activeNodeId={activeNodeId}
+              completedProofKeys={completedProofKeys}
+              crew={crew.filter((node) => nodeIds.includes(node.id))}
+              game={game}
+              motion={motion}
+              onChangeNode={setActiveNodeId}
+              onMiss={onMiss}
+              onProof={onProof}
+              onSignal={onSignal}
+              onStartMotion={() => void motion.start()}
+              play={play}
+              preview={!shared}
+              signals={coordinator.signals}
+              stageIndex={stageIndex}
+            />
+          ) : null}
 
           {hintLevel > 0 ? (
-            <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(160)} style={[styles.hintPanel, { borderColor: meta.accent }]}>
-              <View style={styles.hintTopline}><TechnicalLabel color={meta.accent}>DIRECTOR HINT {hintLevel}/3</TechnicalLabel><Pressable accessibilityLabel="Close hint" accessibilityRole="button" onPress={() => setHintLevel(0)}><Ionicons color={theme.colors.muted} name="close" size={19} /></Pressable></View>
-              <Text style={[styles.hintText, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{HINTS[missionId][stageIndex][hintLevel - 1]}</Text>
-            </Animated.View>
+            <AdaptiveGuidePanel
+              accent={meta.accent}
+              assessment={pressure}
+              hint={HINTS[missionId][stageIndex][hintLevel - 1]}
+              level={hintLevel}
+              onClose={() => setHintLevel(0)}
+              onNext={() => setHintLevel((current) => Math.min(3, current + 1))}
+            />
           ) : null}
           {error ? <View style={[styles.error, { borderColor: theme.colors.fault }]}><TechnicalLabel color={theme.colors.fault}>INSTRUMENT FAULT</TechnicalLabel><Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text></View> : null}
           {shared ? <View style={styles.liveStatus}><View style={[styles.connectionDot, { backgroundColor: session.connectionState === 'connected' ? theme.colors.ready : theme.colors.fault }]} /><Text style={[styles.liveStatusText, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{session.connectionState.toUpperCase()} · {coordinator.liveNodeIds?.length ?? nodeIds.length} LIVE NODES · REV {coordinator.revision ?? 0}</Text></View> : <TechnicalLabel color={theme.colors.warning}>SOLO REHEARSAL · SWITCH BETWEEN SIMULATED PHONES ABOVE EACH PUZZLE</TechnicalLabel>}
         </ScrollView>
+
+        {shared && !paused && (secondsLeft > 0 || overtimeAccepted) ? (
+          <HouseLineDock
+            accent={meta.accent}
+            controller={houseLine}
+            expanded={lineOpen}
+            guideState={pressure.offerHint || hintLevel > 0 ? 'ready' : pressure.pressure >= 0.36 ? 'watching' : 'clear'}
+            onExpandedChange={setLineOpen}
+            onGuidePress={() => setHintLevel((current) => Math.max(1, current))}
+          />
+        ) : null}
 
         {paused ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={styles.pauseBackdrop}>
@@ -536,20 +603,29 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   );
 }
 
+function caseName(missionId: EscapeCaseId): string {
+  if (missionId === 'dead-air') return 'DEAD AIR';
+  if (missionId === 'night-glass') return 'NIGHT GLASS';
+  return 'THE LONG TABLE';
+}
+
+function closingEvent(missionId: EscapeCaseId): string {
+  if (missionId === 'dead-air') return 'The Quiet Machine went silent.';
+  if (missionId === 'night-glass') return 'The Red Corridor folded shut.';
+  return 'Every place was served before the last bell.';
+}
+
 const styles = StyleSheet.create({
   caseIdentity: { alignItems: 'center', flexDirection: 'row', gap: 7 },
   caseName: { fontSize: 19, letterSpacing: 0.7 },
   clock: { fontSize: 13, letterSpacing: 0.6 },
   connectionDot: { borderRadius: 5, height: 7, width: 7 },
   content: { gap: 18, paddingBottom: 48, paddingHorizontal: 18, paddingTop: 18 },
+  contentWithDock: { paddingBottom: 126 },
   error: { borderLeftWidth: 3, gap: 4, paddingLeft: 11, paddingVertical: 4 },
   errorText: { fontSize: 13, lineHeight: 18 },
   header: { borderBottomWidth: 1, gap: 10, paddingBottom: 11, paddingHorizontal: 18, paddingTop: 10 },
   headerTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  hintAction: { fontSize: 12 },
-  hintPanel: { borderLeftWidth: 3, gap: 8, paddingLeft: 13, paddingVertical: 5 },
-  hintText: { fontSize: 20, lineHeight: 24 },
-  hintTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   liveDot: { borderRadius: 5, height: 8, width: 8 },
   liveStatus: { alignItems: 'center', flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 6 },
   liveStatusText: { fontSize: 7, letterSpacing: 0.65 },
@@ -562,5 +638,5 @@ const styles = StyleSheet.create({
   recoveryCopy: { fontSize: 15, lineHeight: 21 },
   recoveryTitle: { fontSize: 43, lineHeight: 43 },
   screen: { flex: 1 },
-  stageMeta: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  stageMeta: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
 });

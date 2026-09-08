@@ -64,6 +64,7 @@ describe('Housewire join tickets', () => {
     });
 
     expect(parseJoinTicket(makeJoinTicket('AIR13', 'ws://192.168.1.20:8787', 'dead-air'))?.missionId).toBe('dead-air');
+    expect(parseJoinTicket(makeJoinTicket('TABLE', 'ws://192.168.1.20:8787', 'long-table'))?.missionId).toBe('long-table');
   });
 
   it('rejects unsafe or malformed tickets', () => {
@@ -119,6 +120,23 @@ describe('bounded Housewire session events', () => {
     expect(housewireSessionEventSchema.safeParse({ ...abort, hostNodeId: '../host' }).success).toBe(false);
     expect(housewireSessionEventSchema.safeParse({ ...abort, nodeId: 'guest-a' }).success).toBe(false);
     expect(housewireSessionEventSchema.safeParse({ ...abort, reason: 'unbounded free text' }).success).toBe(false);
+  });
+
+  it('accepts the long-table family coordination signals without arbitrary payloads', () => {
+    const signal = {
+      kind: 'escape.signal',
+      missionId: 'long-table',
+      operationId: 'table-op-01',
+      nodeId: 'node-a',
+      targetNodeId: 'node-b',
+      round: 1,
+      signal: 'keepsake-framed',
+      value: 'KEPT-SEAL',
+      observedAt: 10_000,
+    } as const;
+    expect(housewireSessionEventSchema.safeParse(signal).success).toBe(true);
+    expect(housewireSessionEventSchema.safeParse({ ...signal, signal: 'photo-uploaded' }).success).toBe(false);
+    expect(housewireSessionEventSchema.safeParse({ ...signal, value: 'x'.repeat(33) }).success).toBe(false);
   });
 
   it('rejects mismatched stages, manual receipt substitution and unknown fields', () => {

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlyphMark } from '@/src/components';
 import {
@@ -32,6 +32,18 @@ import {
 
 const ACCENT = '#9AE9F5';
 const RED = '#FF3B32';
+
+const NIGHT_ROOMS: Record<number, { icon: keyof typeof Ionicons.glyphMap; name: string }> = {
+  1: { icon: 'flame-outline', name: 'LANTERN' },
+  2: { icon: 'diamond-outline', name: 'MIRROR' },
+  3: { icon: 'notifications-outline', name: 'BELL' },
+  4: { icon: 'key-outline', name: 'KEY' },
+  5: { icon: 'eye-outline', name: 'EYE' },
+  6: { icon: 'book-outline', name: 'BOOK' },
+  7: { icon: 'time-outline', name: 'CLOCK' },
+  8: { icon: 'exit-outline', name: 'DOOR' },
+  9: { icon: 'moon-outline', name: 'MOON' },
+};
 
 export interface NightGlassStageProps {
   activeNodeId: string;
@@ -218,19 +230,52 @@ function MazeStage(props: NightGlassStageProps) {
     setTimeout(() => setRejected(false), 700);
   };
   return (
-    <CaseStageScaffold accent={ACCENT} instruction="One phone has labels, one has walls, one has the optical rotation. Reconstruct the only path." stageNumber={3} title="Impossible floorplan">
+    <CaseStageScaffold accent={ACCENT} instruction="One phone sees named rooms, one sees doors, one sees how the glass was turned. Describe—never show—your layer." stageNumber={3} title="Impossible floorplan">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <StagePanel tone={ACCENT}>
         {ownsLabels ? <PrivateMazeGrid maze={maze} mode="labels" /> : null}
         {ownsWalls ? <PrivateMazeGrid maze={maze} mode="walls" /> : null}
-        {ownsTransform ? <View style={styles.transformClue}><Ionicons color={RED} name="sync-outline" size={58} style={{ transform: [{ rotate: `${maze.wallLayerRotation}deg` }] }} /><View style={styles.transformCopy}><TechnicalLabel color={RED}>OPTICAL TRANSFORM</TechnicalLabel><Text style={[styles.transformValue, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{maze.wallLayerRotation}° CW</Text><Text style={[styles.transformText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The wall pane is scrambled clockwise. Turn it counter-clockwise by this amount before tracing.</Text></View></View> : null}
+        {ownsTransform ? <View style={styles.transformClue}><Ionicons color={RED} name="sync-outline" size={58} style={{ transform: [{ rotate: `${maze.wallLayerRotation}deg` }] }} /><View style={styles.transformCopy}><TechnicalLabel color={RED}>HOW THE GLASS LIES</TechnicalLabel><Text style={[styles.transformValue, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{rotationPhrase(maze.wallLayerRotation)}</Text><Text style={[styles.transformText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Rotate the spoken wall map the opposite way before the pathfinder touches a room.</Text></View></View> : null}
         {ownsEndpoints ? <View style={styles.endpointClue}><Endpoint label="START" value={maze.startCell} /><Ionicons color={theme.colors.faint} name="arrow-forward" size={26} /><Endpoint label="EXIT" value={maze.exitCell} /></View> : null}
         {!ownsLabels && !ownsWalls && !ownsTransform && !ownsEndpoints ? <WaitingPanel accent={ACCENT} detail="This fourth pane holds no map layer. Coordinate the spoken route and watch for a contradiction." /> : null}
       </StagePanel>
       <View style={[styles.pathBuilder, { borderColor: rejected ? theme.colors.fault : theme.colors.draft }]}>
-        <View style={styles.pathStrip}>{maze.path.map((_, index) => <View key={index} style={[styles.pathSlot, { borderColor: attempt[index] ? RED : theme.colors.draft }]}><Text style={[styles.pathSlotText, { color: attempt[index] ? theme.colors.text : theme.colors.faint, fontFamily: theme.typography.families.display }]}>{attempt[index] ?? '·'}</Text></View>)}</View>
-        <View style={styles.cellChoices}>{maze.cells.map((cell) => <ChoiceChip accent={RED} disabled={attempt.includes(cell)} key={cell} label={String(cell)} onPress={() => setAttempt((current) => [...current, cell])} />)}</View>
-        <View style={styles.actionRow}><ActionButton accent={RED} disabled={!attempt.length} label="Undo" onPress={() => setAttempt((current) => current.slice(0, -1))} secondary /><ActionButton accent={RED} disabled={attempt.length !== maze.path.length} icon="navigate-outline" label="Walk this route" onPress={() => void submit()} /></View>
+        <View style={styles.routeHeader}>
+          <View><TechnicalLabel color={RED}>PATHFINDER&apos;S GLASS</TechnicalLabel><Text style={[styles.routeTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Touch the rooms as they call them.</Text></View>
+          <Text style={[styles.routeCount, { color: ACCENT, fontFamily: theme.typography.families.monoMedium }]}>{attempt.length}/{maze.path.length}</Text>
+        </View>
+        <View style={styles.routeGrid}>
+          {maze.cells.map((cell) => {
+            const room = NIGHT_ROOMS[cell];
+            const visitIndex = attempt.indexOf(cell);
+            const visited = visitIndex >= 0;
+            return (
+              <Pressable
+                accessibilityLabel={`${room.name} room${visited ? `, route step ${visitIndex + 1}` : ''}`}
+                disabled={visited || attempt.length >= maze.path.length}
+                key={cell}
+                onPress={() => setAttempt((current) => [...current, cell])}
+                style={({ pressed }) => [
+                  styles.routeRoom,
+                  { backgroundColor: visited ? RED : '#05090B', borderColor: visited ? RED : theme.colors.draft },
+                  pressed && { transform: [{ scale: 0.96 }] },
+                ]}
+              >
+                <Ionicons color={visited ? '#05090B' : ACCENT} name={room.icon} size={25} />
+                <Text style={[styles.routeRoomName, { color: visited ? '#05090B' : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{room.name}</Text>
+                {visited ? <View style={styles.routeOrder}><Text style={[styles.routeOrderText, { fontFamily: theme.typography.families.displayHeavy }]}>{visitIndex + 1}</Text></View> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.routeThread}>
+          {attempt.map((cell, index) => {
+            const room = NIGHT_ROOMS[cell];
+            return <View key={`${cell}-${index}`} style={styles.routeThreadStep}><Ionicons color={RED} name={room.icon} size={17} />{index < attempt.length - 1 ? <Ionicons color={theme.colors.faint} name="arrow-forward" size={12} /> : null}</View>;
+          })}
+          {!attempt.length ? <Text style={[styles.emptyRoute, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>Your first room becomes the start of a glowing thread.</Text> : null}
+        </View>
+        <View style={styles.actionRow}><ActionButton accent={RED} disabled={!attempt.length} label="Undo last room" onPress={() => setAttempt((current) => current.slice(0, -1))} secondary /><ActionButton accent={RED} disabled={attempt.length !== maze.path.length} icon="navigate-outline" label="Open the exit" onPress={() => void submit()} /></View>
       </View>
     </CaseStageScaffold>
   );
@@ -240,10 +285,10 @@ function PrivateMazeGrid({ maze, mode }: { maze: NightGlassMaze; mode: 'labels' 
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.mazeBlock}>
-      <TechnicalLabel color={mode === 'walls' ? RED : ACCENT}>{mode === 'walls' ? 'UNLABELLED · ROTATED WALL PANE' : 'ROOM NUMBER PANE · NO WALLS'}</TechnicalLabel>
+      <TechnicalLabel color={mode === 'walls' ? RED : ACCENT}>{mode === 'walls' ? 'UNLABELLED · ROTATED DOOR PANE' : 'NAMED ROOM PANE · NO DOORS'}</TechnicalLabel>
       <View
         accessible
-        accessibilityLabel={mode === 'walls' ? 'Unlabelled rotated maze wall pane' : 'Room number pane from one through nine'}
+        accessibilityLabel={mode === 'walls' ? 'Unlabelled rotated maze door pane' : 'Nine named rooms without their doors'}
         style={[styles.maze, mode === 'walls' && { transform: [{ rotate: `${maze.wallLayerRotation}deg` }] }]}
       >
         {maze.cells.map((cell) => {
@@ -258,20 +303,28 @@ function PrivateMazeGrid({ maze, mode }: { maze: NightGlassMaze; mode: 'labels' 
           return (
             <View key={cell} style={[styles.mazeCell, wallStyle]}>
               {mode === 'labels'
-                ? <Text style={[styles.mazeCellText, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{cell}</Text>
+                ? <View style={styles.mazeRoomIdentity}><Ionicons color={ACCENT} name={NIGHT_ROOMS[cell].icon} size={25} /><Text style={[styles.mazeCellText, { color: theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{NIGHT_ROOMS[cell].name}</Text></View>
                 : <View style={[styles.wallJunction, { backgroundColor: ACCENT }]} />}
             </View>
           );
         })}
       </View>
-      {mode === 'walls' ? <Text style={[styles.mazeLegend, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Open red borders are doorways. Another phone owns the room numbers; a third owns the rotation.</Text> : null}
+      {mode === 'walls' ? <Text style={[styles.mazeLegend, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Open red borders are doorways. Another phone owns room names; a third knows which way this pane was turned.</Text> : null}
     </View>
   );
 }
 
 function Endpoint({ label, value }: { label: string; value: number }) {
   const { theme } = useHousewireTheme();
-  return <View style={styles.endpoint}><TechnicalLabel color={label === 'START' ? ACCENT : RED}>{label}</TechnicalLabel><Text style={[styles.endpointValue, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{value}</Text></View>;
+  const room = NIGHT_ROOMS[value];
+  return <View style={styles.endpoint}><TechnicalLabel color={label === 'START' ? ACCENT : RED}>{label}</TechnicalLabel><Ionicons color={label === 'START' ? ACCENT : RED} name={room.icon} size={36} /><Text style={[styles.endpointName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{room.name}</Text></View>;
+}
+
+function rotationPhrase(rotation: number) {
+  if (rotation === 90) return 'ONE TURN RIGHT';
+  if (rotation === 180) return 'UPSIDE DOWN';
+  if (rotation === 270) return 'ONE TURN LEFT';
+  return 'NO TURN';
 }
 
 function CorridorStage(props: NightGlassStageProps) {
@@ -384,14 +437,13 @@ const styles = StyleSheet.create({
   cameraFeedback: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   carryPulse: { borderRadius: 70, borderWidth: 2, height: 128, width: 128 },
   carryTitle: { fontSize: 28, lineHeight: 31 },
-  cellChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   dimCarry: { alignItems: 'center', backgroundColor: '#020303', gap: 13, minHeight: 420, padding: 26 },
   dimCopy: { fontSize: 8, letterSpacing: 1, textAlign: 'center' },
   dimTitle: { fontSize: 35 },
   doorSeam: { bottom: 0, position: 'absolute', right: 5, top: 0, width: 3 },
   endpoint: { alignItems: 'center', flex: 1, gap: 4 },
   endpointClue: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  endpointValue: { fontSize: 68, lineHeight: 69 },
+  endpointName: { fontSize: 18, lineHeight: 21 },
   foldHint: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   foldLeft: { left: 24, transform: [{ perspective: 500 }, { rotateY: '38deg' }] },
   foldPane: { borderWidth: 2, height: 170, position: 'absolute', top: 28, width: 118 },
@@ -411,12 +463,21 @@ const styles = StyleSheet.create({
   maze: { flexDirection: 'row', flexWrap: 'wrap', height: 240, width: 240 },
   mazeBlock: { alignItems: 'center', gap: 12 },
   mazeCell: { alignItems: 'center', borderWidth: 1, height: 80, justifyContent: 'center', width: 80 },
-  mazeCellText: { fontSize: 29 },
+  mazeCellText: { fontSize: 7, letterSpacing: 0.7 },
+  mazeRoomIdentity: { alignItems: 'center', gap: 7 },
   mazeLegend: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   pathBuilder: { borderBottomWidth: 1, borderTopWidth: 1, gap: 13, paddingVertical: 14 },
-  pathSlot: { alignItems: 'center', borderBottomWidth: 2, flex: 1, height: 45, justifyContent: 'center' },
-  pathSlotText: { fontSize: 22 },
-  pathStrip: { flexDirection: 'row', gap: 5 },
+  emptyRoute: { fontSize: 12, lineHeight: 17 },
+  routeCount: { fontSize: 11, letterSpacing: 1 },
+  routeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  routeHeader: { alignItems: 'flex-end', flexDirection: 'row', justifyContent: 'space-between' },
+  routeOrder: { alignItems: 'center', backgroundColor: '#F5F1E8', borderRadius: 11, height: 22, justifyContent: 'center', position: 'absolute', right: 5, top: 5, width: 22 },
+  routeOrderText: { color: '#05090B', fontSize: 11 },
+  routeRoom: { alignItems: 'center', aspectRatio: 1, borderWidth: 1, gap: 6, justifyContent: 'center', width: '31%' },
+  routeRoomName: { fontSize: 7, letterSpacing: 0.65 },
+  routeThread: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 4, minHeight: 25 },
+  routeThreadStep: { alignItems: 'center', flexDirection: 'row', gap: 4 },
+  routeTitle: { fontSize: 20, lineHeight: 23, marginTop: 4 },
   roleBadge: { alignItems: 'center', borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 39 },
   roleBadgeText: { fontSize: 7, letterSpacing: 0.8 },
   roleRail: { flexDirection: 'row', gap: 6 },

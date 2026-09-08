@@ -14,6 +14,7 @@ const edge = z.tuple([z.number().int().min(1).max(16), z.number().int().min(1).m
 
 const cluePayload = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), text: boundedText }).strict(),
+  z.object({ kind: z.literal('riddle-fragment'), fragmentId: safeId, text: boundedText }).strict(),
   z.object({ kind: z.literal('sequence'), items: z.array(shortText).min(1).max(16) }).strict(),
   z.object({
     kind: z.literal('mapping'),
@@ -48,6 +49,11 @@ const mechanic = z.discriminatedUnion('kind', [
     kind: z.literal('distributed-order'),
     tokens: z.array(z.object({ id: safeId, label: shortText }).strict()).min(3).max(8),
     adjacentConstraints: z.array(z.tuple([safeId, safeId])).min(2).max(8),
+  }).strict(),
+  z.object({
+    kind: z.literal('split-riddle'),
+    candidates: z.array(z.object({ id: safeId, label: shortText, sigil: shortText }).strict()).min(5).max(8),
+    fragmentCount: z.union([z.literal(3), z.literal(4)]),
   }).strict(),
   z.object({
     kind: z.literal('symbol-lock'),
@@ -94,6 +100,7 @@ const playerMechanic = z.discriminatedUnion('kind', [
   }).strict(),
   mechanic.options[1],
   mechanic.options[2],
+  mechanic.options[3],
   z.object({
     kind: z.literal('route-grid'),
     width: z.union([z.literal(3), z.literal(4)]),
@@ -114,6 +121,7 @@ const playerMechanic = z.discriminatedUnion('kind', [
 
 const solution = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('sequence'), answer: z.array(safeId).min(3).max(8) }).strict(),
+  z.object({ kind: z.literal('word'), answer: safeId }).strict(),
   z.object({ kind: z.literal('code'), answer: z.string().regex(/^\d{3,8}$/) }).strict(),
   z.object({
     kind: z.literal('relay'),
@@ -183,7 +191,7 @@ const recipe = z.object({
 export const forgeCaseSchema = z.object({
   id: z.string().min(1).max(96).regex(/^forge-[a-z0-9-]+-[A-Z0-9]{7}$/),
   schemaVersion: z.literal(1),
-  generatorVersion: z.literal('housewire-local-forge-v1'),
+  generatorVersion: z.enum(['housewire-local-forge-v1', 'housewire-local-forge-v2']),
   providerId: safeId,
   seed: z.union([z.string().min(1).max(128), z.number().finite()]),
   effectiveSeed: z.number().int().min(0).max(0xffff_ffff),

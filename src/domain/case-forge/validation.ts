@@ -9,6 +9,7 @@ import type {
   ForgeValidationIssue,
 } from './types';
 import { forgeCaseSchema, parseForgeCase } from './schema';
+import { forgeRiddleCatalogEntry, forgeRiddleObject } from './riddle-catalog';
 
 function sameSet<T>(first: readonly T[], second: readonly T[]): boolean {
   return first.length === second.length && new Set(first).size === first.length && first.every((value) => second.includes(value));
@@ -26,51 +27,121 @@ function issue(issues: ForgeValidationIssue[], code: string, path: string, messa
   issues.push({ code, path, message });
 }
 
-function validateOrderStage(game: ForgeCase, issues: ForgeValidationIssue[]): void {
-  const stage = game.stages[0];
+function validateOrderStage(
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
   if (stage.mechanic.kind !== 'distributed-order' || stage.solution.kind !== 'sequence') {
-    issue(issues, 'MECHANIC_SOLUTION', 'stages.0', 'The opening stage must use a sequence solution.');
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A distributed-order stage must use a sequence solution.');
     return;
   }
   const tokenIds = stage.mechanic.tokens.map((token) => token.id);
   if (!sameSet(tokenIds, stage.solution.answer)) {
-    issue(issues, 'ORDER_TOKEN_SET', 'stages.0.solution', 'The order answer must use every token exactly once.');
+    issue(issues, 'ORDER_TOKEN_SET', `${stagePath}.solution`, 'The order answer must use every token exactly once.');
   }
   const expectedConstraints = stage.solution.answer
     .slice(0, -1)
     .map((token, index) => `${token}:${stage.solution.kind === 'sequence' ? stage.solution.answer[index + 1] : ''}`);
   const constraints = stage.mechanic.adjacentConstraints.map(([first, second]) => `${first}:${second}`);
   if (!sameArray(constraints, expectedConstraints)) {
-    issue(issues, 'ORDER_CONSTRAINTS', 'stages.0.mechanic', 'Adjacent constraints must define the authoritative order.');
+    issue(issues, 'ORDER_CONSTRAINTS', `${stagePath}.mechanic`, 'Adjacent constraints must define the authoritative order.');
   }
   if (stage.clues.filter((clue) => clue.id.startsWith('order-link-')).length !== expectedConstraints.length) {
-    issue(issues, 'ORDER_CLUES', 'stages.0.clues', 'Every order constraint needs one distributed clue.');
+    issue(issues, 'ORDER_CLUES', `${stagePath}.clues`, 'Every order constraint needs one distributed clue.');
   }
 }
 
-function validateSymbolStage(game: ForgeCase, issues: ForgeValidationIssue[]): void {
-  const stage = game.stages[1];
+function validateSplitRiddleStage(
+  game: ForgeCase,
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
+  if (stage.mechanic.kind !== 'split-riddle' || stage.solution.kind !== 'word') {
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A split-riddle stage must use a word solution.');
+    return;
+  }
+  const entry = forgeRiddleCatalogEntry(stage.solution.answer);
+  if (!entry) {
+    issue(issues, 'RIDDLE_ANSWER', `${stagePath}.solution`, 'The word lock answer must come from the canonical object catalog.');
+    return;
+  }
+  const candidateIds = stage.mechanic.candidates.map((candidate) => candidate.id);
+  if (
+    new Set(candidateIds).size !== candidateIds.length ||
+    !candidateIds.includes(entry.answerId) ||
+    !candidateIds.every((candidateId) => entry.candidateIds.includes(candidateId))
+  ) {
+    issue(issues, 'RIDDLE_CANDIDATES', `${stagePath}.mechanic.candidates`, 'The object plate must contain distinct canonical candidates including its answer.');
+  }
+  for (const [index, candidate] of stage.mechanic.candidates.entries()) {
+    const canonical = forgeRiddleObject(candidate.id);
+    if (!canonical || canonical.label !== candidate.label || canonical.sigil !== candidate.sigil) {
+      issue(issues, 'RIDDLE_OBJECT_COPY', `${stagePath}.mechanic.candidates.${index}`, 'Object labels and sigils must match the canonical catalog.');
+    }
+  }
+
+  const fragmentClues = stage.clues.filter(
+    (clue): clue is typeof clue & { payload: Extract<typeof clue.payload, { kind: 'riddle-fragment' }> } =>
+      clue.payload.kind === 'riddle-fragment',
+  );
+  if (fragmentClues.length !== stage.mechanic.fragmentCount) {
+    issue(issues, 'RIDDLE_FRAGMENT_COUNT', `${stagePath}.clues`, 'The clue count must match the split-riddle mechanic.');
+  }
+  const definitions = fragmentClues.flatMap((clue, index) => {
+    const definition = entry.fragments.find((fragment) => fragment.id === clue.payload.fragmentId);
+    if (!definition || definition.text !== clue.payload.text) {
+      issue(issues, 'RIDDLE_FRAGMENT_COPY', `${stagePath}.clues.${index}`, 'Every witness fragment must match its canonical safe wording.');
+      return [];
+    }
+    const visibleMatches = candidateIds.filter((candidateId) => definition.matchingCandidateIds.includes(candidateId));
+    if (visibleMatches.length < 2) {
+      issue(issues, 'RIDDLE_FRAGMENT_SOLO', `${stagePath}.clues.${index}`, 'No single witness fragment may identify the answer by itself.');
+    }
+    return [definition];
+  });
+  if (new Set(definitions.map((definition) => definition.id)).size !== definitions.length) {
+    issue(issues, 'RIDDLE_FRAGMENT_DUPLICATE', `${stagePath}.clues`, 'Witness fragments must be distinct.');
+  }
+  const survivors = candidateIds.filter((candidateId) =>
+    definitions.every((definition) => definition.matchingCandidateIds.includes(candidateId)),
+  );
+  if (!sameArray(survivors, [entry.answerId])) {
+    issue(issues, 'RIDDLE_AMBIGUOUS', `${stagePath}.solution`, 'Combining the canonical fragments must leave exactly one object.');
+  }
+  if (!game.recipe.playerIds.every((playerId) =>
+    fragmentClues.some((clue) => clue.audiencePlayerIds.includes(playerId)))) {
+    issue(issues, 'RIDDLE_PLAYER_COVERAGE', `${stagePath}.clues`, 'Every player must hold at least one witness fragment.');
+  }
+}
+
+function validateSymbolStage(
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
   if (stage.mechanic.kind !== 'symbol-lock' || stage.solution.kind !== 'code') {
-    issue(issues, 'MECHANIC_SOLUTION', 'stages.1', 'The second stage must use a code solution.');
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A symbol-lock stage must use a code solution.');
     return;
   }
   if (!stage.mechanic.encodedSequence.every((symbol) => stage.mechanic.kind === 'symbol-lock' && stage.mechanic.symbols.includes(symbol))) {
-    issue(issues, 'UNKNOWN_SYMBOL', 'stages.1.mechanic.encodedSequence', 'Encoded symbols must belong to the lock alphabet.');
+    issue(issues, 'UNKNOWN_SYMBOL', `${stagePath}.mechanic.encodedSequence`, 'Encoded symbols must belong to the lock alphabet.');
   }
   const pairs = stage.clues.flatMap((clue) => clue.payload.kind === 'mapping' ? clue.payload.pairs : []);
   const mapping = new Map(pairs.map((pair) => [pair.left, pair.right]));
   if (mapping.size !== stage.mechanic.symbols.length || !stage.mechanic.symbols.every((symbol) => mapping.has(symbol))) {
-    issue(issues, 'INCOMPLETE_DECODER', 'stages.1.clues', 'Distributed decoder strips must cover every lock symbol.');
+    issue(issues, 'INCOMPLETE_DECODER', `${stagePath}.clues`, 'Distributed decoder strips must cover every lock symbol.');
   } else {
     const reconstructed = stage.mechanic.encodedSequence.map((symbol) => mapping.get(symbol)).join('');
     if (reconstructed !== stage.solution.answer) {
-      issue(issues, 'CODE_MISMATCH', 'stages.1.solution', 'Decoder strips do not reconstruct the stored code.');
+      issue(issues, 'CODE_MISMATCH', `${stagePath}.solution`, 'Decoder strips do not reconstruct the stored code.');
     }
   }
   if (stage.mechanic.revealMode === 'camera') {
     const markerSymbols = stage.clues.flatMap((clue) => clue.payload.kind === 'camera-marker' ? [clue.payload.symbol] : []);
     if (!sameSet(markerSymbols, stage.mechanic.symbols)) {
-      issue(issues, 'MARKER_COVERAGE', 'stages.1.clues', 'Every lock symbol needs exactly one camera-safe marker.');
+      issue(issues, 'MARKER_COVERAGE', `${stagePath}.clues`, 'Every lock symbol needs exactly one camera-safe marker.');
     }
   } else {
     const manualSymbols = stage.mechanic.symbols.filter((symbol, index) =>
@@ -81,23 +152,27 @@ function validateSymbolStage(game: ForgeCase, issues: ForgeValidationIssue[]): v
       ),
     );
     if (!sameSet(manualSymbols, stage.mechanic.symbols)) {
-      issue(issues, 'MARKER_COVERAGE', 'stages.1.clues', 'Every lock symbol needs exactly one manual marker reveal.');
+      issue(issues, 'MARKER_COVERAGE', `${stagePath}.clues`, 'Every lock symbol needs exactly one manual marker reveal.');
     }
   }
 }
 
-function validateRelayStage(game: ForgeCase, issues: ForgeValidationIssue[]): void {
-  const stage = game.stages[2];
+function validateRelayStage(
+  game: ForgeCase,
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
   if (stage.mechanic.kind !== 'private-relay' || stage.solution.kind !== 'relay') {
-    issue(issues, 'MECHANIC_SOLUTION', 'stages.2', 'The third stage must use recipient-bound relay proofs.');
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A private-relay stage must use recipient-bound relay proofs.');
     return;
   }
   if (stage.mechanic.memoryMode !== (game.playerCount === 1)) {
-    issue(issues, 'MEMORY_MODE', 'stages.2.mechanic.memoryMode', 'Memory mode is reserved for a one-player case.');
+    issue(issues, 'MEMORY_MODE', `${stagePath}.mechanic.memoryMode`, 'Memory mode is reserved for a one-player case.');
   }
   const playerIds = game.recipe.playerIds;
   if (stage.mechanic.rounds.length !== stage.solution.rounds.length) {
-    issue(issues, 'RELAY_ROUNDS', 'stages.2', 'Relay mechanics and answers must have the same round count.');
+    issue(issues, 'RELAY_ROUNDS', stagePath, 'Relay mechanics and answers must have the same round count.');
     return;
   }
   stage.mechanic.rounds.forEach((round, index) => {
@@ -111,7 +186,7 @@ function validateRelayStage(game: ForgeCase, issues: ForgeValidationIssue[]): vo
       answer.recipientPlayerId !== round.recipientPlayerId ||
       !sameSet(round.excludedPlayerIds, expectedExcluded)
     ) {
-      issue(issues, 'RELAY_CONTRACT', `stages.2.mechanic.rounds.${index}`, 'Relay actors, recipient, and exclusions disagree.');
+      issue(issues, 'RELAY_CONTRACT', `${stagePath}.mechanic.rounds.${index}`, 'Relay actors, recipient, and exclusions disagree.');
     }
     const senderTokens = stage.clues.filter(
       (clue) =>
@@ -123,7 +198,7 @@ function validateRelayStage(game: ForgeCase, issues: ForgeValidationIssue[]): vo
           : clue.payload.kind === 'text' && clue.payload.text === `One-time word: ${answer.token}`),
     );
     if (senderTokens.length !== 1) {
-      issue(issues, 'RELAY_SECRET', `stages.2.clues`, `Round ${round.round} must expose its token only to its sender.`);
+      issue(issues, 'RELAY_SECRET', `${stagePath}.clues`, `Round ${round.round} must expose its token only to its sender.`);
     }
   });
 }
@@ -160,16 +235,19 @@ function mazePath(
   return result.reverse();
 }
 
-function validateRouteStage(game: ForgeCase, issues: ForgeValidationIssue[]): void {
-  const stage = game.stages[3];
+function validateRouteStage(
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
   if (stage.mechanic.kind !== 'route-grid' || stage.solution.kind !== 'route') {
-    issue(issues, 'MECHANIC_SOLUTION', 'stages.3', 'The fourth stage must use a route solution.');
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A route-grid stage must use a route solution.');
     return;
   }
   const mechanic = stage.mechanic;
   const cellCount = mechanic.width * mechanic.height;
   if (mechanic.width !== mechanic.height || mechanic.cells.length !== cellCount || !sameSet(mechanic.cells, Array.from({ length: cellCount }, (_, index) => index + 1))) {
-    issue(issues, 'GRID_CELLS', 'stages.3.mechanic.cells', 'Route cells must form a complete numbered square grid.');
+    issue(issues, 'GRID_CELLS', `${stagePath}.mechanic.cells`, 'Route cells must form a complete numbered square grid.');
   }
   const keys = mechanic.openEdges.map(([first, second]) => normalizedEdge(first, second));
   const validEdges = mechanic.openEdges.every(([first, second]) => {
@@ -178,36 +256,40 @@ function validateRouteStage(game: ForgeCase, issues: ForgeValidationIssue[]): vo
     return mechanic.cells.includes(first) && mechanic.cells.includes(second) && rowDistance + columnDistance === 1;
   });
   if (!validEdges || new Set(keys).size !== keys.length || mechanic.openEdges.length !== cellCount - 1) {
-    issue(issues, 'GRID_EDGES', 'stages.3.mechanic.openEdges', 'The route network must be a simple perfect maze.');
+    issue(issues, 'GRID_EDGES', `${stagePath}.mechanic.openEdges`, 'The route network must be a simple perfect maze.');
   }
   const expectedPath = mazePath(mechanic.startCell, mechanic.exitCell, mechanic.cells, mechanic.openEdges);
   if (!expectedPath || !sameArray(expectedPath, stage.solution.answer)) {
-    issue(issues, 'ROUTE_ANSWER', 'stages.3.solution', 'The stored route is not the unique entry-to-exit path.');
+    issue(issues, 'ROUTE_ANSWER', `${stagePath}.solution`, 'The stored route is not the unique entry-to-exit path.');
   }
   const clueEdges = stage.clues.flatMap((clue) => clue.payload.kind === 'grid-edges' ? clue.payload.edges : []);
   const clueKeys = clueEdges.map(([first, second]) => normalizedEdge(first, second));
   if (!sameSet(clueKeys, keys)) {
-    issue(issues, 'ROUTE_LAYERS', 'stages.3.clues', 'Distributed route layers must cover every open edge exactly once.');
+    issue(issues, 'ROUTE_LAYERS', `${stagePath}.clues`, 'Distributed route layers must cover every open edge exactly once.');
   }
 }
 
-function validateSyncStage(game: ForgeCase, issues: ForgeValidationIssue[]): void {
-  const stage = game.stages[4];
+function validateSyncStage(
+  game: ForgeCase,
+  stage: ForgeCase['stages'][number],
+  issues: ForgeValidationIssue[],
+): void {
+  const stagePath = `stages.${stage.index}`;
   if (stage.mechanic.kind !== 'motion-sync' || stage.solution.kind !== 'sync') {
-    issue(issues, 'MECHANIC_SOLUTION', 'stages.4', 'The finale must use synchronized physical proofs.');
+    issue(issues, 'MECHANIC_SOLUTION', stagePath, 'A motion-sync stage must use synchronized physical proofs.');
     return;
   }
   if (
     stage.mechanic.windowMs !== stage.solution.windowMs ||
     JSON.stringify(stage.mechanic.assignments) !== JSON.stringify(stage.solution.assignments)
   ) {
-    issue(issues, 'SYNC_ANSWER', 'stages.4.solution', 'The synchronized proof must match the assigned formation.');
+    issue(issues, 'SYNC_ANSWER', `${stagePath}.solution`, 'The synchronized proof must match the assigned formation.');
   }
   if (!sameSet(stage.mechanic.assignments.map((assignment) => assignment.playerId), game.recipe.playerIds)) {
-    issue(issues, 'SYNC_PLAYERS', 'stages.4.mechanic.assignments', 'Every player needs exactly one finale position.');
+    issue(issues, 'SYNC_PLAYERS', `${stagePath}.mechanic.assignments`, 'Every player needs exactly one finale position.');
   }
   if (!game.recipe.noiseAllowed && stage.mechanic.assignments.some((assignment) => assignment.vocalCue !== 'NONE')) {
-    issue(issues, 'NOISE_POLICY', 'stages.4.mechanic.assignments', 'A quiet-room recipe cannot require vocal evidence.');
+    issue(issues, 'NOISE_POLICY', `${stagePath}.mechanic.assignments`, 'A quiet-room recipe cannot require vocal evidence.');
   }
   for (const [index, assignment] of stage.mechanic.assignments.entries()) {
     const positionClue = stage.clues.some(
@@ -218,7 +300,7 @@ function validateSyncStage(game: ForgeCase, issues: ForgeValidationIssue[]): voi
           ? clue.payload.kind === 'pose' && clue.payload.pose === assignment.pose
           : clue.payload.kind === 'text' && clue.payload.text === `Touch contact ${index + 1}: hold the on-screen plate until it arms.`),
     );
-    if (!positionClue) issue(issues, 'SYNC_CLUE', 'stages.4.clues', `Missing private position clue for ${assignment.playerId}.`);
+    if (!positionClue) issue(issues, 'SYNC_CLUE', `${stagePath}.clues`, `Missing private position clue for ${assignment.playerId}.`);
   }
 }
 
@@ -251,6 +333,20 @@ export function validateForgeCase(value: unknown): ForgeCaseValidation {
   if (new Set(stageIds).size !== stageIds.length || !game.stages.every((stage, index) => stage.index === index)) {
     issue(issues, 'STAGE_ORDER', 'stages', 'Stage ids and indexes must be unique and contiguous.');
   }
+  const mechanicKinds = game.stages.map((stage) => stage.mechanic.kind);
+  if (game.generatorVersion === 'housewire-local-forge-v1') {
+    const legacyOrder = ['distributed-order', 'symbol-lock', 'private-relay', 'route-grid', 'motion-sync'] as const;
+    if (!sameArray(mechanicKinds, legacyOrder)) {
+      issue(issues, 'LEGACY_MECHANIC_ORDER', 'stages', 'A version-one case must preserve its original five-stage mechanic order.');
+    }
+  } else {
+    if (new Set(mechanicKinds).size !== mechanicKinds.length || !mechanicKinds.includes('split-riddle')) {
+      issue(issues, 'MECHANIC_VARIETY', 'stages', 'A version-two cut needs five distinct mechanics including one canonical split riddle.');
+    }
+    if (mechanicKinds.at(-1) !== 'motion-sync') {
+      issue(issues, 'FINALE_MECHANIC', 'stages', 'The synchronized physical proof must remain the finale.');
+    }
+  }
   const clueIds = game.stages.flatMap((stage) => stage.clues.map((clue) => clue.id));
   if (new Set(clueIds).size !== clueIds.length) issue(issues, 'CLUE_IDS', 'stages.clues', 'Clue ids must be unique across the case.');
   for (const stage of game.stages) {
@@ -271,12 +367,27 @@ export function validateForgeCase(value: unknown): ForgeCaseValidation {
         issue(issues, 'PUBLIC_CLUE', `stages.${stage.index}.clues.${clue.id}`, 'Public clues must be visible to the full crew.');
       }
     }
+    switch (stage.mechanic.kind) {
+      case 'distributed-order':
+        validateOrderStage(stage, issues);
+        break;
+      case 'split-riddle':
+        validateSplitRiddleStage(game, stage, issues);
+        break;
+      case 'symbol-lock':
+        validateSymbolStage(stage, issues);
+        break;
+      case 'private-relay':
+        validateRelayStage(game, stage, issues);
+        break;
+      case 'route-grid':
+        validateRouteStage(stage, issues);
+        break;
+      case 'motion-sync':
+        validateSyncStage(game, stage, issues);
+        break;
+    }
   }
-  validateOrderStage(game, issues);
-  validateSymbolStage(game, issues);
-  validateRelayStage(game, issues);
-  validateRouteStage(game, issues);
-  validateSyncStage(game, issues);
   return { playable: issues.length === 0, issues };
 }
 
@@ -317,6 +428,12 @@ export function validateForgeSubmission(
   switch (solution.kind) {
     case 'sequence':
       return prefixResult(solution.answer, (submission as Extract<ForgeStageSubmission, { kind: 'sequence' }>).value, stage.id);
+    case 'word': {
+      const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'word' }>).value.trim().toLowerCase();
+      return submitted === solution.answer
+        ? { accepted: true, code: 'ACCEPTED', stageId: stage.id }
+        : { accepted: false, code: submitted ? 'WRONG_VALUE' : 'INCOMPLETE', stageId: stage.id };
+    }
     case 'code': {
       const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'code' }>).value.trim();
       if (submitted === solution.answer) return { accepted: true, code: 'ACCEPTED', stageId: stage.id, acceptedPrefixLength: submitted.length, expectedLength: solution.answer.length };

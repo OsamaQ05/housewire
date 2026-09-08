@@ -73,6 +73,8 @@ export interface StagePressureAssessment {
   offerHint: boolean;
   preferManualFallback: boolean;
   pressure: number;
+  reason: 'sensor' | 'retries' | 'stall' | 'watching';
+  summary: string;
 }
 
 function difficultyPressure(telemetry: ActionTelemetry, expectedConfidence: number): number {
@@ -94,12 +96,29 @@ function difficultyPressure(telemetry: ActionTelemetry, expectedConfidence: numb
 export function assessStagePressure(input: StagePressureInput): StagePressureAssessment {
   const inference = inferDifficulty(input);
   const pressure = inference.struggleProbability;
+  const reason = !input.sensorAvailable
+    ? 'sensor'
+    : input.attempts >= 2
+      ? 'retries'
+      : input.secondsSinceProgress >= inference.hintAfterSeconds
+        ? 'stall'
+        : 'watching';
+  const roundedSeconds = Math.max(0, Math.round(input.secondsSinceProgress));
   return {
     offerHint:
       input.secondsSinceProgress >= inference.hintAfterSeconds ||
       (input.attempts >= 2 && pressure >= 0.52),
     preferManualFallback: inference.preferManualFallback,
     pressure,
+    reason,
+    summary:
+      reason === 'sensor'
+        ? 'A needed phone sensor is unavailable, so the guide prepared an accessible route.'
+        : reason === 'retries'
+          ? `${input.attempts} attempts suggest the current clue needs a smaller step.`
+          : reason === 'stall'
+            ? `${roundedSeconds} seconds without progress suggests the crew may be stuck.`
+            : 'The guide is quietly reading pace, retries, and device availability.',
   };
 }
 

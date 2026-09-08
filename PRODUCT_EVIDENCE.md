@@ -22,6 +22,9 @@ It does **not** claim that HOUSEWIRE causes family bonding, improves mental heal
 
 - The game requires information exchange; it does not merely put multiple people beside one screen.
 - Private fragments, assigned signal ownership, and host-required completions make participation mechanically relevant.
+- THE LONG TABLE uses generational objects, actual crew names, and an in-person household-object witness so family context changes the mechanics without requiring emotional disclosure.
+- Family Frequency asks players to predict low-stakes choices and shared details, then reveals the real answer immediately; it does not infer closeness or turn private answers into a relationship score.
+- Circuit Race uses equal mirrored challenges and small-team interdependence. Competition supplies urgency, but each crew still has to exchange private evidence and coordinate a physical-phone action.
 - Physical movement is bounded by safe-room selection and a clear-route confirmation.
 - Preview labels simulations honestly because simulated cooperation is not evidence of human co-play.
 - The product claim remains experiential: designed to get families talking, moving, and relying on one another.
@@ -33,6 +36,8 @@ It does **not** claim that HOUSEWIRE causes family bonding, improves mental heal
 - “Cooperative games are always better than competitive or creative games.”
 - “More speech during play means a relationship improved.”
 - “A successful hackathon demo predicts sustained household use.”
+- “Knowing more trivia answers proves that one relative cares more.”
+- “Winning Circuit Race makes one side of a family better or closer.”
 
 Testing any of those propositions would require an ethics-aware study design, representative recruitment, comparison conditions, validated outcome measures, preregistration where appropriate, and follow-up beyond one session.
 
@@ -68,14 +73,16 @@ These sources establish API feasibility, not gameplay quality or sensor accuracy
 
 ## AI evidence boundary
 
-The active “AI” is local and inspectable:
+The default active “AI” is local and inspectable:
 
 - statistical feature extraction plus a physics-authored nearest-prototype/RBF motion-intent model with an open-set unknown class;
 - constraint-valid deterministic operation generation; and
 - host-side semantic, identity, confidence, timing, and synchronization validation; and
 - bounded local pressure inference that can expose a clue or recommend a manual path without completing an action or weakening host rules.
 
-There is no trained neural model, LLM, cloud inference API, prompt pipeline, or secret key. The compact motion model uses authored reference profiles calibrated against deterministic traces; it must not be described as learned from a household dataset. The generator does not write free-form story content. The host validator is rules-based, and it should not be described as a learned fraud or anomaly-detection model.
+The optional Case Forge narrative provider can use a server-side OpenAI key to rank answer-free validated case cuts and write bounded atmosphere. For the distributed riddle it receives candidate/fragment counts only—not object names, clue text, or truth tables. It is not required for play and cannot change clues, solutions, executable mechanics, or proofs. The compact motion model uses authored reference profiles calibrated against deterministic traces; it must not be described as learned from a household dataset. The host validator is rules-based, and it should not be described as a learned fraud or anomaly-detection model.
+
+Family Frequency's optional model call receives only style, card count, and a random seed. It creates low-stakes question/option structure under a strict schema; local checks reject unsafe copy, duplicates, missing round kinds, and choice-shaped text for ordering rounds. A bounded local ledger rotates styles and filters recent fingerprints without transmitting that ledger. Player names, reference answers, guesses, scores, and history are excluded. Circuit Race's equal-course compiler and host proof validator are deterministic software, not a learned model; its “AI Guide” is a bounded local pressure inference over elapsed time, retries, stage context, and progress that ranks authored hints. These distinctions should remain explicit in judging materials.
 
 The current product wires the case compilers, local director, motion classifier, relative acoustic classifier, host-authoritative state machines, and direct recipient transport into the playable UI. Only behavior observable in a run should be presented as active; deterministic generation and rules-based host validation should not be mislabeled as learned AI.
 

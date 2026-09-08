@@ -5,7 +5,10 @@ node_modules/
 
 # Expo
 .expo/
+.expo-anonymous/
 dist/
+dist-web/
+dist-android*/
 web-build/
 expo-env.d.ts
 
@@ -26,6 +29,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 housewire-*.log
+.expo-serve*.log
+.ai-qa*.log
 
 # macOS
 .DS_Store

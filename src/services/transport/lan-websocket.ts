@@ -6,6 +6,7 @@ import type {
   DirectPublishOptions,
   PublishOptions,
   RelayClientRole,
+  RelayResumeCredentials,
   ServerRelayMessage,
   SessionTransport,
   TransportDirectFrame,
@@ -43,12 +44,15 @@ export interface LanWebSocketTransportOptions {
   reconnectBaseDelayMs?: number;
   connectTimeoutMs?: number;
   directAckTimeoutMs?: number;
-  role?: RelayClientRole;
+  role: RelayClientRole;
+  resumeCredentials?: RelayResumeCredentials;
+  onResumeCredentials?: (credentials: RelayResumeCredentials | undefined) => void;
   webSocketFactory?: WebSocketFactory;
 }
 
 const OPEN = 1;
 const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const RESUME_CREDENTIAL = /^[a-zA-Z0-9_-]{43}$/;
 
 interface PendingDirectDelivery {
   recipientId: string;
@@ -88,10 +92,32 @@ export class LanWebSocketTransport<T = unknown, D = unknown> implements SessionT
   private transportError?: Error;
   private supportsDirect = false;
   private relayMaximumMessageBytes = MAXIMUM_RELAY_MESSAGE_BYTES;
+  private resumeCredentials?: RelayResumeCredentials;
+  private credentialsIssuedOnThisInstance = false;
 
   constructor(private readonly options: LanWebSocketTransportOptions) {
     this.sessionId = options.sessionId;
     this.clientId = options.clientId;
+    if (!SAFE_ID.test(options.sessionId) || !SAFE_ID.test(options.clientId)) {
+      throw new RelayProtocolError('INVALID_ID', 'Session and client ids must be relay-safe.');
+    }
+    if (options.resumeCredentials) {
+      if (!isRelayResumeCredentials(options.resumeCredentials)) {
+        throw new RelayProtocolError('INVALID_RESUME', 'Stored reconnect credentials have an invalid shape.');
+      }
+      if (
+        options.resumeCredentials.sessionId !== options.sessionId ||
+        options.resumeCredentials.clientId !== options.clientId ||
+        options.resumeCredentials.role !== options.role
+      ) {
+        throw new RelayProtocolError(
+          'RESUME_IDENTITY_MISMATCH',
+          'Reconnect credentials are bound to one exact room, phone, and role.',
+        );
+      }
+      this.resumeCredentials = options.resumeCredentials;
+      this.roomEpoch = options.resumeCredentials.roomEpoch;
+    }
   }
 
   get state(): TransportConnectionState {
@@ -149,6 +175,7 @@ export class LanWebSocketTransport<T = unknown, D = unknown> implements SessionT
           lastSequence: this.lastSequence,
           lastRoomEpoch: this.roomEpoch,
           role: this.options.role,
+          resumeCredential: this.resumeCredentials?.credential,
           capabilities: ['direct-v1'],
         } satisfies ClientRelayMessage<T, D>));
       });
@@ -157,6 +184,17 @@ export class LanWebSocketTransport<T = unknown, D = unknown> implements SessionT
         const message = this.parseMessage(event.data);
         if (!message) return;
         if (message.type === 'error') {
+          if (
+            message.code === 'ROOM_RESET' &&
+            this.credentialsIssuedOnThisInstance &&
+            this.resumeCredentials
+          ) {
+            this.resumeCredentials = undefined;
+            this.credentialsIssuedOnThisInstance = false;
+            this.lastSequence = 0;
+            this.roomEpoch = undefined;
+            this.notifyResumeCredentials(undefined);
+          }
           const error = new RelayProtocolError(message.code, message.message);
           this.fail(error);
           settleError(error);
@@ -171,13 +209,26 @@ export class LanWebSocketTransport<T = unknown, D = unknown> implements SessionT
             socket.close(4_400, 'Identity mismatch');
             return;
           }
-          if (message.roomEpoch && this.roomEpoch && message.roomEpoch !== this.roomEpoch) {
-            this.lastSequence = 0;
-          } else if (!message.roomEpoch && message.latestSequence < this.lastSequence) {
-            // Compatibility with a relay from before room epochs were added.
+          if (message.role !== this.options.role) {
+            const error = new RelayProtocolError('ROLE_MISMATCH', 'The relay acknowledged a different room role.');
+            this.fail(error);
+            settleError(error);
+            socket.close(4_400, 'Role mismatch');
+            return;
+          }
+          if (this.roomEpoch && message.roomEpoch !== this.roomEpoch) {
             this.lastSequence = 0;
           }
-          if (message.roomEpoch) this.roomEpoch = message.roomEpoch;
+          this.roomEpoch = message.roomEpoch;
+          this.resumeCredentials = {
+            clientId: this.clientId,
+            credential: message.resumeCredential,
+            role: this.options.role,
+            roomEpoch: message.roomEpoch,
+            sessionId: this.sessionId,
+          };
+          this.credentialsIssuedOnThisInstance = true;
+          this.notifyResumeCredentials(this.resumeCredentials);
           this.supportsDirect = message.capabilities?.includes('direct-v1') ?? false;
           this.relayMaximumMessageBytes = Math.min(
             MAXIMUM_RELAY_MESSAGE_BYTES,
@@ -410,6 +461,14 @@ export class LanWebSocketTransport<T = unknown, D = unknown> implements SessionT
     for (const listener of this.stateListeners) listener(state);
   }
 
+  private notifyResumeCredentials(credentials: RelayResumeCredentials | undefined): void {
+    try {
+      this.options.onResumeCredentials?.(credentials);
+    } catch {
+      // Credential persistence must never tear down an otherwise valid relay connection.
+    }
+  }
+
   private parseMessage(data: unknown): ServerRelayMessage<T, D> | undefined {
     try {
       if (typeof data !== 'string') return undefined;
@@ -436,11 +495,13 @@ function isServerRelayMessage<T, D>(value: unknown): value is ServerRelayMessage
   }
   if (value.type === 'joined') {
     return (
-      typeof value.sessionId === 'string' &&
-      typeof value.clientId === 'string' &&
+      typeof value.sessionId === 'string' && SAFE_ID.test(value.sessionId) &&
+      typeof value.clientId === 'string' && SAFE_ID.test(value.clientId) &&
       isSafeCounter(value.latestSequence) &&
       isSafeCounter(value.serverTime) &&
-      (value.roomEpoch === undefined || (typeof value.roomEpoch === 'string' && SAFE_ID.test(value.roomEpoch))) &&
+      typeof value.roomEpoch === 'string' && SAFE_ID.test(value.roomEpoch) &&
+      (value.role === 'host' || value.role === 'guest' || value.role === 'probe') &&
+      typeof value.resumeCredential === 'string' && RESUME_CREDENTIAL.test(value.resumeCredential) &&
       (value.capabilities === undefined ||
         (Array.isArray(value.capabilities) && value.capabilities.every((capability) => capability === 'direct-v1'))) &&
       (value.maximumMessageBytes === undefined ||
@@ -504,4 +565,14 @@ function isServerRelayMessage<T, D>(value: unknown): value is ServerRelayMessage
 
 function createDirectMessageId(): string {
   return `direct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function isRelayResumeCredentials(value: RelayResumeCredentials): boolean {
+  return (
+    SAFE_ID.test(value.sessionId) &&
+    SAFE_ID.test(value.clientId) &&
+    SAFE_ID.test(value.roomEpoch) &&
+    (value.role === 'host' || value.role === 'guest' || value.role === 'probe') &&
+    RESUME_CREDENTIAL.test(value.credential)
+  );
 }

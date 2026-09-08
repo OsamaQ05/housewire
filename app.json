@@ -13,7 +13,7 @@
       "bundleIdentifier": "app.housewire.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "Housewire uses the camera only when you choose to scan a join code or a camera clue. Scans are processed locally on this phone, and no photo is saved.",
-        "NSLocalNetworkUsageDescription": "HOUSEWIRE connects family phones on the same Wi-Fi for a shared escape game.",
+        "NSLocalNetworkUsageDescription": "HOUSEWIRE connects family phones on the same Wi-Fi for shared escape rooms and team races.",
         "NSMicrophoneUsageDescription": "HOUSEWIRE uses the microphone only during an explicit game action: a short one-time whisper or local loudness pattern. Voice is never transcribed or archived.",
         "NSMotionUsageDescription": "Housewire uses motion to turn this phone into a physical game node."
       }

@@ -20,6 +20,24 @@ describe('local mission director', () => {
     })).toMatchObject({ preferManualFallback: true });
   });
 
+  it('explains an intervention from bounded play telemetry', () => {
+    const retries = assessStagePressure({
+      attempts: 3,
+      secondsSinceProgress: 18,
+      sensorAvailable: true,
+    });
+    expect(retries.reason).toBe('retries');
+    expect(retries.summary).toContain('3 attempts');
+
+    const sensor = assessStagePressure({
+      attempts: 0,
+      secondsSinceProgress: 2,
+      sensorAvailable: false,
+    });
+    expect(sensor.reason).toBe('sensor');
+    expect(sensor.preferManualFallback).toBe(true);
+  });
+
   it('learns a stable household prior and raises help as implicit struggle grows', () => {
     const practiced = learnHouseholdSkill([
       { durationSeconds: 310, retries: 0 },

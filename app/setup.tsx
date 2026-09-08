@@ -16,6 +16,7 @@ const CASE_ROOM_COPY = {
   'line-13': 'No stairs or obstacles. Keep at least two clear stations.',
   'dead-air': 'No stairs or obstacles. Keep at least two quiet stations.',
   'night-glass': 'No stairs or obstacles. Keep at least two well-lit stations.',
+  'long-table': 'Clear one shared table or floor area, plus a safe path to household objects.',
 } as const;
 
 export default function SetupScreen() {
@@ -87,7 +88,7 @@ export default function SetupScreen() {
               { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy },
             ]}
           >
-            Choose safe rooms
+            Where can everyone play safely?
           </Text>
           <Text
             style={[
@@ -95,7 +96,7 @@ export default function SetupScreen() {
               { color: theme.colors.muted, fontFamily: theme.typography.families.body },
             ]}
           >
-            {CASE_ROOM_COPY[selectedMission]}
+            Choose one clear, well-lit space per phone. {CASE_ROOM_COPY[selectedMission]}
           </Text>
         </View>
 
@@ -162,7 +163,7 @@ export default function SetupScreen() {
             },
           ]}
         >
-          {safeRooms.length} rooms selected
+          {safeRooms.length} safe spaces ready · one phone goes in each
         </Text>
 
         <View style={styles.modeSection}>
@@ -172,20 +173,20 @@ export default function SetupScreen() {
               { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium },
             ]}
           >
-            Play mode
+            How are you playing?
           </Text>
           <View style={styles.modeRow}>
             <ModeChoice
               active={sessionMode === 'lan'}
               icon="people-outline"
-              label="Together"
-              meta={selectedMission === 'dead-air' ? '3 phones best' : '2–4 phones'}
+              label="Family game"
+              meta={selectedMission === 'dead-air' || selectedMission === 'long-table' ? '3 phones best' : '2–4 phones'}
               onPress={() => chooseMode('lan')}
             />
             <ModeChoice
               active={sessionMode === 'preview'}
               icon="phone-portrait-outline"
-              label="Solo preview"
+              label="Practice first"
               meta="1 phone"
               onPress={() => chooseMode('preview')}
             />
@@ -194,7 +195,7 @@ export default function SetupScreen() {
 
         <PrimaryAction
           disabled={safeRooms.length < 2}
-          label={sessionMode === 'lan' ? 'Open lobby' : 'Continue solo'}
+          label={sessionMode === 'lan' ? 'Next: connect the phones' : 'Start one-phone practice'}
           onPress={() => {
             play('relay', 0.55);
             router.push('/lobby');

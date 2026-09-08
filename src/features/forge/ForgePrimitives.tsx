@@ -18,13 +18,14 @@ import Animated, {
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
 import { useHousewireTheme } from '@/src/theme';
+import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
 const FORGE_INK = '#F2D36D';
 const FORGE_DARK = '#0A0B08';
 
 export function ForgeGrid({ color = FORGE_INK }: { color?: string }) {
   return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.noPointerEvents]}>
+    <View {...decorativeAccessibilityProps} style={[StyleSheet.absoluteFill, styles.noPointerEvents]}>
       {Array.from({ length: 14 }, (_, index) => (
         <View key={`h-${index}`} style={[styles.gridHorizontal, { backgroundColor: color, top: `${index * 8}%` }]} />
       ))}

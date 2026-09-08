@@ -5,6 +5,7 @@ import { makeJoinTicket, parseJoinTicket } from '../src/features/session/protoco
 import { probeLanHouse } from '../src/features/session/join-room';
 import { LanWebSocketTransport, type WebSocketLike } from '../src/services/transport/lan-websocket';
 import { MAXIMUM_RELAY_MESSAGE_BYTES } from '../src/services/transport/types';
+import type { RelayResumeCredentials } from '../src/services/transport/types';
 
 interface Payload {
   action: string;
@@ -98,9 +99,11 @@ describe('LAN relay integration', () => {
       clientId: 'sender',
       role: 'guest',
     });
+    let recipientResumeCredentials: RelayResumeCredentials | undefined;
     const recipient = new LanWebSocketTransport<Payload, DirectPayload>({
       ...shared,
       clientId: 'recipient',
+      onResumeCredentials: (credentials) => { recipientResumeCredentials = credentials; },
       role: 'guest',
     });
     const hostDirect: DirectPayload[] = [];
@@ -147,6 +150,7 @@ describe('LAN relay integration', () => {
     const reconnectedRecipient = new LanWebSocketTransport<Payload, DirectPayload>({
       ...shared,
       clientId: 'recipient',
+      resumeCredentials: recipientResumeCredentials,
       role: 'guest',
     });
     const replayedDirect: DirectPayload[] = [];
@@ -335,7 +339,7 @@ describe('LAN relay integration', () => {
       webSocketFactory: factory,
     });
     await host.connect();
-    await expect(impersonator.connect()).rejects.toMatchObject({ code: 'HOST_EXISTS' });
+    await expect(impersonator.connect()).rejects.toMatchObject({ code: 'RESUME_REQUIRED' });
     expect(host.state).toBe('connected');
     await host.disconnect();
     await impersonator.disconnect();

@@ -8,24 +8,26 @@ import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
-type ActionIcon = 'people-outline' | 'scan-outline' | 'phone-portrait-outline';
+type ActionIcon = 'people-outline' | 'scan-outline' | 'sunny-outline';
 
 export default function OpeningScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const { theme } = useHousewireTheme();
   const missionStartedAt = useHousewireStore((state) => state.missionStartedAt);
+  const onboardingComplete = useHousewireStore((state) => state.onboardingComplete);
+  const tutorialComplete = useHousewireStore((state) => state.tutorialComplete);
   const { play } = useHousewireSound();
   const compact = height < 680;
 
   const createGame = () => {
     play('relay', 0.55);
-    router.push('/home');
+    router.push(onboardingComplete ? '/modes' : '/onboarding');
   };
 
-  const trySolo = () => {
+  const openTutorial = () => {
     play('switch', 0.62);
-    router.push('/onboarding');
+    router.push('/tutorial');
   };
 
   return (
@@ -72,7 +74,7 @@ export default function OpeningScreen() {
               { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium },
             ]}
           >
-            Three complete escape rooms. Every phone becomes a different physical prop.
+            Escape rooms, family trivia and live team races built for the people in the same house.
           </Text>
 
           {missionStartedAt ? (
@@ -100,9 +102,9 @@ export default function OpeningScreen() {
           ) : null}
 
           <HouseAction
-            accessibilityHint="Opens the three available escape-room case files"
+            accessibilityHint={onboardingComplete ? 'Opens the three Housewire game modes' : 'Starts a short first-time tour'}
             icon="people-outline"
-            label="Open case files"
+            label={onboardingComplete ? 'Choose a game' : 'Start here · 2 minute tour'}
             onPress={createGame}
           />
 
@@ -121,10 +123,10 @@ export default function OpeningScreen() {
             </View>
             <View style={styles.halfAction}>
               <HouseAction
-                accessibilityHint="Explains how Housewire turns phones into room instruments"
-                icon="phone-portrait-outline"
-                label="How it works"
-                onPress={trySolo}
+                accessibilityHint="Opens the easy four-step First Light practice case"
+                icon="sunny-outline"
+                label={tutorialComplete ? 'Replay practice' : 'Easy practice'}
+                onPress={openTutorial}
                 variant="secondary"
               />
             </View>

@@ -13,6 +13,12 @@ import type {
   ForgeThemeId,
   ForgeTone,
 } from './types';
+import {
+  FORGE_RIDDLE_CATALOG,
+  forgeRiddleObject,
+  type ForgeRiddleCatalogEntry,
+  type ForgeRiddleFragmentDefinition,
+} from './riddle-catalog';
 
 const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 const ALL_CAPABILITIES = [
@@ -37,6 +43,8 @@ interface ThemeBlueprint {
   ending: string;
   stageTitles: readonly [string, string, string, string, string];
   stageBeats: readonly [string, string, string, string, string];
+  riddleTitle: string;
+  riddleBeat: string;
   objectLabels: readonly string[];
   relayWords: readonly string[];
   gates: readonly string[];
@@ -52,7 +60,7 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
     premise:
       'A research station has surfaced without its crew. Its emergency relay still answers—but only in fragments split across your phones.',
     objective:
-      'Rebuild the station call sign, open its pressure vault, and transmit the recovery tone as one crew.',
+      'Recover five interlocking station proofs and bring the emergency relay online as one crew.',
     ending:
       'The relay answers from the dark. The station lights climb the cable one by one, and the recovered log names your crew.',
     stageTitles: ['Floodline Order', 'Pressure Seal', 'The Silent Channel', 'Ballast Route', 'Surface Tone'],
@@ -63,6 +71,8 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
       'The ballast pumps will overload unless the current takes the station’s one safe route.',
       'The ascent motor listens for a physical formation and a held crew tone.',
     ],
+    riddleTitle: 'The Unnamed Instrument',
+    riddleBeat: 'A sealed equipment locker recognizes one object, but its description has surfaced on different channels.',
     objectLabels: ['SONAR', 'BALLAST', 'GALLEY', 'DIVE BELL', 'ARCHIVE', 'AIRLOCK', 'BEACON', 'CORE'],
     relayWords: ['ANCHOR', 'BRINE', 'LANTERN', 'TRENCH', 'ORBIT', 'HOLLOW', 'CURRENT', 'EMBER'],
     gates: ['AFT', 'KEEL', 'PORT', 'CROWN'],
@@ -76,7 +86,7 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
     premise:
       'At midnight, every clock in an abandoned manor stopped on a different second. A mechanical will has divided the winding sequence among its heirs.',
     objective:
-      'Restore the household order, decode the master key, and restart the heart clock together.',
+      'Recover five interlocking inheritance proofs and restart the heart clock together.',
     ending:
       'The missing minute finally passes. Doors unlatch throughout the manor, and dawn moves across the portraits again.',
     stageTitles: ['Servants’ Sequence', 'The Brass Testament', 'Speaking Tube', 'Gearwalk', 'Heart Clock'],
@@ -87,6 +97,8 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
       'A service automaton must cross the gear floor without touching a locked tooth.',
       'The heart clock requires every heir to become one part of the escapement.',
     ],
+    riddleTitle: 'The Unnamed Inheritance',
+    riddleBeat: 'The mechanical will names no object outright. Its four surviving lines were delivered to different heirs.',
     objectLabels: ['PANTRY', 'ATRIUM', 'NURSERY', 'LIBRARY', 'ORANGERY', 'ATTIC', 'STUDY', 'BELL TOWER'],
     relayWords: ['MERCURY', 'VELLUM', 'THIRTEEN', 'CANDLE', 'COPPER', 'WINDOW', 'ORCHARD', 'HOLLOW'],
     gates: ['HOUR', 'MINUTE', 'CHIME', 'CROWN'],
@@ -100,7 +112,7 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
     premise:
       'A prototype camera flash erased an exhibition from ordinary sight. Your phones still catch different parts of its afterimage.',
     objective:
-      'Reconstruct the collection, unlock the negative vault, and hold the final frame long enough to restore it.',
+      'Recover five interlocking exhibit proofs and hold the final frame long enough to restore the collection.',
     ending:
       'The shutter closes. Every missing object returns with a soft crackle of light, exactly where the crew remembered it.',
     stageTitles: ['Inventory of Shadows', 'Negative Vault', 'Audio Guide Zero', 'Gallery Without Walls', 'The Final Exposure'],
@@ -111,6 +123,8 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
       'The erased gallery survives as open passages split across several viewpoints.',
       'The restoration flash needs the crew to hold a single impossible photograph together.',
     ],
+    riddleTitle: 'Object Without a Label',
+    riddleBeat: 'One erased exhibit can reopen the gallery, but its catalog description has split into contradictory-looking fragments.',
     objectLabels: ['MASK', 'ASTROLABE', 'VASE', 'LANTERN', 'MAP', 'CROWN', 'CAMERA', 'MIRROR'],
     relayWords: ['SILVER', 'VELVET', 'ORBIT', 'FIGURE', 'GLASS', 'EMBER', 'NORTH', 'FRAME'],
     gates: ['PLATE', 'LENS', 'SHUTTER', 'FILM'],
@@ -124,7 +138,7 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
     premise:
       'A mountain train has stopped between stations as a whiteout erases the track. Its old safety system has assigned one fragment of the route to each passenger.',
     objective:
-      'Restore the carriage order, clear the signal box, and guide the train through Black Pass.',
+      'Recover five interlocking rail proofs and guide the train safely through Black Pass.',
     ending:
       'The points lock with a deep metallic note. The train rolls out of the whiteout, carrying every passenger into the same sunrise.',
     stageTitles: ['Carriage Manifest', 'Signal Cabinet', 'Conductor’s Wire', 'Black Pass', 'Clear Track'],
@@ -135,6 +149,8 @@ const THEMES: Readonly<Record<ForgeThemeId, ThemeBlueprint>> = {
       'The points through Black Pass form one valid path, distributed across the train.',
       'The final signal requires every carriage to answer in one physical rhythm.',
     ],
+    riddleTitle: 'The Lost Property Lock',
+    riddleBeat: 'The emergency cabinet asks for one lost object. Each carriage received a different line from its description.',
     objectLabels: ['SLEEPER', 'DINER', 'MAIL', 'OBSERVATION', 'BAGGAGE', 'ENGINE', 'PARLOR', 'CABOOSE'],
     relayWords: ['SWITCH', 'SUMMIT', 'LANTERN', 'TUNNEL', 'CINDER', 'NORTH', 'RIVER', 'COPPER'],
     gates: ['HOME', 'DISTANT', 'PASS', 'YARD'],
@@ -420,6 +436,91 @@ function createOrderStage(
     fallback: {
       reason: 'This stage uses only reading and touch.',
       instruction: 'Read each fragment aloud and tap the labels into order.',
+      preservesAnswer: true,
+    },
+  };
+}
+
+function riddleSurvivors(
+  candidateIds: readonly string[],
+  fragments: readonly ForgeRiddleFragmentDefinition[],
+): string[] {
+  return candidateIds.filter((candidateId) =>
+    fragments.every((fragment) => fragment.matchingCandidateIds.includes(candidateId)),
+  );
+}
+
+function createRiddleCandidates(
+  entry: ForgeRiddleCatalogEntry,
+  fragments: readonly ForgeRiddleFragmentDefinition[],
+  count: number,
+  random: SeededRandom,
+) {
+  const selectedIds = [entry.answerId];
+  for (const fragment of fragments) {
+    const decoy = random.shuffle(fragment.matchingCandidateIds)
+      .find((candidateId) => candidateId !== entry.answerId && !selectedIds.includes(candidateId));
+    if (decoy) selectedIds.push(decoy);
+  }
+  for (const candidateId of random.shuffle(entry.candidateIds)) {
+    if (selectedIds.length >= count) break;
+    if (!selectedIds.includes(candidateId)) selectedIds.push(candidateId);
+  }
+  return random.shuffle(selectedIds).map((candidateId) => {
+    const candidate = forgeRiddleObject(candidateId);
+    if (!candidate) throw new Error(`Missing canonical riddle object ${candidateId}.`);
+    return { ...candidate };
+  });
+}
+
+function createSplitRiddleStage(
+  theme: ThemeBlueprint,
+  request: ForgeGenerationRequest,
+  playerIds: readonly string[],
+  random: SeededRandom,
+  durationMinutes: number,
+): ForgeStage {
+  const entry = random.pick(FORGE_RIDDLE_CATALOG);
+  const fragmentCount: 3 | 4 = playerIds.length === 4 || request.difficulty <= 2 ? 4 : 3;
+  const fragments = random.shuffle(entry.fragments.slice(0, fragmentCount));
+  const candidateCount = request.difficulty <= 1 ? 6 : request.difficulty <= 3 ? 7 : 8;
+  const candidates = createRiddleCandidates(entry, fragments, candidateCount, random);
+  const candidateIds = candidates.map((candidate) => candidate.id);
+  const afterTwo = riddleSurvivors(candidateIds, fragments.slice(0, 2));
+  const answer = forgeRiddleObject(entry.answerId);
+  if (!answer || riddleSurvivors(candidateIds, fragments).length !== 1) {
+    throw new Error('The canonical split-riddle catalog produced an ambiguous lock.');
+  }
+
+  const clues: ForgeClue[] = fragments.map((fragment, index) => ({
+    id: `riddle-fragment-${index + 1}`,
+    title: `Witness fragment ${index + 1} of ${fragmentCount}`,
+    audiencePlayerIds: clueAudience(playerIds[index % playerIds.length]),
+    private: playerIds.length > 1,
+    payload: { kind: 'riddle-fragment', fragmentId: fragment.id, text: fragment.text },
+  }));
+
+  return {
+    id: 'forge-split-riddle',
+    index: 0,
+    title: theme.riddleTitle,
+    storyBeat: theme.riddleBeat,
+    instruction: 'Keep your fragment on your phone. Read every line aloud, eliminate objects that conflict, then lock in the one survivor.',
+    durationMinutes,
+    mechanic: { kind: 'split-riddle', candidates, fragmentCount },
+    clues,
+    hints: standardHints(
+      'No single fragment is enough. Test each object against every line the crew has read.',
+      `Combining the first two witness fragments leaves ${afterTwo.length} possible ${afterTwo.length === 1 ? 'object' : 'objects'} on this plate. Add the remaining evidence.`,
+      `The answer starts with ${answer.label[0]} and has ${answer.label.length} letters.`,
+      request.difficulty,
+    ),
+    solution: { kind: 'word', answer: entry.answerId },
+    requiredPlayerIds: [...playerIds],
+    submitterPlayerIds: [...playerIds],
+    fallback: {
+      reason: 'The object lock uses private reading and touch, so it remains playable without sensors or network access.',
+      instruction: 'Pass the phone between roles if needed; keep the same candidate plate and combine all witness fragments aloud.',
       preservesAnswer: true,
     },
   };
@@ -870,7 +971,7 @@ function createCustomThemeBlueprint(base: ThemeBlueprint, prompt: string): Theme
     premise:
       `The case world is “${world}”. An unknown mechanism has divided its only escape sequence across the crew’s phones.`,
     objective:
-      'Recover the sequence, open the encoded lock, route the private signal, cross the hidden path, and close the mechanism together.',
+      'Recover five interlocking proofs from the case world and close its final mechanism together.',
     ending:
       `The final lock releases. “${world}” becomes still, and the route behind the crew seals without taking any of its evidence.`,
     stageTitles: ['Origin Sequence', 'The Encoded Aperture', 'Private Frequency', 'The Impossible Route', 'Final Alignment'],
@@ -881,6 +982,8 @@ function createCustomThemeBlueprint(base: ThemeBlueprint, prompt: string): Theme
       'Several partial maps describe one safe route through the case world.',
       'The exit responds only when every role holds a different part of one synchronized proof.',
     ],
+    riddleTitle: 'The Nameless Object',
+    riddleBeat: `One object belongs inside “${world}”, but its identity survives only as private witness fragments.`,
     objectLabels: ['ORIGIN', 'ARCHIVE', 'LANTERN', 'MIRROR', 'SIGNAL', 'VAULT', 'GATE', 'CORE'],
     relayWords: ['ORBIT', 'EMBER', 'NORTH', 'GLASS', 'HOLLOW', 'COPPER', 'THREAD', 'RETURN'],
     gates: ['ENTRY', 'ECHO', 'CROSSING', 'EXIT'],
@@ -906,13 +1009,34 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
     : baseTheme;
   const durations = distributeDurations(request.targetMinutes);
   const roles = createRoles(normalizedPlayerIds, request.playerNames, random);
+  const legacyKinds = random.shuffle([
+    'distributed-order',
+    'symbol-lock',
+    'private-relay',
+    'route-grid',
+  ] as const);
+  const openingKinds = random.shuffle([
+    'split-riddle',
+    ...legacyKinds.slice(0, 3),
+  ] as const);
+  const openingStages = openingKinds.map((kind, index) => {
+    switch (kind) {
+      case 'distributed-order':
+        return createOrderStage(theme, request, normalizedPlayerIds, random, durations[index]);
+      case 'split-riddle':
+        return createSplitRiddleStage(theme, request, normalizedPlayerIds, random, durations[index]);
+      case 'symbol-lock':
+        return createSymbolStage(theme, request, normalizedPlayerIds, random, durations[index]);
+      case 'private-relay':
+        return createRelayStage(theme, request, normalizedPlayerIds, random, durations[index]);
+      case 'route-grid':
+        return createRouteStage(theme, request, normalizedPlayerIds, random, durations[index]);
+    }
+  });
   const stages = [
-    createOrderStage(theme, request, normalizedPlayerIds, random, durations[0]),
-    createSymbolStage(theme, request, normalizedPlayerIds, random, durations[1]),
-    createRelayStage(theme, request, normalizedPlayerIds, random, durations[2]),
-    createRouteStage(theme, request, normalizedPlayerIds, random, durations[3]),
+    ...openingStages,
     createSyncStage(theme, request, normalizedPlayerIds, random, durations[4]),
-  ];
+  ].map((stage, index) => ({ ...stage, index }));
   const idSuffix = mixSeed(effectiveSeed, THEME_IDS.indexOf(theme.id), request.targetMinutes, request.intensity.length)
     .toString(36)
     .toUpperCase()
@@ -921,7 +1045,7 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
   return {
     id: `forge-${theme.id}-${idSuffix}`,
     schemaVersion: 1,
-    generatorVersion: 'housewire-local-forge-v1',
+    generatorVersion: 'housewire-local-forge-v2',
     providerId: 'housewire-local-forge-v1',
     seed: request.seed,
     effectiveSeed,
@@ -969,6 +1093,8 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
         'all-players-required',
         'capability-fallbacks',
         'private-clue-isolation',
+        'canonical-riddle-lock',
+        'variable-mechanic-cut',
         'route-connectivity',
         'bounded-content',
       ],

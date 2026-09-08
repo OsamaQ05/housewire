@@ -57,12 +57,26 @@ export const missions: MissionDefinition[] = [
     requiredRoles: ['relay', 'navigator', 'breaker'],
     mechanics: ['CAMERA', 'PARALLAX', 'MAZE', 'CARRY', 'SYNC'],
   },
+  {
+    id: 'long-table',
+    title: 'THE LONG TABLE',
+    operation: 'MIDNIGHT SERVICE',
+    description:
+      'An impossible dining room stole one ordinary family meal. Seat four generations, rebuild the photograph, prove what the house kept, then serve before the last bell.',
+    duration: '22 MIN',
+    playerRange: '2–4 PLACES',
+    intensity: 'ACTIVE',
+    playable: true,
+    accent: '#E4A84A',
+    requiredRoles: ['listener', 'navigator', 'relay', 'breaker'],
+    mechanics: ['TIMELINE', 'PHOTO', 'CAMERA', 'HANDOFF', 'VOICE'],
+  },
 ];
 
 export const sealedOperations = [
-  { title: 'COURIER ZERO', detail: 'The packet may never stop moving.', code: 'OP.04' },
-  { title: 'THE HOUSE BELOW', detail: 'Another floor is answering from underground.', code: 'OP.05' },
-  { title: 'LAST OCCUPANT', detail: 'The empty room keeps checking in.', code: 'OP.06' },
+  { title: 'COURIER ZERO', detail: 'The packet may never stop moving.', code: 'OP.05' },
+  { title: 'THE HOUSE BELOW', detail: 'Another floor is answering from underground.', code: 'OP.06' },
+  { title: 'LAST OCCUPANT', detail: 'The empty room keeps checking in.', code: 'OP.07' },
 ];
 
 export const roleCopy: Record<RoleId, { title: string; instruction: string; color: string }> = {

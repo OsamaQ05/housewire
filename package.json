@@ -4,7 +4,11 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "dev": "concurrently --kill-others-on-fail --names RELAY,EXPO --prefix-colors magenta,cyan \"npm:relay\" \"expo start\"",
+    "start:share": "node scripts/start-shared-expo.mjs",
+    "start:client": "node scripts/start-shared-expo.mjs --dev-client",
+    "dev": "node scripts/start-shared-housewire.mjs",
+    "dev:share": "node scripts/start-shared-housewire.mjs",
+    "dev:client": "node scripts/start-shared-housewire.mjs --dev-client",
     "relay": "tsx server/index.ts",
     "android": "expo start --android",
     "ios": "expo start --ios",

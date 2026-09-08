@@ -11,6 +11,7 @@ const CASE_ART = {
   'line-13': require('../assets/art/line13-house-v2.png'),
   'dead-air': require('../assets/art/dead-air-case.png'),
   'night-glass': require('../assets/art/night-glass-case.png'),
+  'long-table': require('../assets/art/long-table-case.png'),
 } as const;
 
 export default function DebriefScreen() {
@@ -127,18 +128,21 @@ function closingCopy(missionId: string, retries: number): string {
   const recovery = retries === 0 ? 'No clue was lost.' : `${retries} ${retries === 1 ? 'mistake was' : 'mistakes were'} recovered together.`;
   if (missionId === 'line-13') return `The future call never reached the present. ${recovery}`;
   if (missionId === 'dead-air') return `The Quiet Machine can no longer route through the house. ${recovery}`;
-  return `The duplicate floorplan folded back behind the glass. ${recovery}`;
+  if (missionId === 'night-glass') return `The duplicate floorplan folded back behind the glass. ${recovery}`;
+  return `The stolen meal returned to the people who made it matter. ${recovery}`;
 }
 
 function closingTitle(missionId: string): string {
   if (missionId === 'dead-air') return 'You killed the broadcast.';
   if (missionId === 'night-glass') return 'You folded the corridor.';
+  if (missionId === 'long-table') return 'You served the long table.';
   return 'You closed the line.';
 }
 
 function closingSubtitle(missionId: string): string {
   if (missionId === 'dead-air') return 'Three ducts. One countertone. Dead quiet.';
   if (missionId === 'night-glass') return 'Every impossible door is gone. Together.';
+  if (missionId === 'long-table') return 'Four decades. One table. No empty place.';
   return 'Every receiver went quiet. Together.';
 }
 

@@ -197,7 +197,7 @@ const snapshotRequestSchema = z
 
 const readySchema = z.object({ kind: z.literal('node.ready'), nodeId: safeIdSchema, ready: z.boolean() }).strict();
 
-export const escapeMissionIds = ['dead-air', 'night-glass'] as const;
+export const escapeMissionIds = ['dead-air', 'night-glass', 'long-table'] as const;
 export type EscapeMissionId = (typeof escapeMissionIds)[number];
 
 const escapeMissionIdSchema = z.enum(escapeMissionIds);
@@ -293,7 +293,14 @@ const escapeSignalSchema = z
     nodeId: safeIdSchema,
     targetNodeId: safeIdSchema.optional(),
     round: z.number().int().min(1).max(8),
-    signal: z.enum(['gate-open', 'whisper-sent', 'whisper-heard', 'frame-locked']),
+    signal: z.enum([
+      'gate-open',
+      'whisper-sent',
+      'whisper-heard',
+      'frame-locked',
+      'table-set',
+      'keepsake-framed',
+    ]),
     value: z.string().max(32).optional(),
     observedAt: timestampSchema,
   })
@@ -665,5 +672,5 @@ function firstRouteParam(value: JoinTicketRouteParam): string | undefined {
 }
 
 export function isMissionId(value: string): value is MissionId {
-  return value === 'line-13' || value === 'dead-air' || value === 'night-glass';
+  return value === 'line-13' || value === 'dead-air' || value === 'night-glass' || value === 'long-table';
 }

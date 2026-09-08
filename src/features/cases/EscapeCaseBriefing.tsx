@@ -23,6 +23,7 @@ import { useHousewireTheme } from '@/src/theme';
 const CASE_ART: Readonly<Record<EscapeCaseId, number>> = {
   'dead-air': require('@/assets/art/dead-air-case.png'),
   'night-glass': require('@/assets/art/night-glass-case.png'),
+  'long-table': require('@/assets/art/long-table-case.png'),
 };
 
 const CASE_COPY = {
@@ -47,6 +48,17 @@ const CASE_COPY = {
       ['git-merge-outline', 'Fold it together'],
     ] as const,
     title: 'The camera sees another house.',
+  },
+  'long-table': {
+    accent: '#E4A84A',
+    duration: '22 MINUTES',
+    eyebrow: 'BLACKLINE FILE 04 · MIDNIGHT SERVICE',
+    rules: [
+      ['restaurant-outline', 'Order four generations'],
+      ['camera-outline', 'Find what your home kept'],
+      ['people-outline', 'Serve one table together'],
+    ] as const,
+    title: 'Your table remembers every seat.',
   },
 } as const;
 
@@ -135,7 +147,7 @@ export function EscapeCaseBriefing({ missionId }: { missionId: EscapeCaseId }) {
     ) return;
     enteredRef.current = true;
     startMission();
-    play(missionId === 'dead-air' ? 'deadAirOpen' : 'nightGlassOpen', 0.72);
+    play(openingSound(missionId), 0.72);
     router.replace('/mission');
   }, [coordinator.liveNodeIds, coordinator.startedAt, localNodeId, locallyReady, missionId, play, router, shared, startMission]);
 
@@ -155,7 +167,7 @@ export function EscapeCaseBriefing({ missionId }: { missionId: EscapeCaseId }) {
     }
     enteredRef.current = true;
     startMission();
-    play(missionId === 'dead-air' ? 'deadAirOpen' : 'nightGlassOpen', 0.72);
+    play(openingSound(missionId), 0.72);
     router.replace('/mission');
   };
 
@@ -212,7 +224,7 @@ export function EscapeCaseBriefing({ missionId }: { missionId: EscapeCaseId }) {
             <View style={styles.packetOpen}>
               <View style={styles.packetTopline}>
                 <OperationalLabel textStyle={{ color: copy.accent }}>YOUR INSTRUMENT</OperationalLabel>
-                <Ionicons color={copy.accent} name={missionId === 'dead-air' ? 'radio-outline' : 'aperture-outline'} size={25} />
+                <Ionicons color={copy.accent} name={missionId === 'dead-air' ? 'radio-outline' : missionId === 'night-glass' ? 'aperture-outline' : 'restaurant-outline'} size={25} />
               </View>
               <Text style={[styles.roleTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{role.title}</Text>
               <Text style={[styles.roleInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{role.instruction}</Text>
@@ -249,7 +261,7 @@ export function EscapeCaseBriefing({ missionId }: { missionId: EscapeCaseId }) {
         <BreakerButton
           disabled={!locallyReady || (shared && (!coordinator.isHost || !everyoneReady || starting))}
           haptic="rigid"
-          label={shared && !coordinator.isHost ? 'Ready — wait for host' : `Open ${missionId === 'dead-air' ? 'the channel' : 'the corridor'}`}
+          label={shared && !coordinator.isHost ? 'Ready — wait for host' : openLabel(missionId)}
           loading={starting}
           onPress={() => void begin()}
           overline={shared ? coordinator.isHost ? everyoneReady ? 'EVERY PHONE IS ARMED' : 'WAITING FOR THE HOUSE' : 'HOST CONTROLS THE CLOCK' : 'ALL ROLES RUN ON THIS PHONE'}
@@ -276,6 +288,15 @@ function roleFor(game: CompiledEscapeCase, nodeId: string) {
     }
     return { title: 'THE TUNER', instruction: 'You open ducts and operate the Quiet Machine. The private channel deliberately excludes this phone.', privateNote: 'YOU WILL SEE A CLOSED-CHANNEL PULSE ONLY' };
   }
+  if (game.id === 'long-table') {
+    if (nodeId === game.tableCaptainNodeId) {
+      return { title: 'THE HOST', instruction: 'You hold the service ledger. Everyone else owns the decades and fragments needed to fill it.', privateNote: 'YOU CAN ENTER ANSWERS · YOU CANNOT SEE THE COMPLETE CLUE' };
+    }
+    if (nodeId === game.photograph.ruleOwnerNodeId) {
+      return { title: 'THE WITNESS', instruction: 'You own the photograph’s reading rule and must inspect another person’s real household object.', privateNote: 'THE OBJECT LENS SAVES AND SENDS NOTHING' };
+    }
+    return { title: 'THE COURIER', instruction: 'You carry private fragments between places. The route changes hands after every service pass.', privateNote: 'EVERY PERSON BECOMES A DESTINATION' };
+  }
   const firstRound = game.parallaxRounds[0];
   if (nodeId === firstRound.watcherNodeId) {
     return { title: 'THE WATCHER', instruction: 'Your camera sees bearings that the frame and hinge cannot. Say what moves inside the glass.', privateNote: 'CAMERA CLUES ARE PROCESSED LIVE AND NEVER SAVED' };
@@ -284,6 +305,18 @@ function roleFor(game: CompiledEscapeCase, nodeId: string) {
     return { title: 'THE FRAME', instruction: 'Your screen becomes a physical doorway for another phone to scan. Keep it bright and still.', privateNote: 'THE MARKER CHANGES ON EVERY RUN' };
   }
   return { title: 'THE HINGE', instruction: 'Your phone tilts the door seen on somebody else’s camera. You control a view you cannot see.', privateNote: 'MOTION TRACES STAY ON THIS PHONE' };
+}
+
+function openingSound(missionId: EscapeCaseId): 'deadAirOpen' | 'nightGlassOpen' | 'ring' {
+  if (missionId === 'dead-air') return 'deadAirOpen';
+  if (missionId === 'night-glass') return 'nightGlassOpen';
+  return 'ring';
+}
+
+function openLabel(missionId: EscapeCaseId): string {
+  if (missionId === 'dead-air') return 'Open the channel';
+  if (missionId === 'night-glass') return 'Open the corridor';
+  return 'Seat the long table';
 }
 
 const styles = StyleSheet.create({

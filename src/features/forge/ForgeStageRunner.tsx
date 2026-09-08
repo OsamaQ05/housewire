@@ -63,6 +63,7 @@ export function ForgeStageRunner({
   const { theme } = useHousewireTheme();
   const [lastResult, setLastResult] = useState<ForgeSubmissionResult | null>(null);
   const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
+  const [riddleAnswer, setRiddleAnswer] = useState('');
   const [symbolCode, setSymbolCode] = useState<string[]>([]);
   const [relayTokens, setRelayTokens] = useState<Record<number, string>>({});
   const [route, setRoute] = useState<number[]>([]);
@@ -77,6 +78,7 @@ export function ForgeStageRunner({
   useEffect(() => {
     setLastResult(null);
     setSelectedTokens([]);
+    setRiddleAnswer('');
     setSymbolCode([]);
     setRelayTokens({});
     setRoute(routeStartCell ? [routeStartCell] : []);
@@ -185,6 +187,10 @@ export function ForgeStageRunner({
               setLastResult(null);
               setSelectedTokens(value);
             }}
+            onRiddleChange={(value) => {
+              setLastResult(null);
+              setRiddleAnswer(value);
+            }}
             onSymbolChange={(value) => {
               setLastResult(null);
               setSymbolCode(value);
@@ -200,6 +206,7 @@ export function ForgeStageRunner({
               setSyncProofs((value) => ({ ...value, [playerId]: { at: now, evidenceMode } }));
             }}
             relayTokens={relayTokens}
+            riddleAnswer={riddleAnswer}
             route={route}
             roles={roles}
             selectedTokens={selectedTokens}
@@ -220,6 +227,9 @@ export function ForgeStageRunner({
               switch (stage.mechanic.kind) {
                 case 'distributed-order':
                   void submit({ kind: 'sequence', value: selectedTokens });
+                  break;
+                case 'split-riddle':
+                  void submit({ kind: 'word', value: riddleAnswer });
                   break;
                 case 'symbol-lock':
                   void submit({ kind: 'code', value: symbolCode.join('') });
@@ -394,6 +404,13 @@ function CluePayloadView({ liveMode, payload }: { liveMode: boolean; payload: Fo
   switch (payload.kind) {
     case 'text':
       return <Text selectable style={[styles.clueHero, { color: forgeColors.ink, fontFamily: theme.typography.families.storyBold }]}>{payload.text}</Text>;
+    case 'riddle-fragment':
+      return (
+        <View style={[styles.riddleClue, { borderColor: forgeColors.ink }]}>
+          <Text style={[styles.riddleQuote, { color: forgeColors.ink, fontFamily: theme.typography.families.storyBold }]}>“{payload.text}”</Text>
+          <Text style={[styles.riddleWitness, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>READ ALOUD · DO NOT SHOW YOUR SCREEN</Text>
+        </View>
+      );
     case 'sequence':
       return <View style={styles.payloadRow}>{payload.items.map((item, index) => <PayloadChip key={`${item}-${index}`} text={`${index + 1} · ${item}`} />)}</View>;
     case 'mapping':
@@ -440,11 +457,13 @@ function CameraScannerPayload({ markerToken, symbol }: { markerToken: string; sy
 function MechanicWorkbench({
   activePlayerId,
   onRelayChange,
+  onRiddleChange,
   onRouteChange,
   onSequenceChange,
   onSymbolChange,
   onSyncProof,
   relayTokens,
+  riddleAnswer,
   roles,
   route,
   selectedTokens,
@@ -455,11 +474,13 @@ function MechanicWorkbench({
 }: {
   activePlayerId: string;
   onRelayChange: (value: Record<number, string>) => void;
+  onRiddleChange: (value: string) => void;
   onRouteChange: (value: number[]) => void;
   onSequenceChange: (value: string[]) => void;
   onSymbolChange: (value: string[]) => void;
   onSyncProof: (playerId: string, evidenceMode: ForgeSyncProof['evidenceMode']) => void;
   relayTokens: Record<number, string>;
+  riddleAnswer: string;
   roles: readonly ForgeRole[];
   route: number[];
   selectedTokens: string[];
@@ -488,6 +509,45 @@ function MechanicWorkbench({
         </View>
       );
     }
+    case 'split-riddle':
+      return (
+        <View style={styles.assembly}>
+          <View style={styles.riddleLockHeader}>
+            <View style={[styles.riddleKeyhole, { borderColor: riddleAnswer ? forgeColors.ink : theme.colors.draft }]}>
+              <Ionicons color={riddleAnswer ? forgeColors.ink : theme.colors.faint} name={riddleAnswer ? 'lock-open' : 'lock-closed'} size={22} />
+            </View>
+            <View style={styles.riddleLockCopy}>
+              <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Combine every private witness line. Tap the only object that survives all of them.</Text>
+              <Text style={[styles.riddleCount, { color: forgeColors.orange, fontFamily: theme.typography.families.monoMedium }]}>{mechanic.fragmentCount} FRAGMENTS · ONE ANSWER</Text>
+            </View>
+          </View>
+          <View style={styles.riddleCandidateGrid}>
+            {mechanic.candidates.map((candidate) => {
+              const selected = candidate.id === riddleAnswer;
+              return (
+                <Pressable
+                  accessibilityLabel={`${candidate.label}${selected ? ', selected' : ''}`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  key={candidate.id}
+                  onPress={() => onRiddleChange(selected ? '' : candidate.id)}
+                  style={({ pressed }) => [
+                    styles.riddleCandidate,
+                    {
+                      backgroundColor: selected ? forgeColors.ink : 'transparent',
+                      borderColor: selected ? forgeColors.ink : theme.colors.draft,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.riddleSigil, { color: selected ? forgeColors.dark : forgeColors.ink, fontFamily: theme.typography.families.displayHeavy }]}>{candidate.sigil}</Text>
+                  <Text style={[styles.riddleCandidateLabel, { color: selected ? forgeColors.dark : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{candidate.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
     case 'symbol-lock':
       return (
         <View style={styles.assembly}>
@@ -940,6 +1000,17 @@ const styles = StyleSheet.create({
   relayRecipient: { fontSize: 18, lineHeight: 20, textTransform: 'uppercase' },
   relayRound: { alignItems: 'center', borderColor: '#FF7048', borderWidth: 1, height: 34, justifyContent: 'center', width: 34 },
   relayRoundText: { fontSize: 20 },
+  riddleCandidate: { alignItems: 'center', borderWidth: 1, flexBasis: '47%', flexGrow: 1, gap: 5, justifyContent: 'center', minHeight: 86, padding: 10 },
+  riddleCandidateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  riddleCandidateLabel: { fontSize: 9, letterSpacing: 1.1 },
+  riddleClue: { borderBottomWidth: 1, borderTopWidth: 1, gap: 8, paddingVertical: 14 },
+  riddleCount: { fontSize: 8, letterSpacing: 1 },
+  riddleKeyhole: { alignItems: 'center', borderWidth: 1, height: 48, justifyContent: 'center', transform: [{ rotate: '45deg' }], width: 48 },
+  riddleLockCopy: { flex: 1, gap: 6 },
+  riddleLockHeader: { alignItems: 'center', flexDirection: 'row', gap: 15 },
+  riddleQuote: { fontSize: 22, lineHeight: 28 },
+  riddleSigil: { fontSize: 31, lineHeight: 34 },
+  riddleWitness: { fontSize: 7, letterSpacing: 1 },
   roleBrief: { alignItems: 'center', borderLeftWidth: 2, flexDirection: 'row', gap: 8, minHeight: 48, paddingLeft: 10 },
   roleBriefText: { flex: 1, fontSize: 12, lineHeight: 17 },
   roleName: { fontSize: 19, lineHeight: 20, textTransform: 'uppercase' },

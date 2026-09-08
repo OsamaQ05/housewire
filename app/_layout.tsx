@@ -21,8 +21,10 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useHousewireStore } from '@/src/store/use-housewire-store';
+import { useCircuitRaceStore } from '@/src/store/use-circuit-race-store';
 import { HousewireThemeProvider } from '@/src/theme';
 import { HousewireSessionProvider } from '@/src/features/session';
+import { CircuitRaceRuntimeProvider } from '@/src/features/race';
 import { HousewireSoundProvider } from '@/src/hooks/use-housewire-sound';
 
 void SplashScreen.preventAutoHideAsync();
@@ -34,6 +36,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const settings = useHousewireStore((state) => state.settings);
   const hydrated = useHousewireStore((state) => state.hydrated);
+  const raceHydrated = useCircuitRaceStore((state) => state.hydrated);
   const [fontsLoaded, fontError] = useFonts({
     BarlowCondensed_700Bold,
     BarlowCondensed_800ExtraBold,
@@ -44,16 +47,16 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && hydrated) {
+    if ((fontsLoaded || fontError) && hydrated && raceHydrated) {
       void SplashScreen.hideAsync();
     }
-  }, [fontError, fontsLoaded, hydrated]);
+  }, [fontError, fontsLoaded, hydrated, raceHydrated]);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(settings.daylight ? '#EFE6D2' : '#070806');
   }, [settings.daylight]);
 
-  if ((!fontsLoaded && !fontError) || !hydrated) return null;
+  if ((!fontsLoaded && !fontError) || !hydrated || !raceHydrated) return null;
 
   const navigationTheme = {
     ...DarkTheme,
@@ -76,16 +79,18 @@ export default function RootLayout() {
       >
         <HousewireSoundProvider>
           <HousewireSessionProvider>
-            <ThemeProvider value={navigationTheme}>
-              <Stack
-                screenOptions={{
-                  animation: settings.reducedMotion ? 'none' : 'fade',
-                  animationDuration: 220,
-                  contentStyle: { backgroundColor: navigationTheme.colors.background },
-                  headerShown: false,
-                }}
-              />
-            </ThemeProvider>
+            <CircuitRaceRuntimeProvider>
+              <ThemeProvider value={navigationTheme}>
+                <Stack
+                  screenOptions={{
+                    animation: settings.reducedMotion ? 'none' : 'fade',
+                    animationDuration: 220,
+                    contentStyle: { backgroundColor: navigationTheme.colors.background },
+                    headerShown: false,
+                  }}
+                />
+              </ThemeProvider>
+            </CircuitRaceRuntimeProvider>
           </HousewireSessionProvider>
         </HousewireSoundProvider>
       </HousewireThemeProvider>

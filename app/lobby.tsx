@@ -107,6 +107,7 @@ export default function LobbyScreen() {
   const connectionState: TransportConnectionState =
     sessionMode === 'lan' ? sessionConnectionState : 'idle';
   const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [showConnectionDetails, setShowConnectionDetails] = useState(false);
   const connectionError = lobbyError ?? sessionError ?? null;
   const [starting, setStarting] = useState(false);
   const processedLobbyEventIdsRef = useRef(new Set<string>());
@@ -341,23 +342,23 @@ export default function LobbyScreen() {
                 ? 'One phone. Whole house.'
                 : isGuest
                   ? 'You’re inside.'
-                  : 'Bring the house online.'}
+                  : 'Let everyone scan this.'}
             </Text>
             <Text style={[styles.heroText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>
               {sessionMode === 'preview'
                 ? 'You will step through every room.'
                 : isGuest
                   ? 'Stay here until the host starts.'
-                  : 'Invite one more phone to begin.'}
+                  : 'On each phone: open Housewire, tap Join game, then scan.'}
             </Text>
           </View>
         </ImageBackground>
 
         <View style={styles.section}>
           <SectionLead
-            detail={sessionMode === 'preview' ? 'No second phone needed' : isGuest ? 'You joined this code' : 'Other phones scan this'}
+            detail={sessionMode === 'preview' ? 'No second phone needed' : isGuest ? 'You are connected—stay on this screen' : 'Scan once on every other phone'}
             index="1"
-            title={sessionMode === 'preview' ? 'Solo setup' : isGuest ? 'House found' : 'Share'}
+            title={sessionMode === 'preview' ? 'Solo setup' : isGuest ? 'You’re in' : 'Connect phones'}
           />
 
           {sessionMode === 'lan' && !isGuest && joinTicket ? (
@@ -387,7 +388,10 @@ export default function LobbyScreen() {
                 >
                   {sessionCode ?? '-----'}
                 </Text>
-                <Text numberOfLines={2} selectable style={[styles.relay, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{relayUrl}</Text>
+                <Pressable accessibilityRole="button" onPress={() => setShowConnectionDetails((current) => !current)}>
+                  <Text style={[styles.detailsAction, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{showConnectionDetails ? 'Hide connection details' : 'Connection details'}</Text>
+                </Pressable>
+                {showConnectionDetails ? <Text numberOfLines={2} selectable style={[styles.relay, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{relayUrl}</Text> : null}
               </View>
             </View>
           ) : sessionMode === 'lan' && !isGuest ? (
@@ -400,9 +404,9 @@ export default function LobbyScreen() {
                   ? 'PREPARING INVITE'
                   : 'INVITE UNAVAILABLE'}
               </OperationalLabel>
-              <Text style={[styles.invitePendingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>The QR appears when the relay answers.</Text>
+              <Text style={[styles.invitePendingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Preparing your join code…</Text>
               <Text selectable style={[styles.invitePendingText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>
-                Keep this lobby open. The relay must be running on {relayUrl} before another phone can join.
+                Keep this screen open. If this takes more than a few seconds, reconnect below.
               </Text>
             </View>
           ) : sessionMode === 'lan' ? (
@@ -423,9 +427,9 @@ export default function LobbyScreen() {
 
         <View style={styles.section}>
           <SectionLead
-            detail={sessionMode === 'preview' ? 'Solo stand-ins' : `${connectedLiveCrew.length} ready`}
+            detail={sessionMode === 'preview' ? 'Solo stand-ins' : `${connectedLiveCrew.length} phone${connectedLiveCrew.length === 1 ? '' : 's'} connected`}
             index="2"
-            title="Rooms"
+            title="Who is where"
           />
           <View style={styles.roomGrid}>
             {displayedCrew.map((node) => (
@@ -450,16 +454,16 @@ export default function LobbyScreen() {
 
         <View style={styles.section}>
           <SectionLead
-            detail={sessionMode === 'preview' ? 'Ready now' : connectedLiveCrew.length >= 2 ? 'House is ready' : 'Needs 2 phones'}
+            detail={sessionMode === 'preview' ? 'Ready now' : connectedLiveCrew.length >= 2 ? 'Ready when everyone is in place' : 'Connect at least 2 phones'}
             index="3"
-            title="Start"
+            title="Split up, then start"
           />
           <View style={styles.readyLine}>
             {[0, 1, 2, 3].map((index) => {
               const filled = sessionMode === 'preview' ? index < previewCrew.length : index < connectedLiveCrew.length;
               return <View key={index} style={[styles.readyDot, { backgroundColor: filled ? theme.colors.ready : 'transparent', borderColor: filled ? theme.colors.ready : theme.colors.draft }]} />;
             })}
-            <Text style={[styles.readyText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'preview' ? 'Solo rooms ready' : `${connectedLiveCrew.length} of 2 minimum`}</Text>
+            <Text style={[styles.readyText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'preview' ? 'Solo rooms ready' : `${connectedLiveCrew.length} connected · sound on · safe paths clear`}</Text>
           </View>
 
           <View style={styles.actions}>
@@ -475,22 +479,24 @@ export default function LobbyScreen() {
             </>
           ) : (
             <>
-              <BreakerButton
-                disabled={connectionState !== 'connected' || connectedLiveCrew.length < 2}
-                haptic="rigid"
-                label={isGuest ? 'Continue on this phone' : `Start with ${connectedLiveCrew.length}`}
-                loading={starting}
-                onPress={() => void beginLive()}
-                overline={
-                  connectionState === 'connected'
-                    ? connectedLiveCrew.length < 2
-                      ? 'WAITING FOR ONE MORE PHONE'
-                      : isGuest
-                        ? 'HOST STARTS EVERYONE TOGETHER'
-                        : 'STARTS EVERY PHONE TOGETHER'
-                    : 'CONNECTING TO THE HOUSE'
-                }
-              />
+              {isGuest ? (
+                <View accessibilityLiveRegion="polite" style={[styles.guestWait, { backgroundColor: theme.colors.surface, borderColor: theme.colors.ready }]}>
+                  <View style={[styles.guestWaitDot, { backgroundColor: theme.colors.ready }]} />
+                  <View style={styles.guestWaitCopy}>
+                    <Text style={[styles.guestWaitTitle, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>You’re ready. Stay here.</Text>
+                    <Text style={[styles.guestWaitBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The host starts every phone together.</Text>
+                  </View>
+                </View>
+              ) : (
+                <BreakerButton
+                  disabled={connectionState !== 'connected' || connectedLiveCrew.length < 2}
+                  haptic="rigid"
+                  label={`Start together · ${connectedLiveCrew.length} phone${connectedLiveCrew.length === 1 ? '' : 's'}`}
+                  loading={starting}
+                  onPress={() => void beginLive()}
+                  overline={connectionState === 'connected' ? connectedLiveCrew.length < 2 ? 'WAITING FOR ONE MORE PHONE' : 'STARTS EVERY PHONE TOGETHER' : 'CONNECTING PHONES'}
+                />
+              )}
               {connectionState === 'error' || connectionState === 'closed' ? (
                 <BreakerButton
                   haptic="selection"
@@ -607,18 +613,18 @@ function initialsFor(name: string): string {
 function connectionLabel(state: TransportConnectionState): string {
   switch (state) {
     case 'connected':
-      return 'relay connected';
+      return 'phones can connect';
     case 'connecting':
-      return 'opening relay';
+      return 'connecting phones';
     case 'reconnecting':
       return 'reconnecting';
     case 'error':
-      return 'relay fault';
+      return 'connection problem';
     case 'closed':
-      return 'line closed';
+      return 'connection closed';
     case 'idle':
     default:
-      return 'relay idle';
+      return 'getting ready';
   }
 }
 
@@ -645,9 +651,15 @@ const styles = StyleSheet.create({
   code: { fontSize: 52, letterSpacing: 7, lineHeight: 54 },
   content: { flexGrow: 1, gap: 22, paddingBottom: 42, paddingHorizontal: 20, paddingTop: 4 },
   doorLight: { height: 4, left: 10, position: 'absolute', right: 10, top: 0 },
+  detailsAction: { fontSize: 12, lineHeight: 18, paddingHorizontal: 10, paddingVertical: 7 },
   faultBand: { borderLeftWidth: 3, gap: 5, paddingLeft: 12, paddingVertical: 5 },
   faultText: { fontSize: 14, lineHeight: 20 },
   guestCode: { alignItems: 'center', borderWidth: 1, gap: 4, padding: 18 },
+  guestWait: { alignItems: 'center', borderLeftWidth: 4, flexDirection: 'row', gap: 13, padding: 15 },
+  guestWaitBody: { fontSize: 13, lineHeight: 18 },
+  guestWaitCopy: { flex: 1, gap: 2 },
+  guestWaitDot: { borderRadius: 6, height: 11, width: 11 },
+  guestWaitTitle: { fontSize: 17, lineHeight: 21 },
   hero: { height: 225, justifyContent: 'flex-end', marginHorizontal: -20, overflow: 'hidden' },
   heroCopy: { gap: 6, padding: 20 },
   heroImage: { opacity: 0.76 },

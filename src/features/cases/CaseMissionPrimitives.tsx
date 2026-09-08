@@ -30,8 +30,11 @@ export function CaseStageScaffold({
         <Text style={[styles.stageNumber, { color: accent, fontFamily: theme.typography.families.displayHeavy }]}>{String(stageNumber).padStart(2, '0')}</Text>
         <View style={styles.headingCopy}>
           <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{title}</Text>
-          <Text style={[styles.instruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{instruction}</Text>
         </View>
+      </View>
+      <View style={[styles.doNow, { borderColor: accent }]}>
+        <TechnicalLabel color={accent}>DO THIS NOW</TechnicalLabel>
+        <Text style={[styles.instruction, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{instruction}</Text>
       </View>
       {children}
     </Animated.View>
@@ -411,6 +414,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 10, letterSpacing: 0.8, textAlign: 'center' },
   closeCamera: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.58)', height: 42, justifyContent: 'center', position: 'absolute', right: 12, top: 12, width: 42 },
   disabled: { opacity: 0.38 },
+  doNow: { borderLeftWidth: 3, gap: 3, paddingLeft: 11, paddingVertical: 2 },
   fallbackCopy: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   heading: { alignItems: 'flex-start', flexDirection: 'row', gap: 13 },
   headingCopy: { flex: 1, gap: 3, paddingTop: 2 },

@@ -43,6 +43,8 @@ const SYNCHRONIZED_STAGES = new Set([
   'countertone',
   'draw-threshold',
   'fold-corridor',
+  'take-your-places',
+  'last-bell',
 ]);
 
 function hash(value: string): number {
@@ -171,6 +173,12 @@ function expectedProofActor(
   if (game.id === 'night-glass' && stageIndex === 3 && itemIndex !== undefined) {
     return game.corridor.courierNodeId;
   }
+  if (game.id === 'long-table' && stageIndex === 2 && itemIndex !== undefined) {
+    return game.keepsakes[itemIndex]?.witnessNodeId;
+  }
+  if (game.id === 'long-table' && stageIndex === 3 && itemIndex !== undefined) {
+    return game.serviceRoute[itemIndex]?.courierNodeId;
+  }
   return undefined;
 }
 
@@ -201,6 +209,8 @@ function synchronizedWindowMs(game: CompiledEscapeCase, stageIndex: number): num
   if (game.id === 'dead-air' && stageId === 'countertone') return game.countertone.windowMs;
   if (game.id === 'night-glass' && stageId === 'draw-threshold') return game.threshold.windowMs;
   if (game.id === 'night-glass' && stageId === 'fold-corridor') return game.finale.windowMs;
+  if (game.id === 'long-table' && stageId === 'take-your-places') return game.placeWindowMs;
+  if (game.id === 'long-table' && stageId === 'last-bell') return game.finale.windowMs;
   return Number.POSITIVE_INFINITY;
 }
 

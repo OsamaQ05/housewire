@@ -5,6 +5,7 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import type { ForgeCase, ForgeMechanic } from '@/src/domain/case-forge/types';
 import { useHousewireTheme } from '@/src/theme';
+import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
 import { ForgeButton, ForgeGrid } from './ForgePrimitives';
 
@@ -13,6 +14,7 @@ const MECHANIC_LABEL: Readonly<Record<ForgeMechanic['kind'], string>> = {
   'motion-sync': 'SYNC',
   'private-relay': 'RELAY',
   'route-grid': 'ROUTE',
+  'split-riddle': 'WITNESS',
   'symbol-lock': 'LENS',
 };
 
@@ -107,7 +109,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function CaseSeal({ accent, playerCount, stageCount }: { accent: string; playerCount: number; stageCount: number }) {
   return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.sealGraphic}>
+    <View {...decorativeAccessibilityProps} style={styles.sealGraphic}>
       <Svg height="118" viewBox="0 0 260 118" width="260">
         <Circle cx="130" cy="59" fill="none" r="43" stroke={accent} strokeDasharray="3 5" strokeOpacity="0.6" />
         <Circle cx="130" cy="59" fill="none" r="28" stroke={accent} strokeWidth="2" />

@@ -56,13 +56,13 @@ describe('CaseForgeAiServer', () => {
       premise: 'A sealed lighthouse has begun broadcasting tomorrow’s storm through rooms that have no windows.',
       objective: 'Reconstruct the warning, route it through the lantern room, and close the impossible weather channel.',
       ending: 'The final forecast collapses into static as the real dawn reaches the glass.',
-      roles: baseCase.roles.map((role, index) => ({
+      roles: selectedMechanicalCase.roles.map((role, index) => ({
         id: role.id,
         title: ['Keeper', 'Barometer', 'Lamplighter'][index] ?? `Keeper ${index + 1}`,
         brief: `You hold one private layer of the lighthouse report for station ${index + 1}.`,
         responsibility: `Protect station ${index + 1} and reveal its evidence only when the crew needs it.`,
       })),
-      stages: baseCase.stages.map((stage, index) => ({
+      stages: selectedMechanicalCase.stages.map((stage, index) => ({
         id: stage.id,
         title: `Forecast ${index + 1}`,
         storyBeat: `The false storm reaches lighthouse level ${index + 1}, changing the shape of the next room.`,

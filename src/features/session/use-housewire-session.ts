@@ -19,6 +19,7 @@ import {
 import { LOBBY_PRESENCE_TIMEOUT_MS } from './lobby-presence';
 import { resolveLanRelayUrl } from './join-room';
 import { ReliableSessionOutbox } from './reliable-outbox';
+import { RelayResumeVault } from './relay-resume-vault';
 import { createRelayId } from './relay-id';
 import {
   advanceServerClockAnchor,
@@ -83,6 +84,9 @@ export function useHousewireSession(options: HousewireSessionOptions) {
   const reliableOutboxRef = useRef(new ReliableSessionOutbox<HousewireSessionEvent>());
   const flushingOutboxRef = useRef(false);
   const serverClockAnchorRef = useRef<ServerClockAnchor | undefined>(undefined);
+  // Private to this provider lifetime. Credentials never enter Zustand,
+  // session events, race snapshots, logs, or QR join tickets.
+  const resumeVaultRef = useRef(new RelayResumeVault());
   const [connectionState, setConnectionState] = useState<TransportConnectionState>('idle');
   const [feed, setFeed] = useState<SessionFeedItem[]>([]);
   const [directFeed, setDirectFeed] = useState<SessionDirectFeedItem[]>([]);
@@ -138,10 +142,19 @@ export function useHousewireSession(options: HousewireSessionOptions) {
       return;
     }
 
+    const role = stableNode.id === 'local' ? 'host' : 'guest';
+    const resumeIdentity = {
+      clientId: stableNode.id,
+      relayUrl: options.relayUrl,
+      role,
+      sessionId: options.sessionId,
+    } as const;
     const transport = new LanWebSocketTransport<HousewireSessionEvent, unknown>({
       clientId: stableNode.id,
+      onResumeCredentials: (credentials) => resumeVaultRef.current.write(resumeIdentity, credentials),
       reconnect: true,
-      role: stableNode.id === 'local' ? 'host' : 'guest',
+      resumeCredentials: resumeVaultRef.current.read(resumeIdentity),
+      role,
       sessionId: options.sessionId,
       url: options.relayUrl,
     });

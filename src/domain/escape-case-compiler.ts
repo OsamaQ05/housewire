@@ -1,7 +1,7 @@
 import { LINE_13_GLYPHS, type Line13Glyph } from './line-13-game';
 import type { Capability } from './types';
 
-export type EscapeCaseId = 'dead-air' | 'night-glass';
+export type EscapeCaseId = 'dead-air' | 'night-glass' | 'long-table';
 export type EscapeSeed = number | string;
 
 export type ToneBand = 'LOW' | 'MID' | 'HIGH';
@@ -9,6 +9,15 @@ export type DuctId = 'I' | 'II' | 'III' | 'IV';
 export type EnvelopeLevel = 'SOFT' | 'STRONG' | 'REST';
 export type GrossPose = 'LEFT' | 'RIGHT' | 'AWAY' | 'TOWARD' | 'UPRIGHT' | 'FLAT';
 export type Bearing = 'N' | 'E' | 'S' | 'W';
+export type LongTableArtifactId =
+  | 'BRASS KEY'
+  | 'RECIPE CARD'
+  | 'CASSETTE'
+  | 'FILM CAMERA'
+  | 'GAME PAD'
+  | 'MOBILE';
+export type PhotoAnchor = 'KEY' | 'CASSETTE' | 'CAMERA' | 'GAME PAD';
+export type PhotoPosition = 'NORTH' | 'EAST' | 'SOUTH' | 'WEST';
 
 export type EvidenceMode =
   | 'camera-qr'
@@ -19,7 +28,8 @@ export type EvidenceMode =
   | 'microphone-level'
   | 'pressure-hold'
   | 'device-motion'
-  | 'direction-hold';
+  | 'direction-hold'
+  | 'camera-frame';
 
 export interface EscapeCaseCompileOptions {
   /** A stable increment that produces a new case without changing the house seed. */
@@ -78,7 +88,12 @@ export type EscapeStageProofKind =
   | 'night-glass/parallax-round'
   | 'night-glass/maze-path'
   | 'night-glass/anchor'
-  | 'night-glass/finale';
+  | 'night-glass/finale'
+  | 'long-table/seat-order'
+  | 'long-table/photo-code'
+  | 'long-table/keepsake'
+  | 'long-table/pass-step'
+  | 'long-table/finale';
 
 export interface EscapeStageContract {
   id: string;
@@ -102,7 +117,12 @@ export type EscapeStageProof =
   | { kind: 'night-glass/parallax-round'; value: NightGlassParallaxProof }
   | { kind: 'night-glass/maze-path'; value: readonly number[] }
   | { kind: 'night-glass/anchor'; value: NightGlassAnchorProof }
-  | { kind: 'night-glass/finale'; value: NightGlassPoseProof };
+  | { kind: 'night-glass/finale'; value: NightGlassPoseProof }
+  | { kind: 'long-table/seat-order'; value: readonly LongTableArtifactId[] }
+  | { kind: 'long-table/photo-code'; value: string }
+  | { kind: 'long-table/keepsake'; value: LongTableKeepsakeProof }
+  | { kind: 'long-table/pass-step'; value: LongTablePassProof }
+  | { kind: 'long-table/finale'; value: LongTableFinaleProof };
 
 export interface StageProofValidation extends ProofValidation {
   stageId?: string;
@@ -256,7 +276,65 @@ export interface NightGlassCase extends CompiledEscapeCaseBase {
   };
 }
 
-export type CompiledEscapeCase = DeadAirCase | NightGlassCase;
+export interface LongTableArtifact {
+  id: LongTableArtifactId;
+  era: number;
+  ownerNodeId: string;
+  clue: string;
+  icon: 'key-outline' | 'document-text-outline' | 'musical-notes-outline' | 'camera-outline' | 'game-controller-outline' | 'phone-portrait-outline';
+}
+
+export interface LongTablePhotoFragment {
+  anchor: PhotoAnchor;
+  position: PhotoPosition;
+  digit: number;
+  ownerNodeId: string;
+}
+
+export interface LongTableKeepsakeAssignment {
+  round: number;
+  seekerNodeId: string;
+  witnessNodeId: string;
+  prompt: string;
+  markerToken: string;
+}
+
+export interface LongTablePassStep {
+  step: number;
+  courierNodeId: string;
+  stationOwnerNodeId: string;
+  requiredPose: GrossPose;
+  markerToken: string;
+}
+
+export interface LongTableFinaleAssignment {
+  nodeId: string;
+  pose: GrossPose;
+  voiceLevel: EnvelopeLevel;
+}
+
+export interface LongTableCase extends CompiledEscapeCaseBase {
+  id: 'long-table';
+  tableCaptainNodeId: string;
+  artifacts: readonly LongTableArtifact[];
+  artifactOrder: readonly LongTableArtifactId[];
+  placeWindowMs: number;
+  photograph: {
+    keeperNodeId: string;
+    ruleOwnerNodeId: string;
+    readOrder: readonly PhotoPosition[];
+    fragments: readonly LongTablePhotoFragment[];
+    code: string;
+  };
+  keepsakes: readonly LongTableKeepsakeAssignment[];
+  serviceRoute: readonly LongTablePassStep[];
+  finale: {
+    windowMs: number;
+    assignments: readonly LongTableFinaleAssignment[];
+  };
+}
+
+export type CompiledEscapeCase = DeadAirCase | NightGlassCase | LongTableCase;
 
 export interface DeadAirServiceScanProof {
   step: number;
@@ -329,6 +407,39 @@ export interface NightGlassAnchorProof {
   anchorOwnerConfirmed: boolean;
 }
 
+export interface LongTableKeepsakeProof {
+  round: number;
+  seekerNodeId: string;
+  witnessNodeId: string;
+  markerToken: string;
+  framedInCamera: boolean;
+  witnessConfirmed: boolean;
+}
+
+export interface LongTablePassProof {
+  step: number;
+  courierNodeId: string;
+  stationOwnerNodeId: string;
+  markerToken: string;
+  requiredPose: GrossPose;
+  cameraEvidenceMode: 'camera-qr' | 'rotating-seal';
+  motionEvidenceMode: 'device-motion' | 'direction-hold';
+  stationOwnerConfirmed: boolean;
+}
+
+export interface LongTableFinaleProof {
+  startedAt: number;
+  completedAt: number;
+  contactsHeld: boolean;
+  assignments: readonly {
+    nodeId: string;
+    pose: GrossPose;
+    voiceLevel: EnvelopeLevel;
+    motionEvidenceMode: 'device-motion' | 'direction-hold';
+    voiceEvidenceMode: 'microphone-level' | 'pressure-hold';
+  }[];
+}
+
 const DUCT_IDS = ['I', 'II', 'III', 'IV'] as const satisfies readonly DuctId[];
 const TONE_SIGNATURES = [
   ['LOW', 'HIGH', 'MID'],
@@ -358,6 +469,23 @@ const ALL_POSES = [
   'FLAT',
 ] as const satisfies readonly GrossPose[];
 const BEARINGS = ['N', 'E', 'S', 'W'] as const satisfies readonly Bearing[];
+const PHOTO_POSITIONS = ['NORTH', 'EAST', 'SOUTH', 'WEST'] as const satisfies readonly PhotoPosition[];
+const LONG_TABLE_ARTIFACTS = [
+  { id: 'BRASS KEY', era: 1964, clue: 'Cut before screens had locks. It opened a door, never an app.', icon: 'key-outline' },
+  { id: 'RECIPE CARD', era: 1976, clue: 'Stained by hands, copied by memory, revised in the margin.', icon: 'document-text-outline' },
+  { id: 'CASSETTE', era: 1987, clue: 'Its music had two sides and a pencil could rescue it.', icon: 'musical-notes-outline' },
+  { id: 'FILM CAMERA', era: 1995, clue: 'It counted moments before anyone could preview them.', icon: 'camera-outline' },
+  { id: 'GAME PAD', era: 2003, clue: 'Two thumbs learned its map before touchscreens arrived.', icon: 'game-controller-outline' },
+  { id: 'MOBILE', era: 2012, clue: 'The youngest object swallowed the jobs of all the others.', icon: 'phone-portrait-outline' },
+] as const satisfies readonly Omit<LongTableArtifact, 'ownerNodeId'>[];
+const KEEPSAKE_PROMPTS = [
+  'Find something at least two people here have used.',
+  'Find something repaired instead of replaced.',
+  'Find something that came from another home.',
+  'Find something that has outlived one of your phones.',
+  'Find something everyone recognizes but nobody labels.',
+  'Find something that only makes sense in this household.',
+] as const;
 
 class SeededRandom {
   private state: number;
@@ -1105,15 +1233,218 @@ export function compileNightGlassCase(
   };
 }
 
+export function compileLongTableCase(
+  seed: EscapeSeed,
+  requestedNodeIds: readonly string[],
+  options: EscapeCaseCompileOptions = {},
+): LongTableCase {
+  const nodeIds = normalizedNodes(requestedNodeIds);
+  const replayIndex = normalizedReplayIndex(options.replayIndex);
+  const caseSeed = effectiveSeed('long-table', seed, replayIndex);
+  const random = new SeededRandom(caseSeed);
+  const roleOrder = random.shuffle(nodeIds);
+  const artifactTemplates = random
+    .shuffle(LONG_TABLE_ARTIFACTS)
+    .slice(0, 4)
+    .sort((left, right) => left.era - right.era);
+  const artifactOwners = random.shuffle([
+    ...nodeIds,
+    ...random.shuffle(nodeIds).slice(0, artifactTemplates.length - nodeIds.length),
+  ]);
+  const artifacts = artifactTemplates.map((artifact, index): LongTableArtifact => ({
+    ...artifact,
+    ownerNodeId: artifactOwners[index],
+  }));
+  const artifactOrder = artifacts.map((artifact) => artifact.id);
+  const tableCaptainNodeId = roleOrder[0];
+
+  const fragmentDigits = random.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 4);
+  const fragmentOwners = random.shuffle([
+    ...nodeIds,
+    ...random.shuffle(nodeIds).slice(0, 4 - nodeIds.length),
+  ]);
+  const fragments = (['KEY', 'CASSETTE', 'CAMERA', 'GAME PAD'] as const).map(
+    (anchor, index): LongTablePhotoFragment => ({
+      anchor,
+      position: PHOTO_POSITIONS[index],
+      digit: fragmentDigits[index],
+      ownerNodeId: fragmentOwners[index],
+    }),
+  );
+  const readOrder = random.shuffle(PHOTO_POSITIONS);
+  const code = readOrder
+    .map((position) => fragments.find((fragment) => fragment.position === position)?.digit ?? 0)
+    .join('');
+  const keeperNodeId = roleOrder[1 % roleOrder.length];
+  const ruleOwnerNodeId = roleOrder[2 % roleOrder.length];
+
+  const promptOrder = random.shuffle(KEEPSAKE_PROMPTS);
+  const keepsakes = roleOrder.map((seekerNodeId, index): LongTableKeepsakeAssignment => {
+    const witnessNodeId = roleOrder[(index + 1) % roleOrder.length];
+    return {
+      round: index + 1,
+      seekerNodeId,
+      witnessNodeId,
+      prompt: promptOrder[index],
+      markerToken: token('HW-LT-KEPT', caseSeed, index + 1, seekerNodeId),
+    };
+  });
+
+  const poseOrder = random.shuffle(HINGE_POSES);
+  const serviceRoute = artifactOrder.slice(0, nodeIds.length).map((artifactId, index): LongTablePassStep => {
+    const courierNodeId = roleOrder[index];
+    const stationOwnerNodeId = roleOrder[(index + 1) % roleOrder.length];
+    return {
+      step: index + 1,
+      courierNodeId,
+      stationOwnerNodeId,
+      requiredPose: poseOrder[index % poseOrder.length],
+      markerToken: token('HW-LT-PASS', caseSeed, index + 1, artifactId),
+    };
+  });
+
+  const finalePoses = random.shuffle(ALL_POSES).slice(0, nodeIds.length);
+  const finaleLevels = random.shuffle<EnvelopeLevel>(['REST', 'SOFT', 'STRONG', 'SOFT']);
+  const finaleAssignments = nodeIds.map((nodeId, index): LongTableFinaleAssignment => ({
+    nodeId,
+    pose: finalePoses[index],
+    voiceLevel: finaleLevels[index],
+  }));
+
+  const capabilityFallbacks: CapabilityFallbackPlan[] = [
+    capabilityFallback(
+      options,
+      'long-table/place-orientation',
+      'take-your-places',
+      nodeIds,
+      'orientation',
+      'device-motion',
+      'direction-hold',
+      'Hold the place contact while every phone settles on the table.',
+    ),
+    capabilityFallback(
+      options,
+      'long-table/keepsake-camera',
+      'what-the-house-kept',
+      keepsakes.map((assignment) => assignment.seekerNodeId),
+      'cameraQr',
+      'camera-frame',
+      'rotating-seal',
+      'Inspect the object in person, then use its signed keepsake seal.',
+    ),
+    capabilityFallback(
+      options,
+      'long-table/service-pass-camera',
+      'run-the-pass',
+      serviceRoute.map((step) => step.courierNodeId),
+      'cameraQr',
+      'camera-qr',
+      'rotating-seal',
+      'Read the destination seal aloud after reaching the correct person.',
+    ),
+    capabilityFallback(
+      options,
+      'long-table/finale-voice',
+      'last-bell',
+      finaleAssignments.filter((assignment) => assignment.voiceLevel !== 'REST').map((assignment) => assignment.nodeId),
+      'microphoneLevel',
+      'microphone-level',
+      'pressure-hold',
+      'Use the matching voice-pressure contact on the final beat.',
+    ),
+  ];
+
+  const stageContracts: readonly EscapeStageContract[] = [
+    {
+      id: 'take-your-places',
+      index: 0,
+      proofKind: 'long-table/seat-order',
+      requiredNodeIds: nodeIds,
+      submitterNodeIds: nodeIds,
+      expectedProofKeys: ['seat-order'],
+    },
+    {
+      id: 'stolen-photograph',
+      index: 1,
+      proofKind: 'long-table/photo-code',
+      requiredNodeIds: uniqueNodeIds([
+        keeperNodeId,
+        ruleOwnerNodeId,
+        ...fragments.map((fragment) => fragment.ownerNodeId),
+      ]),
+      submitterNodeIds: [keeperNodeId],
+      expectedProofKeys: ['photo-code'],
+    },
+    {
+      id: 'what-the-house-kept',
+      index: 2,
+      proofKind: 'long-table/keepsake',
+      requiredNodeIds: nodeIds,
+      submitterNodeIds: uniqueNodeIds(keepsakes.map((assignment) => assignment.witnessNodeId)),
+      expectedProofKeys: keepsakes.map((assignment) => `keepsake:${assignment.round}`),
+    },
+    {
+      id: 'run-the-pass',
+      index: 3,
+      proofKind: 'long-table/pass-step',
+      requiredNodeIds: nodeIds,
+      submitterNodeIds: uniqueNodeIds(serviceRoute.map((step) => step.courierNodeId)),
+      expectedProofKeys: serviceRoute.map((step) => `pass:${step.step}`),
+    },
+    {
+      id: 'last-bell',
+      index: 4,
+      proofKind: 'long-table/finale',
+      requiredNodeIds: nodeIds,
+      submitterNodeIds: nodeIds,
+      expectedProofKeys: ['last-bell'],
+    },
+  ];
+
+  return {
+    id: 'long-table',
+    version: 1,
+    seed,
+    replayIndex,
+    effectiveSeed: caseSeed,
+    nodeIds,
+    recommendedPlayers: 3,
+    stages: stageContracts,
+    capabilityFallbacks,
+    tableCaptainNodeId,
+    artifacts,
+    artifactOrder,
+    placeWindowMs: 8_000,
+    photograph: {
+      keeperNodeId,
+      ruleOwnerNodeId,
+      readOrder,
+      fragments,
+      code,
+    },
+    keepsakes,
+    serviceRoute,
+    finale: {
+      windowMs: 8_000,
+      assignments: finaleAssignments,
+    },
+  };
+}
+
 export function compileEscapeCase(
   caseId: EscapeCaseId,
   seed: EscapeSeed,
   nodeIds: readonly string[],
   options: EscapeCaseCompileOptions = {},
 ): CompiledEscapeCase {
-  return caseId === 'dead-air'
-    ? compileDeadAirCase(seed, nodeIds, options)
-    : compileNightGlassCase(seed, nodeIds, options);
+  switch (caseId) {
+    case 'dead-air':
+      return compileDeadAirCase(seed, nodeIds, options);
+    case 'night-glass':
+      return compileNightGlassCase(seed, nodeIds, options);
+    case 'long-table':
+      return compileLongTableCase(seed, nodeIds, options);
+  }
 }
 
 export function validateDeadAirDuctOrder(
@@ -1328,6 +1659,67 @@ export function validateNightGlassFinaleProof(
   return proofAccepted();
 }
 
+export function validateLongTableArtifactOrder(
+  game: LongTableCase,
+  submitted: readonly LongTableArtifactId[],
+): PrefixValidation {
+  return validateOrderedAttempt(game.artifactOrder, submitted);
+}
+
+export function validateLongTablePhotoCode(
+  game: LongTableCase,
+  submitted: string,
+): ProofValidation {
+  return submitted === game.photograph.code ? proofAccepted() : proofRejected('WRONG_VALUE');
+}
+
+export function validateLongTableKeepsakeProof(
+  game: LongTableCase,
+  proof: LongTableKeepsakeProof,
+): ProofValidation {
+  const expected = game.keepsakes[proof.round - 1];
+  if (!expected || expected.round !== proof.round) return proofRejected('WRONG_STAGE_ITEM');
+  if (proof.seekerNodeId !== expected.seekerNodeId) return proofRejected('WRONG_ACTOR');
+  if (proof.witnessNodeId !== expected.witnessNodeId) return proofRejected('WRONG_TARGET');
+  if (proof.markerToken !== expected.markerToken) return proofRejected('WRONG_TOKEN');
+  if (!proof.framedInCamera || !proof.witnessConfirmed) return proofRejected('MISSING_CONFIRMATION');
+  return proofAccepted();
+}
+
+export function validateLongTablePassProof(
+  game: LongTableCase,
+  proof: LongTablePassProof,
+): ProofValidation {
+  const expected = game.serviceRoute[proof.step - 1];
+  if (!expected || expected.step !== proof.step) return proofRejected('WRONG_STAGE_ITEM');
+  if (proof.courierNodeId !== expected.courierNodeId) return proofRejected('WRONG_ACTOR');
+  if (proof.stationOwnerNodeId !== expected.stationOwnerNodeId) return proofRejected('WRONG_TARGET');
+  if (proof.markerToken !== expected.markerToken) return proofRejected('WRONG_TOKEN');
+  if (proof.requiredPose !== expected.requiredPose) return proofRejected('WRONG_VALUE');
+  if (!proof.stationOwnerConfirmed) return proofRejected('MISSING_CONFIRMATION');
+  return proofAccepted();
+}
+
+export function validateLongTableFinaleProof(
+  game: LongTableCase,
+  proof: LongTableFinaleProof,
+): ProofValidation {
+  if (proof.completedAt < proof.startedAt || proof.completedAt - proof.startedAt > game.finale.windowMs) {
+    return proofRejected('TIMING_WINDOW');
+  }
+  if (!proof.contactsHeld || proof.assignments.length !== game.finale.assignments.length) {
+    return proofRejected('MISSING_CONFIRMATION');
+  }
+  for (const expected of game.finale.assignments) {
+    const submitted = proof.assignments.find((assignment) => assignment.nodeId === expected.nodeId);
+    if (!submitted) return proofRejected('WRONG_ACTOR');
+    if (submitted.pose !== expected.pose || submitted.voiceLevel !== expected.voiceLevel) {
+      return proofRejected('WRONG_VALUE');
+    }
+  }
+  return proofAccepted();
+}
+
 function stageProofResult(
   validation: ProofValidation,
   stageId: string,
@@ -1452,6 +1844,53 @@ export function validateStageProof(
         validateNightGlassFinaleProof(game, proof.value),
         stage.id,
         'finale',
+      );
+    }
+    case 'long-table/seat-order': {
+      if (game.id !== 'long-table') return proofRejected('WRONG_PROOF_KIND');
+      const result = validateLongTableArtifactOrder(game, proof.value);
+      return stageProofResult(
+        result.status === 'complete' ? proofAccepted() : proofRejected('WRONG_VALUE'),
+        stage.id,
+        'seat-order',
+      );
+    }
+    case 'long-table/photo-code': {
+      if (game.id !== 'long-table') return proofRejected('WRONG_PROOF_KIND');
+      return stageProofResult(
+        validateLongTablePhotoCode(game, proof.value),
+        stage.id,
+        'photo-code',
+      );
+    }
+    case 'long-table/keepsake': {
+      if (game.id !== 'long-table') return proofRejected('WRONG_PROOF_KIND');
+      if (nodeId !== proof.value.witnessNodeId) {
+        return { ...proofRejected('UNAUTHORIZED_SUBMITTER'), stageId: stage.id };
+      }
+      return stageProofResult(
+        validateLongTableKeepsakeProof(game, proof.value),
+        stage.id,
+        `keepsake:${proof.value.round}`,
+      );
+    }
+    case 'long-table/pass-step': {
+      if (game.id !== 'long-table') return proofRejected('WRONG_PROOF_KIND');
+      if (nodeId !== proof.value.courierNodeId) {
+        return { ...proofRejected('UNAUTHORIZED_SUBMITTER'), stageId: stage.id };
+      }
+      return stageProofResult(
+        validateLongTablePassProof(game, proof.value),
+        stage.id,
+        `pass:${proof.value.step}`,
+      );
+    }
+    case 'long-table/finale': {
+      if (game.id !== 'long-table') return proofRejected('WRONG_PROOF_KIND');
+      return stageProofResult(
+        validateLongTableFinaleProof(game, proof.value),
+        stage.id,
+        'last-bell',
       );
     }
   }

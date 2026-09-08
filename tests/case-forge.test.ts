@@ -44,11 +44,33 @@ function request(
   };
 }
 
+type MechanicKind = ForgeCase['stages'][number]['mechanic']['kind'];
+
+function gameContaining(
+  playerCount: number,
+  mechanicKinds: readonly MechanicKind[],
+  overrides: Partial<ForgeGenerationRequest> = {},
+): ForgeCase {
+  for (let replayIndex = 0; replayIndex < 40; replayIndex += 1) {
+    const game = generateOfflineForgeCase(request(playerCount, { ...overrides, replayIndex }));
+    if (mechanicKinds.every((kind) => game.stages.some((stage) => stage.mechanic.kind === kind))) return game;
+  }
+  throw new Error(`Could not generate mechanics: ${mechanicKinds.join(', ')}.`);
+}
+
+function stageWithMechanic<K extends MechanicKind>(game: ForgeCase, kind: K) {
+  const stage = game.stages.find((candidate) => candidate.mechanic.kind === kind);
+  if (!stage || stage.mechanic.kind !== kind) throw new Error(`Missing ${kind} stage.`);
+  return stage as typeof stage & { mechanic: Extract<typeof stage.mechanic, { kind: K }> };
+}
+
 function correctSubmission(game: ForgeCase, stageIndex: number): ForgeStageSubmission {
   const solution = game.stages[stageIndex].solution;
   switch (solution.kind) {
     case 'sequence':
       return { kind: 'sequence', value: solution.answer };
+    case 'word':
+      return { kind: 'word', value: solution.answer };
     case 'code':
       return { kind: 'code', value: solution.answer };
     case 'relay':
@@ -79,13 +101,11 @@ describe('offline Case Forge generation', () => {
             playable: true,
             issues: [],
           });
-          expect(game.stages.map((stage) => stage.mechanic.kind)).toEqual([
-            'distributed-order',
-            'symbol-lock',
-            'private-relay',
-            'route-grid',
-            'motion-sync',
-          ]);
+          const mechanicKinds = game.stages.map((stage) => stage.mechanic.kind);
+          expect(mechanicKinds).toHaveLength(5);
+          expect(mechanicKinds.at(-1)).toBe('motion-sync');
+          expect(mechanicKinds).toContain('split-riddle');
+          expect(new Set(mechanicKinds).size).toBe(5);
           expect(game.stages.reduce((sum, stage) => sum + stage.durationMinutes, 0)).toBe(game.durationMinutes);
           expect(game.stages.every((stage) => stage.fallback.preservesAnswer)).toBe(true);
           expect(game.roles.map((role) => role.playerId)).toEqual(game.recipe.playerIds);
@@ -118,13 +138,7 @@ describe('offline Case Forge generation', () => {
       .toContain('underwater spaceship rescue');
     const museum = generateOfflineForgeCase(request(3, { customThemePrompt: 'a museum full of living paintings' }));
     expect(museum.theme).toBe('museum-afterlight');
-    expect(museum.stages.map((stage) => stage.mechanic.kind)).toEqual([
-      'distributed-order',
-      'symbol-lock',
-      'private-relay',
-      'route-grid',
-      'motion-sync',
-    ]);
+    expect(museum.stages.map((stage) => stage.mechanic.kind)).toContain('split-riddle');
     expect(validateForgeCase(museum).playable).toBe(true);
     expect(generateOfflineForgeCase(request(3, { customThemePrompt: 'a train crossing snowy mountains' })).theme)
       .toBe('stormbound-express');
@@ -145,10 +159,10 @@ describe('offline Case Forge generation', () => {
       noiseAllowed: false,
       safeMovement: false,
     });
-    const game = generateOfflineForgeCase(input);
-    const symbol = game.stages[1];
-    const relay = game.stages[2];
-    const finale = game.stages[4];
+    const game = gameContaining(3, ['symbol-lock', 'private-relay'], input);
+    const symbol = stageWithMechanic(game, 'symbol-lock');
+    const relay = stageWithMechanic(game, 'private-relay');
+    const finale = stageWithMechanic(game, 'motion-sync');
     expect(symbol.mechanic).toMatchObject({ kind: 'symbol-lock', revealMode: 'manual' });
     expect(symbol.clues.some((clue) => clue.payload.kind === 'camera-marker')).toBe(false);
     expect(relay.mechanic).toMatchObject({ kind: 'private-relay', deliveryMode: 'text' });
@@ -182,10 +196,10 @@ describe('offline Case Forge generation', () => {
   });
 
   it('makes a one-player relay a memory mechanic and a four-player case truly distributed', () => {
-    const solo = generateOfflineForgeCase(request(1));
-    expect(solo.stages[2].mechanic).toMatchObject({ kind: 'private-relay', memoryMode: true });
-    const group = generateOfflineForgeCase(request(4));
-    expect(group.stages[2].mechanic).toMatchObject({ kind: 'private-relay', memoryMode: false });
+    const solo = gameContaining(1, ['private-relay']);
+    expect(stageWithMechanic(solo, 'private-relay').mechanic).toMatchObject({ memoryMode: true });
+    const group = gameContaining(4, ['private-relay']);
+    expect(stageWithMechanic(group, 'private-relay').mechanic).toMatchObject({ memoryMode: false });
     for (const stage of group.stages) {
       for (const playerId of group.recipe.playerIds) {
         expect(stage.clues.some((clue) => clue.audiencePlayerIds.includes(playerId))).toBe(true);
@@ -195,17 +209,19 @@ describe('offline Case Forge generation', () => {
 
   it('uses quiet and missing-sensor policies without removing the semantic proof', () => {
     const playerIds = ['a', 'b', 'c'];
-    const game = generateOfflineForgeCase(request(3, {
+    const options = {
       playerIds,
       playerNames: Object.fromEntries(playerIds.map((playerId) => [playerId, playerId.toUpperCase()])),
       noiseAllowed: false,
       safeMovement: false,
       capabilitiesByPlayer: Object.fromEntries(playerIds.map((playerId) => [playerId, ['manual', 'touch'] as const])),
-    }));
-    expect(game.stages[1].fallback.reason).toMatch(/no camera/i);
-    expect(game.stages[2].fallback.reason).toMatch(/not suitable/i);
-    expect(game.stages[4].fallback.reason).toMatch(/unavailable/i);
-    expect(game.stages[4].mechanic.kind === 'motion-sync' && game.stages[4].mechanic.assignments.every((assignment) => assignment.vocalCue === 'NONE')).toBe(true);
+    } satisfies Partial<ForgeGenerationRequest>;
+    const game = gameContaining(3, ['symbol-lock', 'private-relay'], options);
+    expect(stageWithMechanic(game, 'symbol-lock').fallback.reason).toMatch(/no camera/i);
+    expect(stageWithMechanic(game, 'private-relay').fallback.reason).toMatch(/not suitable/i);
+    const finale = stageWithMechanic(game, 'motion-sync');
+    expect(finale.fallback.reason).toMatch(/unavailable/i);
+    expect(finale.mechanic.assignments.every((assignment) => assignment.vocalCue === 'NONE')).toBe(true);
     expect(validateForgeCase(game).playable).toBe(true);
   });
 });
@@ -222,19 +238,62 @@ describe('Case Forge proofs and private projections', () => {
     }
   });
 
+  it('runs a canonical split-riddle as a real distributed word lock', () => {
+    const game = generateOfflineForgeCase(request(4, { difficulty: 5 }));
+    const riddle = stageWithMechanic(game, 'split-riddle');
+    expect(riddle.mechanic.candidates).toHaveLength(8);
+    expect(riddle.clues.filter((clue) => clue.payload.kind === 'riddle-fragment')).toHaveLength(4);
+    expect(game.recipe.playerIds.every((playerId) =>
+      riddle.clues.some((clue) => clue.audiencePlayerIds.includes(playerId)))).toBe(true);
+    if (riddle.solution.kind !== 'word') throw new Error('Expected the split-riddle word solution.');
+    const answer = riddle.solution.answer;
+    expect(validateForgeSubmission(game, riddle.index, { kind: 'word', value: answer })).toMatchObject({
+      accepted: true,
+      code: 'ACCEPTED',
+    });
+    const wrong = riddle.mechanic.candidates.find((candidate) => candidate.id !== answer)!;
+    expect(validateForgeSubmission(game, riddle.index, { kind: 'word', value: wrong.id })).toMatchObject({
+      accepted: false,
+      code: 'WRONG_VALUE',
+    });
+
+    const tampered = JSON.parse(JSON.stringify(game)) as ForgeCase;
+    const tamperedRiddle = stageWithMechanic(tampered, 'split-riddle');
+    const fragment = tamperedRiddle.clues.find((clue) => clue.payload.kind === 'riddle-fragment');
+    if (!fragment || fragment.payload.kind !== 'riddle-fragment') throw new Error('Expected a riddle fragment.');
+    (fragment.payload as { text: string }).text = 'The answer is whatever the player taps.';
+    expect(validateForgeCase(tampered)).toMatchObject({ playable: false });
+  });
+
+  it('changes both mechanic selection and scene order across valid replay cuts', () => {
+    const cuts = Array.from({ length: 12 }, (_, replayIndex) =>
+      generateOfflineForgeCase(request(3, { replayIndex })),
+    );
+    const signatures = cuts.map((game) => game.stages.map((stage) => stage.mechanic.kind).join('>'));
+    expect(new Set(signatures).size).toBeGreaterThan(3);
+    const omittedLegacyKinds = cuts.map((game) =>
+      ['distributed-order', 'symbol-lock', 'private-relay', 'route-grid']
+        .find((kind) => !game.stages.some((stage) => stage.mechanic.kind === kind)),
+    );
+    expect(new Set(omittedLegacyKinds).size).toBeGreaterThan(1);
+    expect(cuts.every((game) => validateForgeCase(game).playable)).toBe(true);
+  });
+
   it('reports incomplete prefixes without exposing the missing suffix', () => {
-    const game = generateOfflineForgeCase(request(3));
-    const order = game.stages[0].solution;
-    const route = game.stages[3].solution;
+    const game = gameContaining(3, ['distributed-order', 'route-grid']);
+    const orderStage = stageWithMechanic(game, 'distributed-order');
+    const routeStage = stageWithMechanic(game, 'route-grid');
+    const order = orderStage.solution;
+    const route = routeStage.solution;
     expect(order.kind).toBe('sequence');
     expect(route.kind).toBe('route');
     if (order.kind !== 'sequence' || route.kind !== 'route') return;
-    expect(validateForgeSubmission(game, 0, { kind: 'sequence', value: order.answer.slice(0, 2) })).toMatchObject({
+    expect(validateForgeSubmission(game, orderStage.index, { kind: 'sequence', value: order.answer.slice(0, 2) })).toMatchObject({
       accepted: false,
       code: 'INCOMPLETE',
       acceptedPrefixLength: 2,
     });
-    expect(validateForgeSubmission(game, 3, { kind: 'route', value: [route.answer[0], 99] })).toMatchObject({
+    expect(validateForgeSubmission(game, routeStage.index, { kind: 'route', value: [route.answer[0], 99] })).toMatchObject({
       accepted: false,
       code: 'WRONG_VALUE',
       acceptedPrefixLength: 1,
@@ -242,21 +301,23 @@ describe('Case Forge proofs and private projections', () => {
   });
 
   it('rejects wrong relay recipients and slow or altered synchronized proofs', () => {
-    const game = generateOfflineForgeCase(request(3));
-    const relay = game.stages[2].solution;
-    const sync = game.stages[4].solution;
+    const game = gameContaining(3, ['private-relay']);
+    const relayStage = stageWithMechanic(game, 'private-relay');
+    const syncStage = stageWithMechanic(game, 'motion-sync');
+    const relay = relayStage.solution;
+    const sync = syncStage.solution;
     if (relay.kind !== 'relay' || sync.kind !== 'sync') throw new Error('Unexpected generated mechanics.');
-    expect(validateForgeSubmission(game, 2, {
+    expect(validateForgeSubmission(game, relayStage.index, {
       kind: 'relay',
       rounds: relay.rounds.map((round, index) => index === 0 ? { ...round, recipientPlayerId: 'player-3' } : round),
     }).code).toBe('WRONG_RECIPIENT');
-    expect(validateForgeSubmission(game, 4, {
+    expect(validateForgeSubmission(game, syncStage.index, {
       kind: 'sync',
       startedAt: 1_000,
       completedAt: 1_001 + sync.windowMs,
       proofs: sync.assignments.map((assignment) => ({ ...assignment, evidenceMode: 'manual' as const })),
     }).code).toBe('TIMING_WINDOW');
-    expect(validateForgeSubmission(game, 4, {
+    expect(validateForgeSubmission(game, syncStage.index, {
       kind: 'sync',
       startedAt: 1_000,
       completedAt: 1_000 + sync.windowMs,
@@ -286,9 +347,9 @@ describe('Case Forge proofs and private projections', () => {
   });
 
   it('detects tampered code mappings, routes, safety contracts, and private audiences', () => {
-    const base = generateOfflineForgeCase(request(3));
+    const base = gameContaining(3, ['route-grid']);
     const routeTamper = JSON.parse(JSON.stringify(base)) as ForgeCase;
-    const routeSolution = routeTamper.stages[3].solution;
+    const routeSolution = stageWithMechanic(routeTamper, 'route-grid').solution;
     if (routeSolution.kind === 'route') (routeSolution.answer as number[])[1] = 99;
     expect(validateForgeCase(routeTamper)).toMatchObject({ playable: false });
 

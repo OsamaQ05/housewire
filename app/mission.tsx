@@ -19,7 +19,6 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
-  FadeOut,
   interpolate,
   SlideInRight,
   useAnimatedStyle,
@@ -43,7 +42,10 @@ import {
 } from '@/src/domain/line-13-game';
 import { assessStagePressure } from '@/src/domain/director';
 import type { EvidenceKind } from '@/src/domain/types';
-import { useSharedMissionCoordinator } from '@/src/features/session';
+import { AdaptiveGuideButton, AdaptiveGuidePanel } from '@/src/features/director';
+import { HouseLineDock, useHouseLine } from '@/src/features/comms';
+import { useHousewireSessionContext, useSharedMissionCoordinator } from '@/src/features/session';
+import { useAcousticMeter } from '@/src/hooks/use-acoustic-meter';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useTerminalMotion, type TerminalMotionSnapshot } from '@/src/hooks/use-terminal-motion';
 import { useHousewireStore, type CrewNode } from '@/src/store/use-housewire-store';
@@ -113,7 +115,7 @@ export default function MissionScreen() {
   const selectedMission = useHousewireStore((state) => state.selectedMission);
   const missionInProgressId = useHousewireStore((state) => state.missionInProgressId);
   const activeMission = missionInProgressId ?? selectedMission;
-  if (activeMission === 'dead-air' || activeMission === 'night-glass') {
+  if (activeMission === 'dead-air' || activeMission === 'night-glass' || activeMission === 'long-table') {
     return <EscapeCaseMission missionId={activeMission} />;
   }
   return <Line13MissionScreen />;
@@ -125,10 +127,13 @@ function Line13MissionScreen() {
   const { height } = useWindowDimensions();
   const { theme } = useHousewireTheme();
   const { play, playKnocks } = useHousewireSound();
+  const acoustic = useAcousticMeter();
+  const houseSession = useHousewireSessionContext();
   const sessionMode = useHousewireStore((state) => state.sessionMode);
   const sessionCode = useHousewireStore((state) => state.sessionCode);
   const localNodeId = useHousewireStore((state) => state.localNodeId);
   const crew = useHousewireStore((state) => state.crew);
+  const rooms = useHousewireStore((state) => state.rooms);
   const calibration = useHousewireStore((state) => state.calibration);
   const settings = useHousewireStore((state) => state.settings);
   const previousRuns = useHousewireStore((state) => state.results);
@@ -171,6 +176,7 @@ function Line13MissionScreen() {
   const [paused, setPaused] = useState(false);
   const [failed, setFailed] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
+  const [lineOpen, setLineOpen] = useState(false);
   const [retries, setRetries] = useState(sharedActive ? 0 : persistedRetries);
   const [stageRetries, setStageRetries] = useState(0);
   const [directorTick, setDirectorTick] = useState(Date.now());
@@ -185,6 +191,22 @@ function Line13MissionScreen() {
   const finaleWindowRef = useRef(false);
   const startedAtRef = useRef(missionStartedAt ?? Date.now());
   const stage = STAGES[stageIndex];
+  const houseLinePeers = useMemo(() => houseSession.peers.map((peer) => ({
+    id: peer.id,
+    label: peer.label,
+    roomLabel: rooms.find((room) => crew.find((node) => node.id === peer.id)?.roomId === room.id)?.label,
+  })), [crew, houseSession.peers, rooms]);
+  const houseLine = useHouseLine({
+    acoustic,
+    channelId: shared.operationId,
+    clockOffsetMs: shared.clockOffsetMs,
+    enabled: sharedActive,
+    hapticsEnabled: settings.haptics,
+    localNodeId,
+    peers: houseLinePeers,
+    session: houseSession,
+    trustedPeerIds: shared.liveNodeIds,
+  });
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -377,8 +399,10 @@ function Line13MissionScreen() {
     if (!pressure.offerHint || autoHintedStageRef.current === stage.id) return;
     autoHintedStageRef.current = stage.id;
     setHintLevel((current) => Math.max(1, current));
+    play('warning', 0.18);
+    if (settings.haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     appendEvent('The local adaptive director opened hint one.');
-  }, [appendEvent, pressure.offerHint, stage.id]);
+  }, [appendEvent, play, pressure.offerHint, settings.haptics, stage.id]);
 
   useEffect(() => {
     if (failed || completedRef.current || (sharedActive && !shared.startedAt)) return;
@@ -412,10 +436,11 @@ function Line13MissionScreen() {
   const leaveOperation = useCallback(() => {
     if (leavingRef.current) return;
     leavingRef.current = true;
+    void acoustic.stop();
     setLocalNodeId('local');
     prepareSession('preview');
     router.replace('/home');
-  }, [prepareSession, router, setLocalNodeId]);
+  }, [acoustic, prepareSession, router, setLocalNodeId]);
 
   const endOperation = useCallback(() => {
     if (!sharedActive) {
@@ -442,13 +467,14 @@ function Line13MissionScreen() {
 
   return (
     <ScreenShell padded={false} texture={false}>
-      <View style={[styles.screen, compact && styles.screenCompact]}>
+      <View style={[styles.screen, compact && styles.screenCompact, sharedActive && styles.screenWithLine]}>
         <MissionHeader compact={compact} failed={failed} onPause={() => setPauseState(true)} preview={!sharedActive} secondsLeft={secondsLeft} stageIndex={stageIndex} />
         <Animated.View entering={settings.reducedMotion ? undefined : SlideInRight.duration(340)} key={`${stage.id}-${awaitingAuthority ? 'waiting' : 'active'}`} style={styles.scene}>
           <View style={[styles.sceneTitleRow, compact && styles.sceneTitleRowCompact]}>
             <View>
               <Text style={[styles.stageTitle, compact && styles.stageTitleCompact, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{stage.title}</Text>
-              <Text style={[styles.objective, compact && styles.objectiveCompact, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{stage.objective}</Text>
+              <Text style={[styles.doNowLabel, { color: theme.colors.wire, fontFamily: theme.typography.families.monoMedium }]}>DO THIS NOW</Text>
+              <Text style={[styles.objective, compact && styles.objectiveCompact, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{stage.objective}</Text>
             </View>
             {judgeCut ? <Seal label="SIMULATION" tone="warning" /> : null}
           </View>
@@ -462,11 +488,21 @@ function Line13MissionScreen() {
             )}
           </View>
         </Animated.View>
-        <MissionDock compact={compact} completedNodeIds={shared.completedNodeIds} crew={crew} hintLevel={hintLevel} localNodeId={localNodeId} onHint={() => {
+        {!sharedActive ? <MissionDock assessment={pressure} compact={compact} completedNodeIds={shared.completedNodeIds} crew={crew} hintLevel={hintLevel} localNodeId={localNodeId} onHint={() => {
           setHintLevel((current) => current >= 3 ? 0 : current + 1);
           if (hintLevel === 0) appendEvent(`A hint opened during ${stage.id}.`);
-        }} sharedActive={sharedActive} />
-        {hintLevel > 0 ? <HintSheet level={hintLevel} onClose={() => setHintLevel(0)} onNext={() => setHintLevel((current) => Math.min(3, current + 1))} text={stage.hints[hintLevel - 1]} /> : null}
+        }} sharedActive={sharedActive} /> : null}
+        {sharedActive && !paused && !failed ? (
+          <HouseLineDock
+            accent={theme.colors.wire}
+            controller={houseLine}
+            expanded={lineOpen}
+            guideState={pressure.offerHint || hintLevel > 0 ? 'ready' : pressure.pressure >= 0.36 ? 'watching' : 'clear'}
+            onExpandedChange={setLineOpen}
+            onGuidePress={() => setHintLevel((current) => Math.max(1, current))}
+          />
+        ) : null}
+        {hintLevel > 0 ? <AdaptiveGuidePanel accent={theme.colors.wire} assessment={pressure} hint={stage.hints[hintLevel - 1]} level={hintLevel} onClose={() => setHintLevel(0)} onNext={() => setHintLevel((current) => Math.min(3, current + 1))} /> : null}
         {paused || failed ? <InterruptionSheet failed={failed} live={sharedActive} onBypass={() => {
           setPauseState(false);
           setFailed(false);
@@ -1163,7 +1199,8 @@ function HoldDial({ durationMs, label, onComplete, onHoldingChange, onProgress, 
   );
 }
 
-function MissionDock({ compact, completedNodeIds, crew, hintLevel, localNodeId, onHint, sharedActive }: {
+function MissionDock({ assessment, compact, completedNodeIds, crew, hintLevel, localNodeId, onHint, sharedActive }: {
+  assessment: ReturnType<typeof assessStagePressure>;
   compact: boolean;
   completedNodeIds: readonly string[];
   crew: CrewNode[];
@@ -1178,19 +1215,8 @@ function MissionDock({ compact, completedNodeIds, crew, hintLevel, localNodeId, 
       <View style={styles.dockCrew}>{crew.filter((node) => node.connected).slice(0, 4).map((node) => (
         <View key={node.id} style={[styles.dockNode, { borderColor: node.id === localNodeId ? node.color : theme.colors.draft, backgroundColor: completedNodeIds.includes(node.id) ? theme.colors.ready : theme.colors.surface }]}><Text style={[styles.dockNodeText, { color: completedNodeIds.includes(node.id) ? theme.colors.background : node.color, fontFamily: theme.typography.families.monoMedium }]}>{node.nodeNumber}</Text></View>
       ))}<Text style={[styles.dockMode, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{sharedActive ? 'connected' : 'rehearsal'}</Text></View>
-      <Pressable accessibilityLabel="Open a progressive hint" accessibilityRole="button" onPress={onHint} style={[styles.hintButton, { borderColor: hintLevel ? theme.colors.warning : theme.colors.draft }]}><Text style={[styles.hintButtonText, { color: hintLevel ? theme.colors.warning : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>? {hintLevel || ''}</Text></Pressable>
+      <AdaptiveGuideButton accent={theme.colors.wire} assessment={assessment} hintLevel={hintLevel} onPress={onHint} />
     </View>
-  );
-}
-
-function HintSheet({ level, onClose, onNext, text }: { level: number; onClose: () => void; onNext: () => void; text: string }) {
-  const { theme } = useHousewireTheme();
-  return (
-    <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOut.duration(150)} style={[styles.hintSheet, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.warning }]}>
-      <View style={styles.hintTopline}><Seal label={`HINT ${level} / 3`} tone="warning" /><IconButton icon="close" label="Close hint" onPress={onClose} /></View>
-      <Text style={[styles.hintText, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{text}</Text>
-      {level < 3 ? <QuietButton icon="arrow-forward" label="Another hint" onPress={onNext} /> : null}
-    </Animated.View>
   );
 }
 
@@ -1243,6 +1269,7 @@ function crewName(nodeId: string, crew: readonly CrewNode[]): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: 16, paddingBottom: 10, paddingTop: 8 },
+  screenWithLine: { paddingBottom: 78 },
   screenCompact: { paddingBottom: 4, paddingTop: 4 },
   header: { alignItems: 'center', flexDirection: 'row', height: 62, justifyContent: 'space-between' },
   headerCompact: { height: 54 },
@@ -1289,6 +1316,7 @@ const styles = StyleSheet.create({
   knockBar: { width: 3 },
   decoderRow: { alignItems: 'center', flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 48 },
   decoderRowCompact: { minHeight: 38 },
+  doNowLabel: { fontSize: 7, letterSpacing: 0.8, marginTop: 2 },
   mapping: { alignItems: 'center', flexDirection: 'row', gap: 3 },
   mappingDigit: { fontSize: 23 },
   codePad: { alignSelf: 'center', flex: 1, maxWidth: 330, width: '100%' },
@@ -1367,11 +1395,6 @@ const styles = StyleSheet.create({
   dockNode: { alignItems: 'center', borderRadius: 18, borderWidth: 1, height: 30, justifyContent: 'center', width: 30 },
   dockNodeText: { fontSize: 10 },
   dockMode: { fontSize: 8, marginLeft: 3, textTransform: 'uppercase' },
-  hintButton: { alignItems: 'center', borderRadius: 20, borderWidth: 1, height: 36, justifyContent: 'center', width: 44 },
-  hintButtonText: { fontSize: 13 },
-  hintSheet: { borderTopWidth: 2, bottom: 0, gap: 15, left: 0, paddingBottom: 24, paddingHorizontal: 20, paddingTop: 16, position: 'absolute', right: 0, zIndex: 20 },
-  hintTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  hintText: { fontSize: 28, lineHeight: 31 },
   interruptionBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 20, zIndex: 30 },
   interruption: { borderWidth: 1, gap: 11, maxWidth: 360, padding: 20, width: '100%' },
   interruptionTitle: { fontSize: 30, lineHeight: 33 },
