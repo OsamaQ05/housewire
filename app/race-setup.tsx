@@ -76,7 +76,7 @@ export default function RaceSetupScreen() {
           <RaceScope />
           <Text style={[styles.kicker, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>2 teams · same course · 1 winner</Text>
           <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Ready, set, solve.</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Riddles, sounds, movement, and one final team lock. The first crew through wins.</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Riddles, sounds, private signals, and one final team lock. The first crew through wins.</Text>
         </Animated.View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(100).duration(420)} style={[styles.rules, { borderColor: theme.colors.draft }]}>
