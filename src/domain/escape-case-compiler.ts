@@ -782,7 +782,7 @@ export function compileDeadAirCase(
       'orientation',
       'device-motion',
       'direction-hold',
-      'Hold the matching direction control for the full countertone window.',
+      'Hold the matching contact plate for the full countertone window.',
     ),
   ];
   const serviceRequiredNodeIds = uniqueNodeIds(
@@ -1090,7 +1090,7 @@ export function compileNightGlassCase(
       'orientation',
       'device-motion',
       'direction-hold',
-      'Hold the matching direction control through the same sync window.',
+      'Hold the matching contact plate through the same sync window.',
     ),
     capabilityFallback(
       options,
@@ -1110,7 +1110,7 @@ export function compileNightGlassCase(
       'orientation',
       'device-motion',
       'direction-hold',
-      'Hold the matching hinge direction until the watcher confirms the bearing.',
+      'Hold the hinge contact until the watcher confirms the bearing.',
     ),
     capabilityFallback(
       options,
@@ -1130,7 +1130,7 @@ export function compileNightGlassCase(
       'motion',
       'device-motion',
       'direction-hold',
-      'Arm a deliberate carry hold before moving and release it only after stopping.',
+      'Hold the courier contact before walking and release it only after stopping.',
     ),
     capabilityFallback(
       options,
@@ -1140,7 +1140,7 @@ export function compileNightGlassCase(
       'orientation',
       'device-motion',
       'direction-hold',
-      'Hold each assigned pose control inside the same finale window.',
+      'Hold each assigned contact inside the same finale window.',
     ),
   ];
   const parallaxRequiredNodeIds = uniqueNodeIds(

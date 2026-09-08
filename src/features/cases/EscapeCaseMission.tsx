@@ -61,17 +61,17 @@ const HINTS = {
     ['Use relative loudness, not pitch.', 'The tuner holds orientation while voices perform.', 'Touch pressure reproduces the same proof if mic is denied.'],
   ],
   'night-glass': [
-    ['Each phone is one segment of the red edge.', 'Hold the assigned gross pose.', 'All panes must lock inside one window.'],
-    ['Frame shows, Hinge moves, Watcher sees.', 'The watcher scans the frame after the hinge locks.', 'Only the camera reveals the final bearing.'],
+    ['Each phone is one segment of the red edge.', 'Hold your private contact.', 'All panes must lock inside one window.'],
+    ['Frame shows, Keeper holds, Watcher sees.', 'The watcher scans the frame after the contact locks.', 'Only the camera reveals the final bearing.'],
     ['Room names, doors, rotation, and endpoints are on different phones.', 'Undo the glass turn before describing the doorways.', 'Touch named neighboring rooms from START to EXIT.'],
     ['Move with the screen dimmed; scan only after stopping.', 'The anchor phone displays the next seal.', 'A manual seal preserves the same ordered handoff.'],
-    ['First lock the assigned pose.', 'Then hold the red edge.', 'Every required pane must close together.'],
+    ['First lock your private contact.', 'Then hold the red edge.', 'Every required pane must close together.'],
   ],
   'long-table': [
     ['Each object belongs to a different decade.', 'Describe the clue instead of showing your screen.', 'The service ledger reads oldest to newest; then every phone lies flat.'],
     ['Every torn corner describes one hidden object.', 'The rule keeper owns the compass order.', 'Place the four solved objects into the photo in that order.'],
     ['The seeker finds; a different person witnesses.', 'The camera is only a live frame and saves nothing.', 'Walk over and inspect the real object before confirming.'],
-    ['Courier and destination change after every pass.', 'Lock the assigned pose before moving.', 'Stop beside the named person, then scan their place seal.'],
+    ['Courier and destination change after every pass.', 'Hold the courier contact before walking.', 'Stop beside the named person, then scan their place seal.'],
     ['Position first, sound second, rim last.', 'REST is a real sound assignment.', 'Every phone must hold the rim inside eight seconds.'],
   ],
 } as const;

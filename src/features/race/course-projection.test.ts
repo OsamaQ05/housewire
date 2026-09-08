@@ -262,8 +262,8 @@ describe('Circuit Race course projection', () => {
     expect(slotOneJson).not.toContain(groundSecret);
     expect(slotOneJson).not.toContain(groundSecretText);
     expect(slotOneJson).not.toContain(groundInstructionSecret);
-    expect(oneGround.instruction).toContain('Follow the three directions');
-    expect(oneGround.hints[1].text).toContain('After all three moves');
+    expect(oneGround.instruction).toContain('Enter the three symbols');
+    expect(oneGround.hints[1].text).toContain('After all three symbols');
     expect(circuitRaceDisplayCourseSchema.safeParse(slotZero).success).toBe(true);
     expect(circuitRaceDisplayCourseSchema.safeParse(slotOne).success).toBe(true);
     expectNoSecretKeys(slotZero);

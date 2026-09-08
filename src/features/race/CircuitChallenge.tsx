@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
@@ -22,8 +22,6 @@ import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
 import type { CircuitRaceDisplayStage } from './course-projection';
-import { useCircuitGrounding } from './use-circuit-grounding';
-
 const EMBER = '#FF6846';
 const MINT = '#5FE0D0';
 const GOLD = '#F2C14E';
@@ -292,23 +290,22 @@ function KnockChallenge({ accent, onSubmit, stage }: ExtractProps<'knock-pattern
 
 function GroundChallenge({ accent, onSubmit, stage }: ExtractProps<'flat-phone'>) {
   if (stage.challenge.station === 'ORIENTATION') {
-    return <GroundOrientationStation accent={accent} requiredFace={stage.challenge.requiredFace} tiltSequence={stage.challenge.tiltSequence} />;
+    return <GroundSignalStation accent={accent} signalSequence={stage.challenge.tiltSequence} />;
   }
   return <GroundActionStation accent={accent} challenge={stage.challenge} onSubmit={onSubmit} />;
 }
 
-function GroundOrientationStation({ accent, requiredFace, tiltSequence }: { accent: string; requiredFace: 'FACE_UP' | 'FACE_DOWN'; tiltSequence: readonly CircuitMotionMove[] }) {
+function GroundSignalStation({ accent, signalSequence }: { accent: string; signalSequence: readonly CircuitMotionMove[] }) {
   const { theme } = useHousewireTheme();
-  const faceLabel = requiredFace === 'FACE_UP' ? 'SCREEN UP' : 'SCREEN DOWN';
   return (
     <View style={styles.challenge}>
-      <RoleStation accent={accent} icon="compass-outline" label="Flight director" text="Call one move at a time. Wait for your teammate to say CENTER before calling the next." />
-      <View accessibilityLabel={`Flight path ${tiltSequence.map(motionMoveLabel).join(', ')}, then ${faceLabel}`} accessible style={[styles.flightPlan, { borderColor: accent }]}> 
-        <Text style={[styles.orientationLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Secret flight plan · call in order</Text>
-        <View style={styles.flightMoves}>{tiltSequence.map((move, index) => <View key={`${move}-${index}`} style={styles.flightMove}><View style={[styles.flightArrow, { borderColor: accent }]}><Ionicons color={accent} name={motionMoveIcon(move)} size={28} /></View><Text style={[styles.flightIndex, { color: GOLD, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{motionMoveLabel(move)}</Text></View>)}</View>
-        <View style={[styles.landingStrip, { backgroundColor: accent }]}><Ionicons color="#08100F" name={requiredFace === 'FACE_UP' ? 'phone-portrait-outline' : 'phone-portrait'} size={25} /><Text style={[styles.landingText, { fontFamily: theme.typography.families.displayHeavy }]}>LAND {faceLabel}</Text></View>
+      <RoleStation accent={accent} icon="disc-outline" label="Signal keeper" text="Call these three symbols in order. Your teammate enters them on a board only they can touch." />
+      <View accessibilityLabel={`Secret signal ${signalSequence.map(signalLabel).join(', ')}`} accessible style={[styles.flightPlan, { borderColor: accent }]}>
+        <Text style={[styles.orientationLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Private signal · call in order</Text>
+        <View style={styles.flightMoves}>{signalSequence.map((signal, index) => <View key={`${signal}-${index}`} style={styles.flightMove}><View style={[styles.flightArrow, { borderColor: accent }]}><Ionicons color={accent} name={signalIcon(signal)} size={28} /></View><Text style={[styles.flightIndex, { color: GOLD, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(signal)}</Text></View>)}</View>
+        <View style={[styles.landingStrip, { backgroundColor: accent }]}><Ionicons color="#08100F" name="finger-print-outline" size={25} /><Text style={[styles.landingText, { fontFamily: theme.typography.families.displayHeavy }]}>THEN HOLD THE SEAL</Text></View>
       </View>
-      <WaitingForTeammate accent={accent} text="Keep directing. Their motion proof advances both phones." />
+      <WaitingForTeammate accent={accent} text="Keep the signal private. Their completed seal advances both phones." />
     </View>
   );
 }
@@ -326,64 +323,43 @@ function GroundActionStation({ accent, challenge, onSubmit }: {
   const { theme } = useHousewireTheme();
   const [manualStartedAt, setManualStartedAt] = useState<number>();
   const [manualMoves, setManualMoves] = useState<CircuitMotionMove[]>([]);
-  const [manualMode, setManualMode] = useState(false);
   const [wrong, setWrong] = useState(false);
-  const ground = useCircuitGrounding(challenge, (samples) => {
-    const submission: CircuitFlatPhoneSubmission = { mechanic: 'flat-phone', mode: 'sensor', samples };
-    if (!onSubmit(submission)) setWrong(true);
-  });
   const fallbackDone = () => {
     if (!manualStartedAt) return;
     const heldMs = Date.now() - manualStartedAt;
     setManualStartedAt(undefined);
-    if (!onSubmit({ mechanic: 'flat-phone', mode: 'manual-hold', heldMs })) setWrong(true);
+    const submission: CircuitFlatPhoneSubmission = { mechanic: 'flat-phone', mode: 'manual-hold', heldMs, signalSequence: manualMoves };
+    if (!onSubmit(submission)) {
+      setWrong(true);
+      setManualMoves([]);
+    }
   };
   const addManualMove = (move: CircuitMotionMove) => {
     if (manualMoves.length >= challenge.moveCount) return;
-    const expected = challenge.tiltSequence?.[manualMoves.length];
-    if (expected && expected !== move) {
-      setWrong(true);
-      setManualMoves([]);
-      return;
-    }
     setWrong(false);
     setManualMoves((current) => [...current, move]);
   };
   return (
     <View style={styles.challenge}>
-      {challenge.station === 'GROUND' ? <RoleStation accent={accent} icon="phone-portrait-outline" label="Hidden-route pilot" text="You cannot see the route. Follow each direction your teammate calls, return to center, then land as ordered." /> : <RoleStation accent={accent} icon="navigate-circle-outline" label="One-phone flight" text="Fly the three shown movements in order. Return to center between moves, then land the phone." />}
+      {challenge.station === 'GROUND' ? <RoleStation accent={accent} icon="grid-outline" label="Signal operator" text="Listen for three symbol names. Tap them in order, then keep one finger on the seal." /> : <RoleStation accent={accent} icon="grid-outline" label="Signal board" text="Copy the three-symbol key into the board, then hold the seal to close the contact." />}
+      {challenge.station === 'FULL' ? (
+        <View accessibilityLabel={`Signal key ${challenge.tiltSequence.map(signalLabel).join(', ')}`} accessible style={[styles.flightPlan, { borderColor: accent }]}>
+          <Text style={[styles.orientationLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Your signal key</Text>
+          <View style={styles.flightMoves}>{challenge.tiltSequence.map((signal, index) => <View key={`${signal}-${index}`} style={styles.flightMove}><Ionicons color={accent} name={signalIcon(signal)} size={27} /><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(signal)}</Text></View>)}</View>
+        </View>
+      ) : null}
       <View style={styles.moveRail}>
         {Array.from({ length: challenge.moveCount }, (_, index) => {
-          const complete = ground.moveIndex > index;
-          const knownMove = challenge.tiltSequence?.[index];
-          return <View key={index} style={[styles.moveSlot, { backgroundColor: complete ? accent : theme.colors.surface, borderColor: complete ? accent : theme.colors.draft }]}>{knownMove ? <Ionicons color={complete ? '#08100F' : theme.colors.text} name={motionMoveIcon(knownMove)} size={22} /> : <Text style={[styles.moveSlotText, { color: complete ? '#08100F' : theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{complete ? '✓' : index + 1}</Text>}</View>;
+          const entered = manualMoves[index];
+          return <View key={index} style={[styles.moveSlot, { backgroundColor: entered ? accent : theme.colors.surface, borderColor: entered ? accent : theme.colors.draft }]}>{entered ? <Ionicons color="#08100F" name={signalIcon(entered)} size={22} /> : <Text style={[styles.moveSlotText, { color: theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text>}</View>;
         })}
-        <Ionicons color={ground.moveIndex >= challenge.moveCount ? accent : theme.colors.faint} name="arrow-forward" size={20} />
-        <View style={[styles.moveSlot, { backgroundColor: ground.faceCorrect ? accent : theme.colors.surface, borderColor: ground.faceCorrect ? accent : theme.colors.draft }]}><Ionicons color={ground.faceCorrect ? '#08100F' : theme.colors.faint} name="download-outline" size={22} /></View>
+        <Ionicons color={manualMoves.length >= challenge.moveCount ? accent : theme.colors.faint} name="add" size={20} />
+        <View style={[styles.moveSlot, { backgroundColor: manualStartedAt ? accent : theme.colors.surface, borderColor: manualMoves.length === challenge.moveCount ? accent : theme.colors.draft }]}><Ionicons color={manualStartedAt ? '#08100F' : theme.colors.faint} name="finger-print-outline" size={22} /></View>
       </View>
-      <View
-        accessibilityLabel={`Flight moves ${ground.moveIndex} of ${challenge.moveCount}; landing stability ${Math.round(ground.progress * 100)} percent`}
-        accessibilityRole="progressbar"
-        accessibilityValue={{ max: 100, min: 0, now: Math.round(ground.progress * 100) }}
-        style={[styles.levelPlate, { borderColor: ground.faceCorrect ? accent : theme.colors.draft }]}
-      >
-        <View style={[styles.levelRing, { borderColor: theme.colors.draft }]}>
-          <Animated.View style={[styles.levelBubble, { backgroundColor: ground.faceCorrect ? accent : GOLD, left: `${44 + ground.level * 6}%`, top: `${44 + ground.level * 3}%` }]} />
-        </View>
-        <View style={[styles.progressTrack, { backgroundColor: theme.colors.draft }]}><View style={[styles.progressFill, { backgroundColor: accent, width: `${Math.round(ground.progress * 100)}%` }]} /></View>
-        <Text style={[styles.levelValue, { color: ground.faceCorrect ? accent : theme.colors.muted, fontFamily: theme.typography.families.displayHeavy }]}>{ground.moveIndex < challenge.moveCount ? `${ground.moveIndex}/${challenge.moveCount}` : `${Math.round(ground.progress * 100)}%`}</Text>
-        <Text style={[styles.levelMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{ground.moveIndex < challenge.moveCount ? (ground.lastMove ? 'RETURN TO CENTER' : 'WAITING FOR CALLED MOVE') : ground.faceCorrect ? 'LANDING LOCK · DO NOT TOUCH' : challenge.requiredFace ? `LAND ${challenge.requiredFace.replace('_', ' ')} · KEEP LEVEL` : 'LAND AS CALLED · KEEP LEVEL'}</Text>
-      </View>
-      {!ground.active ? (
-        <Pressable accessibilityLabel="Arm phone motion sensor" accessibilityRole="button" onPress={() => void ground.start()} style={({ pressed }) => [styles.armButton, { backgroundColor: accent }, pressed && styles.pressed]}>
-          <Ionicons color="#08100F" name="navigate-circle-outline" size={23} />
-          <Text style={[styles.armText, { fontFamily: theme.typography.families.displayHeavy }]}>Start motion challenge</Text>
-        </Pressable>
-      ) : null}
-      {(ground.available === false || ground.denied || manualMode) ? (
-        <View style={[styles.fallback, { borderColor: theme.colors.draft }]}> 
-          <Text style={[styles.fallbackText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Use the four direction keys to reproduce the same route. After three moves, hold the landing plate. A 5-second race penalty applies.</Text>
-          <View style={styles.manualDirections}>{(['TILT_LEFT', 'TIP_FORWARD', 'TIP_BACK', 'TILT_RIGHT'] as const).map((move) => <Pressable accessibilityLabel={motionMoveLabel(move)} accessibilityRole="button" disabled={manualMoves.length >= challenge.moveCount} key={move} onPress={() => addManualMove(move)} style={[styles.manualDirection, { borderColor: accent }]}><Ionicons color={accent} name={motionMoveIcon(move)} size={25} /></Pressable>)}</View>
+      <View style={[styles.fallback, { borderColor: theme.colors.draft }]}>
+          <Text style={[styles.fallbackText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{challenge.station === 'FULL' ? 'Read the private key above. Tap the matching symbols below.' : 'Your teammate has the private key. Enter only what they call.'}</Text>
+          <View style={styles.manualDirections}>{SIGNALS.map((move) => <Pressable accessibilityLabel={signalLabel(move)} accessibilityRole="button" disabled={manualMoves.length >= challenge.moveCount} key={move} onPress={() => addManualMove(move)} style={[styles.manualDirection, { borderColor: accent }]}><Ionicons color={accent} name={signalIcon(move)} size={25} /><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(move)}</Text></Pressable>)}</View>
+          <Pressable accessibilityRole="button" disabled={!manualMoves.length} onPress={() => { setManualMoves((current) => current.slice(0, -1)); setWrong(false); }}><Text style={[styles.accessibleLink, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Undo last symbol</Text></Pressable>
           <Pressable
             accessibilityRole="button"
             disabled={manualMoves.length !== challenge.moveCount}
@@ -391,12 +367,10 @@ function GroundActionStation({ accent, challenge, onSubmit }: {
             onPressOut={fallbackDone}
             style={({ pressed }) => [styles.holdButton, { borderColor: accent, backgroundColor: pressed ? accent : theme.colors.surface }, manualMoves.length !== challenge.moveCount && styles.disabled]}
           >
-            <Text style={[styles.holdText, { color: manualStartedAt ? '#08100F' : accent, fontFamily: theme.typography.families.displayHeavy }]}>HOLD LANDING {((challenge.fallback.minimumHoldMs) / 1_000).toFixed(1)}s</Text>
+            <Text style={[styles.holdText, { color: manualStartedAt ? '#08100F' : accent, fontFamily: theme.typography.families.displayHeavy }]}>HOLD SEAL {((challenge.fallback.minimumHoldMs) / 1_000).toFixed(1)}s</Text>
           </Pressable>
-        </View>
-      ) : null}
-      {ground.available !== false && !ground.denied && !manualMode ? <Pressable accessibilityRole="button" onPress={() => setManualMode(true)}><Text style={[styles.accessibleLink, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Motion difficult? Use the direction-pad fallback</Text></Pressable> : null}
-      {wrong ? <ErrorLine text="The route broke. Start again and return through center after every move." /> : null}
+      </View>
+      {wrong ? <ErrorLine text="That signal did not match. Ask the keeper to call all three symbols again." /> : null}
     </View>
   );
 }
@@ -425,7 +399,7 @@ function BreakerChallenge({ accent, fragments, onSubmit, stage }: {
           accent={accent}
           icon="git-merge-outline"
           label={`${stage.challenge.station === 'ODD' ? 'A' : 'B'} WEAVE HOLDER`}
-          text="You own two alternating gestures. Call the direction and beat number; then weave all four on either phone."
+          text="You own two alternating fuse symbols. Call each symbol and beat number; then enter all four on either phone."
         />
       ) : null}
       <View style={styles.fragmentStack}>
@@ -435,8 +409,8 @@ function BreakerChallenge({ accent, fragments, onSubmit, stage }: {
             <View style={styles.fragmentDigits}>
               {fragment.digits.map((digit, index) => (
                 <View key={index} style={styles.fragmentDigitBlock}>
-                  <View style={[styles.gestureToken, { borderColor: fragment.line === 'ODD' ? EMBER : MINT }]}><Ionicons color={theme.colors.text} name={swipeIcon(circuitBreakerGestureForDigit(digit))} size={34} /></View>
-                  <Text style={[styles.fragmentPosition, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>BEAT {fragment.positions[index]} · {circuitBreakerGestureForDigit(digit)}</Text>
+                  <View style={[styles.gestureToken, { borderColor: fragment.line === 'ODD' ? EMBER : MINT }]}><Ionicons color={theme.colors.text} name={fuseIcon(circuitBreakerGestureForDigit(digit))} size={34} /></View>
+                  <Text style={[styles.fragmentPosition, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>BEAT {fragment.positions[index]} · {fuseLabel(circuitBreakerGestureForDigit(digit))}</Text>
                 </View>
               ))}
             </View>
@@ -444,60 +418,41 @@ function BreakerChallenge({ accent, fragments, onSubmit, stage }: {
         ))}
       </View>
       {fragments.length === 1 ? <Text style={[styles.teammateNote, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Your teammate owns the missing beats. Use Team Line—opponents cannot hear it.</Text> : null}
-      <GestureWeavePad accent={accent} directions={directions} onChange={(value) => { setDirections(value); setWrong(false); }} />
-      <View style={styles.actionRow}><Pressable accessibilityRole="button" disabled={!directions.length} onPress={() => setDirections((current) => current.slice(0, -1))} style={[styles.undoButton, { borderColor: theme.colors.draft }, !directions.length && styles.disabled]}><Ionicons color={theme.colors.text} name="arrow-undo" size={20} /><Text style={[styles.undoText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Undo swipe</Text></Pressable><View style={styles.submitGrow}><SubmitBar accent={accent} disabled={directions.length !== 4} label="CLOSE CIRCUIT" onPress={submit} /></View></View>
-      {wrong ? <ErrorLine text="The weave snapped. Check every beat and direction with your teammate." /> : null}
+      <FuseSequencePad accent={accent} tokens={directions} onChange={(value) => { setDirections(value); setWrong(false); }} />
+      <View style={styles.actionRow}><Pressable accessibilityRole="button" disabled={!directions.length} onPress={() => setDirections((current) => current.slice(0, -1))} style={[styles.undoButton, { borderColor: theme.colors.draft }, !directions.length && styles.disabled]}><Ionicons color={theme.colors.text} name="arrow-undo" size={20} /><Text style={[styles.undoText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Undo symbol</Text></Pressable><View style={styles.submitGrow}><SubmitBar accent={accent} disabled={directions.length !== 4} label="CLOSE CIRCUIT" onPress={submit} /></View></View>
+      {wrong ? <ErrorLine text="The fuse rejected that sequence. Check every beat and symbol with your teammate." /> : null}
     </View>
   );
 }
 
-function GestureWeavePad({ accent, directions, onChange }: { accent: string; directions: readonly CircuitSwipeDirection[]; onChange(value: CircuitSwipeDirection[]): void }) {
+function FuseSequencePad({ accent, tokens, onChange }: { accent: string; tokens: readonly CircuitSwipeDirection[]; onChange(value: CircuitSwipeDirection[]): void }) {
   const { theme } = useHousewireTheme();
   const haptics = useHousewireStore((state) => state.settings.haptics);
-  const originRef = useRef<{ x: number; y: number } | undefined>(undefined);
-  const appendDirection = useCallback((direction: CircuitSwipeDirection) => {
-    if (directions.length >= 4) return;
-    onChange([...directions, direction]);
+  const appendToken = (token: CircuitSwipeDirection) => {
+    if (tokens.length >= 4) return;
+    onChange([...tokens, token]);
     if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-  }, [directions, haptics, onChange]);
-  const responder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) + Math.abs(gesture.dy) > 8,
-    onPanResponderGrant: (event) => {
-      originRef.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
-    },
-    onPanResponderRelease: (event, gesture) => {
-      if (directions.length >= 4) return;
-      const dx = gesture.dx || (originRef.current ? event.nativeEvent.pageX - originRef.current.x : 0);
-      const dy = gesture.dy || (originRef.current ? event.nativeEvent.pageY - originRef.current.y : 0);
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 34) return;
-      const direction: CircuitSwipeDirection = Math.abs(dx) > Math.abs(dy)
-        ? dx > 0 ? 'RIGHT' : 'LEFT'
-        : dy > 0 ? 'DOWN' : 'UP';
-      appendDirection(direction);
-    },
-    onPanResponderTerminate: () => { originRef.current = undefined; },
-  }), [appendDirection, directions.length]);
+  };
   return (
     <View style={[styles.weaveFrame, { borderColor: accent }]}>
-      <View {...responder.panHandlers} accessibilityHint="Swipe the four directions your team assembled, or use the arrow buttons below" accessibilityLabel={`Gesture weave, ${directions.length} of 4 swipes entered`} accessible style={[styles.weavePad, { backgroundColor: theme.colors.surface }]}> 
-        <View style={styles.weaveCross}><View style={[styles.weaveVertical, { backgroundColor: theme.colors.draft }]} /><View style={[styles.weaveHorizontal, { backgroundColor: theme.colors.draft }]} /></View>
-        <Ionicons color={accent} name={directions.length === 4 ? 'flash' : 'move-outline'} size={50} />
-        <Text style={[styles.weaveTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{directions.length === 4 ? 'WEAVE READY' : 'SWIPE THE PATH'}</Text>
-        <Text style={[styles.weaveHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>One continuous-feeling sequence · lift between swipes</Text>
+      <View accessibilityLabel={`Fuse sequence, ${tokens.length} of 4 symbols entered`} accessible style={[styles.weavePad, { backgroundColor: theme.colors.surface }]}>
+        <Ionicons color={accent} name={tokens.length === 4 ? 'flash' : 'keypad-outline'} size={50} />
+        <Text style={[styles.weaveTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{tokens.length === 4 ? 'FUSE READY' : 'BUILD THE FUSE'}</Text>
+        <Text style={[styles.weaveHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Enter the four private symbols in beat order</Text>
       </View>
-      <View style={styles.weaveRail}>{Array.from({ length: 4 }, (_, index) => <View key={index} style={[styles.weaveStep, { backgroundColor: directions[index] ? accent : theme.colors.background, borderColor: directions[index] ? accent : theme.colors.draft }]}>{directions[index] ? <Ionicons color="#08100F" name={swipeIcon(directions[index])} size={23} /> : <Text style={[styles.weaveStepText, { color: theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text>}</View>)}</View>
+      <View style={styles.weaveRail}>{Array.from({ length: 4 }, (_, index) => <View key={index} style={[styles.weaveStep, { backgroundColor: tokens[index] ? accent : theme.colors.background, borderColor: tokens[index] ? accent : theme.colors.draft }]}>{tokens[index] ? <Ionicons color="#08100F" name={fuseIcon(tokens[index])} size={23} /> : <Text style={[styles.weaveStepText, { color: theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text>}</View>)}</View>
       <View style={styles.weaveArrowControls}>
-        {(['UP', 'RIGHT', 'DOWN', 'LEFT'] as const).map((direction) => (
+        {FUSE_TOKENS.map((token) => (
           <Pressable
-            accessibilityLabel={`Add ${direction.toLowerCase()} swipe`}
+            accessibilityLabel={`Add ${fuseLabel(token)} symbol`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: directions.length >= 4 }}
-            disabled={directions.length >= 4}
-            key={direction}
-            onPress={() => appendDirection(direction)}
-            style={({ pressed }) => [styles.weaveArrowButton, { borderColor: theme.colors.draft }, directions.length >= 4 && styles.disabled, pressed && styles.pressed]}
+            accessibilityState={{ disabled: tokens.length >= 4 }}
+            disabled={tokens.length >= 4}
+            key={token}
+            onPress={() => appendToken(token)}
+            style={({ pressed }) => [styles.weaveArrowButton, { borderColor: theme.colors.draft }, tokens.length >= 4 && styles.disabled, pressed && styles.pressed]}
           >
-            <Ionicons color={accent} name={swipeIcon(direction)} size={22} />
+            <Ionicons color={accent} name={fuseIcon(token)} size={22} />
           </Pressable>
         ))}
       </View>
@@ -510,30 +465,42 @@ function SubmitBar({ accent, disabled, label, onPress }: { accent: string; disab
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.submit, { backgroundColor: accent }, disabled && styles.disabled, pressed && styles.pressed]}><Text style={[styles.submitText, { fontFamily: theme.typography.families.displayHeavy }]}>{label}</Text><Ionicons color="#08100F" name="arrow-forward" size={21} /></Pressable>;
 }
 
-function motionMoveLabel(move: CircuitMotionMove): string {
+const SIGNALS: readonly CircuitMotionMove[] = ['TILT_LEFT', 'TILT_RIGHT', 'TIP_FORWARD', 'TIP_BACK'];
+const FUSE_TOKENS: readonly CircuitSwipeDirection[] = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
+
+function signalLabel(move: CircuitMotionMove): string {
   switch (move) {
-    case 'TILT_LEFT': return 'TILT LEFT';
-    case 'TILT_RIGHT': return 'TILT RIGHT';
-    case 'TIP_FORWARD': return 'TIP FORWARD';
-    case 'TIP_BACK': return 'TIP BACK';
+    case 'TILT_LEFT': return 'SUN';
+    case 'TILT_RIGHT': return 'MOON';
+    case 'TIP_FORWARD': return 'WAVE';
+    case 'TIP_BACK': return 'SPARK';
   }
 }
 
-function motionMoveIcon(move: CircuitMotionMove): keyof typeof Ionicons.glyphMap {
+function signalIcon(move: CircuitMotionMove): keyof typeof Ionicons.glyphMap {
   switch (move) {
-    case 'TILT_LEFT': return 'arrow-back';
-    case 'TILT_RIGHT': return 'arrow-forward';
-    case 'TIP_FORWARD': return 'arrow-up';
-    case 'TIP_BACK': return 'arrow-down';
+    case 'TILT_LEFT': return 'sunny-outline';
+    case 'TILT_RIGHT': return 'moon-outline';
+    case 'TIP_FORWARD': return 'water-outline';
+    case 'TIP_BACK': return 'flash-outline';
   }
 }
 
-function swipeIcon(direction: CircuitSwipeDirection): keyof typeof Ionicons.glyphMap {
-  switch (direction) {
-    case 'UP': return 'arrow-up';
-    case 'RIGHT': return 'arrow-forward';
-    case 'DOWN': return 'arrow-down';
-    case 'LEFT': return 'arrow-back';
+function fuseLabel(token: CircuitSwipeDirection): string {
+  switch (token) {
+    case 'UP': return 'FLAME';
+    case 'RIGHT': return 'DROP';
+    case 'DOWN': return 'RING';
+    case 'LEFT': return 'BOLT';
+  }
+}
+
+function fuseIcon(token: CircuitSwipeDirection): keyof typeof Ionicons.glyphMap {
+  switch (token) {
+    case 'UP': return 'flame-outline';
+    case 'RIGHT': return 'water-outline';
+    case 'DOWN': return 'ellipse-outline';
+    case 'LEFT': return 'flash-outline';
   }
 }
 

@@ -49,7 +49,7 @@ const GAMES: readonly GameDefinition[] = [
   },
   {
     kind: 'race', color: MINT, shadow: '#327C77', title: 'Circuit Race',
-    description: 'Two sides race through the same riddles, sounds, movement, and final team lock.',
+    description: 'Two sides race through riddles, sound relays, private symbols, and a final team lock.',
     meta: ['2 or 4 people', '10–18 min', 'live or practice'], action: 'Set up a race', route: '/race-setup', joinRoute: '/race-join',
   },
 ] as const;

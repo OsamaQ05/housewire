@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlyphMark } from '@/src/components';
@@ -333,33 +333,18 @@ function CorridorStage(props: NightGlassStageProps) {
   const step = props.game.corridor.anchorSteps[Math.max(0, index)];
   const finished = index < 0;
   const [carryArmed, setCarryArmed] = useState(false);
-  const [carryArmedAt, setCarryArmedAt] = useState(0);
   const [movementDetected, setMovementDetected] = useState(false);
-  const [manualCarry, setManualCarry] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [scanned, setScanned] = useState(false);
   const courier = props.activeNodeId === step.courierNodeId;
   const anchor = props.activeNodeId === step.anchorOwnerNodeId;
-  useEffect(() => {
-    const evidence = props.motion.lastEvidence;
-    if (
-      carryArmed &&
-      evidence?.kind === 'CARRY_STEADY' &&
-      evidence.confidence >= 0.58 &&
-      evidence.observedAt >= carryArmedAt
-    ) {
-      setMovementDetected(true);
-    }
-  }, [carryArmed, carryArmedAt, props.motion.lastEvidence]);
   if (finished) return <WaitingPanel accent={ACCENT} detail="The courier crossed every pre-cleared station. Nothing tracked distance or room identity." title="Corridor crossed." />;
   const complete = async () => {
     if (!scanned || !stopped) return;
     const accepted = await props.onProof(`anchor:${step.step}`);
     if (!accepted) return;
     setCarryArmed(false);
-    setCarryArmedAt(0);
     setMovementDetected(false);
-    setManualCarry(false);
     setStopped(false);
     setScanned(false);
   };
@@ -369,21 +354,21 @@ function CorridorStage(props: NightGlassStageProps) {
       {anchor ? <QrMarker accent={RED} label={`DOOR SEAL ${step.step}`} token={step.markerToken} /> : null}
       {courier ? (
         <>
-          {!carryArmed ? <StagePanel tone={RED}><TechnicalLabel color={RED}>CHECK THE REAL FLOOR · THEN DIM THIS SCREEN</TechnicalLabel><Text style={[styles.carryTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Move with the phone at your side.</Text><Text style={[styles.carryCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>HOUSEWIRE detects a broad carry-then-stop pattern locally. It does not infer distance, rooms, or where you are.</Text><ActionButton accent={RED} icon="walk-outline" label="Arm safe carry" onPress={() => { setMovementDetected(false); setManualCarry(false); setCarryArmedAt(Date.now()); setCarryArmed(true); props.onStartMotion(); }} /></StagePanel> : null}
+          {!carryArmed ? <StagePanel tone={RED}><TechnicalLabel color={RED}>CHECK THE REAL FLOOR · THEN DIM THIS SCREEN</TechnicalLabel><Text style={[styles.carryTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Move with the phone at your side.</Text><Text style={[styles.carryCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The screen stays dim until you confirm that you reached the named station safely.</Text><ActionButton accent={RED} icon="walk-outline" label="Start safe carry" onPress={() => { setMovementDetected(false); setCarryArmed(true); }} /></StagePanel> : null}
           {carryArmed && !movementDetected && !stopped ? (
             <View style={styles.dimCarry}>
               <View style={[styles.carryPulse, { borderColor: props.motion.lastEvidence?.kind === 'CARRY_STEADY' ? ACCENT : RED }]} />
               <Text style={[styles.dimTitle, { color: '#F5F1E8', fontFamily: theme.typography.families.displayHeavy }]}>MOVE NOW</Text>
               <Text style={[styles.dimCopy, { color: '#AFA99F', fontFamily: theme.typography.families.monoMedium }]}>WALK SAFELY WITH THE PHONE DOWN · THE RING LOCKS AFTER A STEADY CARRY</Text>
-              {manualCarry || props.motion.denied || props.motion.available === false ? <HoldContact accent={ACCENT} durationMs={1_800} label="Walk three safe steps" onComplete={() => setMovementDetected(true)} /> : <ActionButton accent={ACCENT} icon="walk-outline" label="Sensor not responding? Use timed carry" onPress={() => setManualCarry(true)} secondary />}
+              <HoldContact accent={ACCENT} durationMs={1_800} label="Confirm safe arrival" onComplete={() => setMovementDetected(true)} />
             </View>
           ) : null}
           {carryArmed && movementDetected && !stopped ? (
             <View style={styles.dimCarry}>
-              <View style={[styles.carryPulse, { borderColor: props.motion.steadiness > 0.55 || manualCarry ? ACCENT : RED }]} />
+              <View style={[styles.carryPulse, { borderColor: ACCENT }]} />
               <Text style={[styles.dimTitle, { color: '#F5F1E8', fontFamily: theme.typography.families.displayHeavy }]}>ARRIVED?</Text>
               <Text style={[styles.dimCopy, { color: '#AFA99F', fontFamily: theme.typography.families.monoMedium }]}>STOP COMPLETELY BEFORE OPENING THE LENS</Text>
-              {manualCarry || !props.motion.active || props.motion.steadiness > 0.55 ? <HoldContact accent={ACCENT} durationMs={1_300} label="I am stopped" onComplete={() => setStopped(true)} /> : <TechnicalLabel color={RED}>PHONE STILL MOVING · HOLD IT STILL</TechnicalLabel>}
+              <HoldContact accent={ACCENT} durationMs={1_300} label="I am stopped" onComplete={() => setStopped(true)} />
             </View>
           ) : null}
           {stopped && !scanned ? <QrScanner accent={RED} expectedToken={step.markerToken} onScanned={() => setScanned(true)} /> : null}
@@ -402,7 +387,7 @@ function FoldStage(props: NightGlassStageProps) {
   const already = props.completedProofKeys.includes(`finale:${props.activeNodeId}`);
   if (!assignment) return <WaitingPanel accent={ACCENT} detail="This monitor is outside the final three-pane fold." />;
   return (
-    <CaseStageScaffold accent={ACCENT} instruction="Hold your assigned pose, then press the red glass edge. Every pane must fold inside the same window." stageNumber={5} title="Fold the corridor">
+    <CaseStageScaffold accent={ACCENT} instruction="Hold your private contact, then press the red glass edge. Every pane must fold inside the same window." stageNumber={5} title="Fold the corridor">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.foldVisual}>
         <View style={[styles.foldPane, styles.foldLeft, { borderColor: RED }]} />
@@ -413,7 +398,7 @@ function FoldStage(props: NightGlassStageProps) {
       {already ? <WaitingPanel accent={ACCENT} detail="Your glass edge is held. Do not release until the remaining panes close." title="Pane folded." /> : (
         <>
           {!poseReady ? <PoseLock accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReady(true)} pose={assignment.pose} /> : null}
-          {poseReady ? <StagePanel tone={RED}><TechnicalLabel color={RED}>POSE LOCKED · HOLD THE GLASS EDGE</TechnicalLabel><HoldContact accent={RED} durationMs={1_500} label="Hold red edge" onComplete={() => void props.onProof('finale')} /><Text style={[styles.foldHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep the edge pressed until its progress rail closes.</Text></StagePanel> : null}
+          {poseReady ? <StagePanel tone={RED}><TechnicalLabel color={RED}>CONTACT LOCKED · HOLD THE GLASS EDGE</TechnicalLabel><HoldContact accent={RED} durationMs={1_500} label="Hold red edge" onComplete={() => void props.onProof('finale')} /><Text style={[styles.foldHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep the edge pressed until its progress rail closes.</Text></StagePanel> : null}
         </>
       )}
     </CaseStageScaffold>

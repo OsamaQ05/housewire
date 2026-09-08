@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 
-import type { GrossPose } from '@/src/domain/escape-case-compiler';
 import type { TerminalMotionSnapshot } from '@/src/hooks/use-terminal-motion';
 import type { CrewNode } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
@@ -228,68 +227,32 @@ export function HoldContact({
   );
 }
 
-export function poseMatches(motion: TerminalMotionSnapshot, pose: GrossPose): boolean {
-  if (!motion.active) return false;
-  if (pose === 'FLAT') return motion.flatness >= 0.78 && motion.steadiness >= 0.62;
-  if (pose === 'UPRIGHT') return motion.flatness <= 0.46 && motion.steadiness >= 0.55;
-  if (pose === 'LEFT') return motion.tiltX <= -0.42 && motion.steadiness >= 0.48;
-  if (pose === 'RIGHT') return motion.tiltX >= 0.42 && motion.steadiness >= 0.48;
-  if (pose === 'AWAY') return motion.tiltY <= -0.42 && motion.steadiness >= 0.48;
-  return motion.tiltY >= 0.42 && motion.steadiness >= 0.48;
-}
-
 export function PoseLock({
   accent,
-  motion,
-  onArmMotion,
   onComplete,
-  pose,
 }: {
   accent: string;
   motion: TerminalMotionSnapshot;
   onArmMotion: () => void;
   onComplete: () => void;
-  pose: GrossPose;
+  pose: string;
 }) {
   const { theme } = useHousewireTheme();
-  const [matchStartedAt, setMatchStartedAt] = useState<number>();
-  const matched = poseMatches(motion, pose);
-  useEffect(() => {
-    if (!matched) {
-      setMatchStartedAt(undefined);
-      return;
-    }
-    setMatchStartedAt((current) => current ?? Date.now());
-  }, [matched]);
-  useEffect(() => {
-    if (!matchStartedAt) return;
-    const timeout = setTimeout(onComplete, Math.max(0, 900 - (Date.now() - matchStartedAt)));
-    return () => clearTimeout(timeout);
-  }, [matchStartedAt, onComplete]);
   return (
-    <StagePanel tone={matched ? accent : undefined}>
+    <StagePanel tone={accent}>
       <View style={styles.poseTopline}>
-        <View style={[styles.posePhone, { borderColor: matched ? accent : theme.colors.draft, transform: [{ rotate: poseRotation(pose) }] }]}>
-          <View style={[styles.poseSpeaker, { backgroundColor: accent }]} />
+        <View style={[styles.posePhone, { borderColor: accent }]}>
+          <Ionicons color={accent} name="finger-print-outline" size={30} />
         </View>
         <View style={styles.poseCopy}>
-          <TechnicalLabel color={accent}>ASSIGNED POSE</TechnicalLabel>
-          <Text style={[styles.poseName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{pose}</Text>
-          <Text style={[styles.poseTelemetry, { color: matched ? accent : theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{motion.active ? matched ? 'LOCKED · HOLD' : `X ${motion.tiltX.toFixed(2)} · Y ${motion.tiltY.toFixed(2)}` : 'MOTION SLEEPING'}</Text>
+          <TechnicalLabel color={accent}>SHARED CONTACT</TechnicalLabel>
+          <Text style={[styles.poseName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Hold the seal</Text>
+          <Text style={[styles.poseTelemetry, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>KEEP ONE FINGER HERE</Text>
         </View>
       </View>
-      {!motion.active && motion.available !== false && !motion.denied ? <ActionButton accent={accent} icon="phone-portrait-outline" label="Arm phone motion" onPress={onArmMotion} secondary /> : null}
-      {!motion.active || motion.denied || motion.available === false ? <HoldContact accent={accent} durationMs={1_100} label={`Hold ${pose}`} onComplete={onComplete} /> : null}
+      <HoldContact accent={accent} durationMs={1_100} label="Hold contact" onComplete={onComplete} />
     </StagePanel>
   );
-}
-
-function poseRotation(pose: GrossPose) {
-  if (pose === 'LEFT') return '-28deg';
-  if (pose === 'RIGHT') return '28deg';
-  if (pose === 'AWAY') return '180deg';
-  if (pose === 'FLAT') return '90deg';
-  return '0deg';
 }
 
 export function QrMarker({ accent, label, token }: { accent: string; label: string; token: string }) {

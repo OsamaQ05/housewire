@@ -69,6 +69,7 @@ function validOpeningSubmission(stage: CircuitRaceOpeningStage): CircuitRaceSubm
     heldMs: stage.challenge.fallback.minimumHoldMs,
     mechanic: stage.mechanic,
     mode: 'manual-hold',
+    signalSequence: stage.challenge.tiltSequence,
   };
 }
 

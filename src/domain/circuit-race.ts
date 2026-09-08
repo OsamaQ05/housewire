@@ -59,32 +59,32 @@ export const CIRCUIT_RACE_COURSE_TEMPLATES: readonly CircuitRaceCourseTemplate[]
   {
     id: 'riddle-spark',
     openingStageIds: ['relay-order', 'knock-line', 'ground-plane'],
-    premise: 'A voice in the dead switchboard left object clues, a trapped pulse and one unstable flight path. Recover all three before the master breaker seals.',
+    premise: 'A voice in the dead switchboard left object clues, a trapped pulse and one private signal. Recover all three before the master breaker seals.',
   },
   {
     id: 'gravity-breach',
     openingStageIds: ['ground-plane', 'relay-order', 'knock-line'],
-    premise: 'The station broke loose in a gravity surge. Dock the flight phone, identify the missing controls, then wake the final signal before the master breaker seals.',
+    premise: 'The station broke loose in a power surge. Restore the private signal, identify the missing controls, then wake the final line before the master breaker seals.',
   },
   {
     id: 'echo-first',
     openingStageIds: ['knock-line', 'ground-plane', 'relay-order'],
-    premise: 'A pulse is still moving through the dark wing. Catch it, steer it through the damaged gyroscope, then find the objects it is trying to name.',
+    premise: 'A pulse is still moving through the dark wing. Catch it, rebuild its broken signal, then find the objects it is trying to name.',
   },
   {
     id: 'crossed-wires',
     openingStageIds: ['relay-order', 'ground-plane', 'knock-line'],
-    premise: 'The repair map has split into words, movement and sound. Rebuild those three signals in the only order that can wake the master breaker.',
+    premise: 'The repair map has split into words, symbols and sound. Rebuild those three signals in the only order that can wake the master breaker.',
   },
   {
     id: 'falling-signal',
     openingStageIds: ['ground-plane', 'knock-line', 'relay-order'],
-    premise: 'A falling signal scattered itself across motion, rhythm and riddles. Catch every piece, then braid the crew lines at the master breaker.',
+    premise: 'A falling signal scattered itself across symbols, rhythm and riddles. Catch every piece, then join the crew lines at the master breaker.',
   },
   {
     id: 'ghost-current',
     openingStageIds: ['knock-line', 'relay-order', 'ground-plane'],
-    premise: 'A ghost current is tapping from inside the walls. Echo its pulse, decode what it saw, and fly the recovered route into the master breaker.',
+    premise: 'A ghost current is tapping from inside the walls. Echo its pulse, decode what it saw, and carry the recovered key into the master breaker.',
   },
 ] as const;
 
@@ -251,6 +251,7 @@ export type CircuitFlatPhoneSubmission =
       heldMs: number;
       mechanic: 'flat-phone';
       mode: 'manual-hold';
+      signalSequence: readonly CircuitMotionMove[];
     };
 
 export type CircuitBreakerSubmission = {
@@ -397,7 +398,9 @@ export function circuitRaceBreakerFragmentForSlot(
 
 export const defaultCircuitFlatPhoneValidator: CircuitFlatPhoneValidator = {
   validateFallback(challenge, evidence) {
-    return Number.isFinite(evidence.heldMs) && evidence.heldMs >= challenge.fallback.minimumHoldMs;
+    return Number.isFinite(evidence.heldMs) &&
+      evidence.heldMs >= challenge.fallback.minimumHoldMs &&
+      sameValues(evidence.signalSequence, challenge.tiltSequence);
   },
   validateSensor(challenge, evidence) {
     if (evidence.samples.length < challenge.minimumSamples) return false;
@@ -550,7 +553,7 @@ function flatStage(
     estimatedSeconds: 35,
     hints: [
       { id: 'ground-plane-h1', penaltyMs: 6_000, text: copy.firstHint },
-      { id: 'ground-plane-h2', penaltyMs: 10_000, text: `After all three moves, land ${challenge.requiredFace === 'FACE_UP' ? 'screen-up' : 'screen-down'} and hold still.` },
+      { id: 'ground-plane-h2', penaltyMs: 10_000, text: 'After all three symbols, keep one finger on the seal until it locks.' },
     ],
     id: 'ground-plane',
     index,
@@ -652,7 +655,7 @@ function deriveCircuitRaceContent(seed: number): CircuitRaceContent {
     breakerFragments,
     flatChallenge: {
       fallback: {
-        instruction: 'If motion sensing is unavailable, hold the copper plate without releasing.',
+        instruction: 'Enter the three called symbols, then hold the copper seal without releasing.',
         minimumHoldMs: holdMs + 800,
         penaltyMs: 5_000,
       },
@@ -718,7 +721,7 @@ const CIRCUIT_RIDDLES: Readonly<Record<CircuitGlyph, readonly [string, string, s
   ],
 };
 
-/** Maps the protected 0–3 finale tokens to physical swipe gestures. */
+/** Maps the protected 0–3 finale values to the four neutral fuse symbols. */
 export function circuitBreakerGestureForDigit(digit: number): CircuitSwipeDirection {
   return (['UP', 'RIGHT', 'DOWN', 'LEFT'] as const)[Math.abs(Math.trunc(digit)) % 4];
 }
@@ -898,50 +901,50 @@ const KNOCK_STAGE_COPY: readonly CircuitStageCopy[] = [
 
 const FLAT_STAGE_COPY: readonly CircuitFlatStageCopy[] = [
   {
-    firstHint: 'Return through the center between each called direction.',
-    instruction: 'Your teammate owns a secret three-move flight path. Follow their calls with the phone, return to center each time, then land it exactly as ordered.',
-    kicker: 'MOTION',
-    title: 'Blind Flight',
+    firstHint: 'The keeper should call each symbol and its position clearly.',
+    instruction: 'Your teammate owns a secret three-symbol signal. Listen, enter the symbols in order, then hold the shared seal.',
+    kicker: 'PRIVATE SIGNAL',
+    title: 'Blind Switchboard',
   },
   {
-    firstHint: 'Move only when your navigator calls; reset to center each time.',
-    instruction: 'Your navigator can see the smuggler route. Fly the phone through three hidden turns, recenter between them, then dock on the secret face.',
-    kicker: 'GYROSCOPE',
-    title: "Smuggler's Gyroscope",
+    firstHint: 'Repeat all three symbols aloud before touching the board.',
+    instruction: 'The keeper can see a private seal. Rebuild its three symbols on the other phone, then maintain contact to transmit it.',
+    kicker: 'SEALED LINE',
+    title: "Smuggler's Seal",
   },
   {
-    firstHint: 'Make one clean move per call and pass through center between moves.',
-    instruction: 'A loose power cell must cross a three-turn zero-gravity path. Let your partner call it while you steer and land the phone.',
-    kicker: 'ZERO-G',
-    title: 'Zero-Gravity Dock',
+    firstHint: 'Do not show the private screen—communication is the puzzle.',
+    instruction: 'A damaged relay split its symbol key across two phones. Call it, rebuild it, and close the contact together.',
+    kicker: 'BROKEN RELAY',
+    title: 'Signal Vault',
   },
 ];
 
 const BREAKER_STAGE_COPY: readonly CircuitStageCopy[] = [
   {
     hints: [
-      { id: 'breaker-code-h1', penaltyMs: 10_000, text: 'Each teammate holds alternating swipe directions.' },
-      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Weave A and B together from beat 1 to beat 4.' },
+      { id: 'breaker-code-h1', penaltyMs: 10_000, text: 'Each teammate holds alternating fuse symbols.' },
+      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Combine A and B from beat 1 to beat 4.' },
     ],
-    instruction: 'Combine the two private gesture strips, then swipe the four directions as one unbroken closing move.',
-    kicker: 'WEAVE',
-    title: 'Live-Wire Weave',
+    instruction: 'Combine the two private fuse strips, then enter the four symbols in beat order.',
+    kicker: 'FUSE CODE',
+    title: 'Live-Wire Fuse',
   },
   {
     hints: [
       { id: 'breaker-code-h1', penaltyMs: 10_000, text: 'Neither strip is complete; alternate the marked positions.' },
-      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Call positions 1 to 4, then swipe the joined path.' },
+      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Call positions 1 to 4, then enter the joined sequence.' },
     ],
-    instruction: 'Lay both private direction strips side by side, call the four positions, and draw the combined path without lifting.',
-    kicker: 'FINAL BRAID',
-    title: 'The Final Braid',
+    instruction: 'Lay both private symbol strips side by side, call the four positions, and enter the combined fuse code.',
+    kicker: 'FINAL FUSE',
+    title: 'The Final Contact',
   },
   {
     hints: [
-      { id: 'breaker-code-h1', penaltyMs: 10_000, text: 'Your two strips own alternating turns of the same route.' },
-      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Read 1, 2, 3, 4 across both strips before swiping.' },
+      { id: 'breaker-code-h1', penaltyMs: 10_000, text: 'Your two strips own alternating symbols in the same sequence.' },
+      { id: 'breaker-code-h2', penaltyMs: 18_000, text: 'Read 1, 2, 3, 4 across both strips before entering.' },
     ],
-    instruction: 'The fuseboard accepts one continuous gesture. Merge both teammates’ private turns and trace the four-part seal.',
+    instruction: 'The fuseboard accepts one four-symbol code. Merge both teammates’ private strips and enter the seal.',
     kicker: 'MASTER SEAL',
     title: 'Fuseboard Seal',
   },

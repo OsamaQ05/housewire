@@ -943,7 +943,7 @@ function createSyncStage(
         motionAvailable && (audioAvailable || !request.noiseAllowed)
           ? 'Any sensor can become unavailable during play.'
           : 'One or more required motion or audio sensors are unavailable.',
-      instruction: 'Use the matching direction pads and LOW/TONE pressure controls; all players must still hold the same formation in the same window.',
+      instruction: 'Use the matching contact plates and LOW/TONE pressure controls; all players must still hold the same formation in the same window.',
       preservesAnswer: true,
     },
   };

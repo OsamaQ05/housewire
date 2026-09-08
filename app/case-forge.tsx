@@ -34,7 +34,6 @@ const INITIAL_DRAFT: ForgeDraft = {
   difficulty: 3,
   duration: 30,
   intensity: 'balanced',
-  movement: true,
   playerCount: 3,
   themeId: undefined,
   tone: 'mystery',
@@ -202,9 +201,8 @@ function makeRequest(
       name: existing && !existing.simulated ? existing.name : `Player ${index + 1}`,
     };
   });
-  const capabilities: Capability[] = ['manual', 'touch', 'orientation', 'haptics'];
+  const capabilities: Capability[] = ['manual', 'touch', 'haptics'];
   if (draft.camera) capabilities.push('cameraQr');
-  if (draft.movement) capabilities.push('motion');
   if (draft.voice) capabilities.push('microphoneLevel');
   const generatedAt = Date.now();
   return {
@@ -216,7 +214,7 @@ function makeRequest(
     noiseAllowed: draft.voice,
     playerIds: selected.map((player) => player.id),
     playerNames: Object.fromEntries(selected.map((player) => [player.id, player.name])),
-    safeMovement: draft.movement,
+    safeMovement: false,
     seed: `${householdName}-${generatedAt}-${Math.random().toString(36).slice(2, 8)}`,
     targetMinutes: draft.duration,
     themeId: draft.themeId,

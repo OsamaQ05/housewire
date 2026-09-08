@@ -270,7 +270,7 @@ describe('real stage validation', () => {
     const course = compileCircuitRace(18, 'amber');
     const stage = stageByMechanic(course, 'flat-phone');
     const accepted = validateCircuitRaceStage(course, 'ground-plane', {
-      mechanic: 'flat-phone', mode: 'manual-hold', heldMs: stage.challenge.fallback.minimumHoldMs,
+      mechanic: 'flat-phone', mode: 'manual-hold', heldMs: stage.challenge.fallback.minimumHoldMs, signalSequence: stage.challenge.tiltSequence,
     });
     expect(accepted).toMatchObject({
       valid: true,
@@ -279,7 +279,13 @@ describe('real stage validation', () => {
       totalPenaltyMs: stage.challenge.fallback.penaltyMs,
     });
     expect(validateCircuitRaceStage(course, 'ground-plane', {
-      mechanic: 'flat-phone', mode: 'manual-hold', heldMs: stage.challenge.fallback.minimumHoldMs - 1,
+      mechanic: 'flat-phone', mode: 'manual-hold', heldMs: stage.challenge.fallback.minimumHoldMs - 1, signalSequence: stage.challenge.tiltSequence,
+    })).toMatchObject({ valid: false, reason: 'insufficient-evidence' });
+    expect(validateCircuitRaceStage(course, 'ground-plane', {
+      mechanic: 'flat-phone',
+      mode: 'manual-hold',
+      heldMs: stage.challenge.fallback.minimumHoldMs,
+      signalSequence: [...stage.challenge.tiltSequence].reverse(),
     })).toMatchObject({ valid: false, reason: 'insufficient-evidence' });
   });
 

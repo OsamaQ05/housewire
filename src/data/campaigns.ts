@@ -27,7 +27,7 @@ export const missions: MissionDefinition[] = [
     playable: true,
     accent: '#FF603B',
     requiredRoles: ['relay', 'listener', 'navigator', 'breaker'],
-    mechanics: ['LIFT', 'TILT', 'TRANSFER', 'ROUTE', 'SYNC'],
+    mechanics: ['LISTEN', 'CONTACT', 'TRANSFER', 'ROUTE', 'SYNC'],
   },
   {
     id: 'dead-air',
@@ -41,7 +41,7 @@ export const missions: MissionDefinition[] = [
     playable: true,
     accent: '#C8F26A',
     requiredRoles: ['listener', 'navigator', 'breaker'],
-    mechanics: ['LISTEN', 'SCAN', 'WHISPER', 'VOICE', 'TILT'],
+    mechanics: ['LISTEN', 'SCAN', 'WHISPER', 'VOICE', 'CONTACT'],
   },
   {
     id: 'night-glass',

@@ -304,7 +304,7 @@ function roleFor(game: CompiledEscapeCase, nodeId: string) {
   if (nodeId === firstRound.frameNodeId) {
     return { title: 'THE FRAME', instruction: 'Your screen becomes a physical doorway for another phone to scan. Keep it bright and still.', privateNote: 'THE MARKER CHANGES ON EVERY RUN' };
   }
-  return { title: 'THE HINGE', instruction: 'Your phone tilts the door seen on somebody else’s camera. You control a view you cannot see.', privateNote: 'MOTION TRACES STAY ON THIS PHONE' };
+  return { title: 'THE KEEPER', instruction: 'Your phone holds the seal that unlocks somebody else’s camera view. You control a view you cannot see.', privateNote: 'YOUR PRIVATE SEAL STAYS ON THIS PHONE' };
 }
 
 function openingSound(missionId: EscapeCaseId): 'deadAirOpen' | 'nightGlassOpen' | 'ring' {

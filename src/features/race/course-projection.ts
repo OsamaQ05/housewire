@@ -636,10 +636,10 @@ function projectStage(stage: CircuitRaceStage, station: 'FULL' | 0 | 1): unknown
           id: hint.id,
           penaltyMs: hint.penaltyMs,
           text: index === 0
-            ? 'Call the three moves in order; your partner controls the flight phone.'
-            : 'After the moves, call the final landing face.',
+            ? 'Call the three symbols in order; your partner controls the signal board.'
+            : 'After the symbols, tell your partner to hold the seal.',
         })),
-        instruction: 'Guide your teammate through the three moves, then call the landing face. Do not show them this screen.',
+        instruction: 'Call the three private symbols in order. Do not show your teammate this screen.',
         challenge: {
           requiredFace: stage.challenge.requiredFace,
           station: 'ORIENTATION',
@@ -666,9 +666,9 @@ function projectStage(stage: CircuitRaceStage, station: 'FULL' | 0 | 1): unknown
           penaltyMs: hint.penaltyMs,
           text: index === 0
             ? hint.text
-            : 'After all three moves, follow the landing face and stop touching the phone.',
+            : 'After all three symbols, keep one finger on the seal until it locks.',
         })),
-        instruction: 'Follow the three directions your partner calls, returning through center each time. Then land the phone in their final orientation.',
+        instruction: 'Enter the three symbols your partner calls, then hold the contact seal.',
         challenge: {
           ...action,
           requiredFace: null,

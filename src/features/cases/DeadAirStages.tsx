@@ -459,14 +459,14 @@ function CountertoneStage(props: DeadAirStageProps) {
 
   if (!vocalist && !tuner) return (
     <CaseStageScaffold accent={ACCENT} instruction="The service pair performs the cancellation while this monitor watches the machine collapse." stageNumber={5} title="Countertone">
-      <WaitingPanel accent={ACCENT} detail="No microphone or motion evidence is assigned to this fourth monitor. The case will close when every required instrument locks." />
+      <WaitingPanel accent={ACCENT} detail="No microphone or contact evidence is assigned to this fourth monitor. The case will close when every required instrument locks." />
     </CaseStageScaffold>
   );
 
   if (already) return (
     <CaseStageScaffold accent={ACCENT} instruction="Keep this instrument locked while the remaining countertone parts finish." stageNumber={5} title="Countertone">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
-      <WaitingPanel accent={ACCENT} detail="This phone's pressure or pose evidence is locked. The Quiet Machine is waiting for the other required instruments." title="Countertone held." />
+      <WaitingPanel accent={ACCENT} detail="This phone's pressure or contact evidence is locked. The Quiet Machine is waiting for the other required instruments." title="Countertone held." />
     </CaseStageScaffold>
   );
 

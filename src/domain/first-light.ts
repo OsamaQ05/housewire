@@ -32,10 +32,10 @@ export const FIRST_LIGHT_STEPS: readonly FirstLightStepDefinition[] = [
   },
   {
     id: 'carry-signal',
-    eyebrow: 'ROOM 03 · PHONE AS PROP',
-    title: 'Carry the spark',
-    instruction: 'Start motion, lift the phone and turn it slowly. Touch is always available.',
-    hint: 'Tap Start motion, lift the phone and turn slowly. If nothing happens, use touch instead.',
+    eyebrow: 'ROOM 03 · SHARED CONTACT',
+    title: 'Lock the signal',
+    instruction: 'Hold the contact until it locks. This is how physical actions work in a case.',
+    hint: 'Press and hold the contact plate for one second.',
   },
   {
     id: 'finale',

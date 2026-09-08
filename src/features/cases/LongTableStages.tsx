@@ -94,7 +94,7 @@ function PlacesStage(props: LongTableStageProps) {
   };
 
   return (
-    <CaseStageScaffold accent={AMBER} instruction="Each phone owns pieces from a different decade. Speak the clues, order the objects oldest to newest, then lay every phone flat around one surface." stageNumber={1} title="Take your places">
+    <CaseStageScaffold accent={AMBER} instruction="Each phone owns pieces from a different decade. Speak the clues, order the objects oldest to newest, then hold every place contact together." stageNumber={1} title="Take your places">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.placeHeader}>
         <View style={[styles.plateRing, { borderColor: AMBER }]}><View style={[styles.plateCore, { borderColor: CREAM }]}><Ionicons color={AMBER} name="restaurant-outline" size={31} /></View></View>
@@ -132,7 +132,7 @@ function PlacesStage(props: LongTableStageProps) {
 
       {!captain && !tableSet ? <WaitingPanel accent={AMBER} detail={`${crewName(props.game.tableCaptainNodeId, props.crew)} is arranging the service ledger. Describe your objects without showing the screen.`} title="The ledger needs your decade." /> : null}
       {tableSet && !already ? <PoseLock accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('seat-order')} pose="FLAT" /> : null}
-      {already ? <WaitingPanel accent={AMBER} detail="Keep this phone flat. Every place must settle inside the same eight-second service window." title="Your place is set." /> : null}
+      {already ? <WaitingPanel accent={AMBER} detail="Keep this place contact held. Every place must settle inside the same eight-second service window." title="Your place is set." /> : null}
     </CaseStageScaffold>
   );
 }

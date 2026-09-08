@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -15,7 +15,6 @@ import {
   type FirstLightSealOption,
 } from '@/src/domain/first-light';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
-import { useTerminalMotion, type TerminalMotionSnapshot } from '@/src/hooks/use-terminal-motion';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
@@ -43,29 +42,8 @@ export default function TutorialScreen() {
   const [finished, setFinished] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideReason, setGuideReason] = useState('You asked for a small nudge.');
-  const [motionComplete, setMotionComplete] = useState(false);
+  const [contactComplete, setContactComplete] = useState(false);
   const step = FIRST_LIGHT_STEPS[stepIndex];
-
-  const onMotionEvidence = useCallback(
-    (evidence: { kind: string; confidence: number }) => {
-      if (
-        !motionComplete &&
-        (evidence.kind === 'LIFTED' || evidence.kind === 'CARRY_STEADY') &&
-        evidence.confidence >= 0.62
-      ) {
-        setMotionComplete(true);
-        play('accept', 0.58);
-        if (hapticsEnabled) {
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-            () => undefined,
-          );
-        }
-      }
-    },
-    [hapticsEnabled, motionComplete, play],
-  );
-  const motion = useTerminalMotion(onMotionEvidence, ['LIFTED', 'CARRY_STEADY']);
-  const stopMotion = motion.stop;
 
   useEffect(() => {
     setGuideOpen(false);
@@ -77,11 +55,8 @@ export default function TutorialScreen() {
     return () => clearTimeout(timer);
   }, [stepIndex]);
 
-  useEffect(() => () => void stopMotion(), [stopMotion]);
-
   const advance = () => {
     setGuideOpen(false);
-    if (stepIndex === 2) void stopMotion();
     play('relay', 0.48);
     setStepIndex((current) => nextFirstLightStep(current));
   };
@@ -101,7 +76,7 @@ export default function TutorialScreen() {
   const restart = () => {
     setStepIndex(0);
     setFinished(false);
-    setMotionComplete(false);
+    setContactComplete(false);
     setGuideOpen(false);
   };
 
@@ -123,7 +98,7 @@ export default function TutorialScreen() {
           <View style={styles.completeCopy}>
             <Text style={[styles.kicker, { color: MINT, fontFamily: theme.typography.families.monoMedium }]}>CASE 00 · COMPLETE</Text>
             <Text accessibilityRole="header" style={[styles.completeTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>The house is listening.</Text>
-            <Text style={[styles.completeBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You used the line, combined private clues, moved a phone and finished together. You’re ready for a full case.</Text>
+            <Text style={[styles.completeBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You used the line, combined private clues, held a shared contact and finished together. You’re ready for a full case.</Text>
           </View>
           <View style={styles.completeActions}>
             <PrimaryAction icon="grid-outline" label="Choose a game" onPress={() => router.replace('/modes')} />
@@ -171,13 +146,7 @@ export default function TutorialScreen() {
           {step.id === 'house-line' ? <HouseLineStep onAdvance={advance} play={play} /> : null}
           {step.id === 'private-seal' ? <PrivateSealStep onAdvance={advance} onNeedGuide={requestGuide} play={play} /> : null}
           {step.id === 'carry-signal' ? (
-            <MotionStep
-              complete={motionComplete}
-              motion={motion}
-              onAdvance={advance}
-              onFallback={() => setMotionComplete(true)}
-              onStart={() => void motion.start()}
-            />
+            <ContactStep complete={contactComplete} onAdvance={advance} onComplete={() => { setContactComplete(true); play('accept', 0.58); }} />
           ) : null}
           {step.id === 'finale' ? <FinaleStep onFinish={finish} play={play} /> : null}
 
@@ -362,53 +331,32 @@ function SealChoice({ disabled, onPress, seal, selected }: { disabled: boolean; 
   );
 }
 
-function MotionStep({ complete, motion, onAdvance, onFallback, onStart }: { complete: boolean; motion: TerminalMotionSnapshot; onAdvance: () => void; onFallback: () => void; onStart: () => void }) {
+function ContactStep({ complete, onAdvance, onComplete }: { complete: boolean; onAdvance: () => void; onComplete: () => void }) {
   const { theme } = useHousewireTheme();
-  const [fallbackOpen, setFallbackOpen] = useState(false);
-  const activity = Math.round(Math.max(Math.abs(motion.tiltX), Math.abs(motion.tiltY), motion.flatness * 0.45) * 100);
   return (
     <View style={styles.stepBody}>
       <View style={styles.motionStage}>
-        <View style={[styles.roomDoor, { borderColor: complete ? MINT : theme.colors.draft }]}>
-          <Text style={[styles.roomDoorLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>LIVING ROOM</Text>
-          <View style={[styles.phoneProp, { borderColor: complete ? MINT : GOLD, transform: [{ rotate: complete ? '12deg' : `${motion.tiltX * 14}deg` }] }]}>
-            <Ionicons color={complete ? MINT : GOLD} name="phone-portrait-outline" size={46} />
-            <View style={[styles.phonePropDot, { backgroundColor: complete ? MINT : GOLD }]} />
-          </View>
-        </View>
-        <View style={styles.routeArrow}>
-          <View style={[styles.routeLine, { backgroundColor: complete ? MINT : GOLD }]} />
-          <Ionicons color={complete ? MINT : GOLD} name="arrow-forward" size={26} />
-        </View>
-        <View style={[styles.roomDoor, { borderColor: complete ? MINT : theme.colors.draft }]}>
-          <Text style={[styles.roomDoorLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>HALL</Text>
-          <Ionicons color={complete ? MINT : theme.colors.faint} name={complete ? 'sunny-outline' : 'ellipse-outline'} size={48} />
+        <View style={[styles.roomDoor, { borderColor: complete ? MINT : GOLD }]}>
+          <Text style={[styles.roomDoorLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>SHARED CONTACT</Text>
+          <Ionicons color={complete ? MINT : GOLD} name={complete ? 'checkmark-circle' : 'finger-print-outline'} size={62} />
         </View>
       </View>
 
       <View style={[styles.sensorPanel, { backgroundColor: theme.colors.surface, borderColor: complete ? MINT : theme.colors.draft }]}>
         <View style={styles.sensorTopline}>
-          <Text style={[styles.sensorState, { color: complete ? MINT : GOLD, fontFamily: theme.typography.families.monoMedium }]}>{complete ? 'SPARK CARRIED' : motion.active ? 'MOTION ACTIVE' : motion.available === false ? 'MOTION UNAVAILABLE' : 'PHONE READY'}</Text>
-          <Text style={[styles.sensorPercent, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{complete ? '100' : activity}%</Text>
+          <Text style={[styles.sensorState, { color: complete ? MINT : GOLD, fontFamily: theme.typography.families.monoMedium }]}>{complete ? 'CONTACT LOCKED' : 'CONTACT OPEN'}</Text>
+          <Text style={[styles.sensorPercent, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{complete ? '100' : '0'}%</Text>
         </View>
-        <View style={[styles.sensorRail, { backgroundColor: theme.colors.draft }]}><View style={[styles.sensorFill, { backgroundColor: complete ? MINT : GOLD, width: `${complete ? 100 : Math.max(6, activity)}%` }]} /></View>
-        {!complete && !motion.active ? <PrimaryAction icon="phone-portrait-outline" label="Start motion" onPress={onStart} /> : null}
-        {!complete && motion.active ? <Text style={[styles.motionPrompt, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Lift the phone. Turn it slowly.</Text> : null}
+        <View style={[styles.sensorRail, { backgroundColor: theme.colors.draft }]}><View style={[styles.sensorFill, { backgroundColor: complete ? MINT : GOLD, width: complete ? '100%' : '6%' }]} /></View>
       </View>
 
       {!complete ? (
-        <Pressable accessibilityRole="button" onPress={() => setFallbackOpen((current) => !current)} style={styles.fallbackToggle}>
-          <Text style={[styles.fallbackToggleText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Motion not responding? Use touch</Text>
-          <Ionicons color={theme.colors.muted} name={fallbackOpen ? 'chevron-up' : 'chevron-down'} size={18} />
-        </Pressable>
-      ) : null}
-      {fallbackOpen && !complete ? (
-        <Pressable accessibilityHint="Hold for one second" accessibilityLabel="Hold to carry the spark with touch" accessibilityRole="button" delayLongPress={900} onLongPress={onFallback} style={({ pressed }) => [styles.holdFallback, { backgroundColor: pressed ? GOLD : theme.colors.surfaceRaised, borderColor: GOLD }]}>
+        <Pressable accessibilityHint="Hold for one second" accessibilityLabel="Hold the shared contact" accessibilityRole="button" delayLongPress={900} onLongPress={onComplete} style={({ pressed }) => [styles.holdFallback, { backgroundColor: pressed ? GOLD : theme.colors.surfaceRaised, borderColor: GOLD }]}>
           <Ionicons color={GOLD} name="hand-left-outline" size={24} />
-          <Text style={[styles.holdFallbackText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Hold to carry with touch</Text>
+          <Text style={[styles.holdFallbackText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Hold to lock the contact</Text>
         </Pressable>
       ) : null}
-      {complete ? <PrimaryAction icon="arrow-forward" label="Spark delivered" onPress={onAdvance} /> : null}
+      {complete ? <PrimaryAction icon="checkmark" label="Contact locked" onPress={onAdvance} /> : null}
     </View>
   );
 }

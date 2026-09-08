@@ -18,7 +18,6 @@ export interface ForgeDraft {
   difficulty: ForgeDifficulty;
   duration: ForgeDuration;
   intensity: ForgeIntensity;
-  movement: boolean;
   playerCount: 2 | 3 | 4;
   themeId?: ForgeThemeId;
   tone: ForgeTone;
@@ -138,7 +137,7 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
       </View>
       <Text style={[styles.difficultyCaption, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{draft.difficulty <= 2 ? 'Gentle clues with more signposts.' : draft.difficulty <= 4 ? 'Needs careful teamwork.' : 'Fewer hints and tighter timing.'}</Text>
 
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Movement level</Text>
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Pressure level</Text>
       <View accessibilityRole="radiogroup" style={styles.threeRail}>
         {(['gentle', 'balanced', 'intense'] as const).map((intensity) => (
           <CompactRadio key={intensity} label={intensity} onPress={() => onChange({ ...draft, intensity })} selected={draft.intensity === intensity} />
@@ -147,12 +146,11 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
 
       <View style={styles.toggleList}>
         <ForgeToggle detail="Markers and visual fragments" icon="camera-outline" label="Camera clues" onPress={() => onChange({ ...draft, camera: !draft.camera })} value={draft.camera} />
-        <ForgeToggle detail="Tilts, holds, and table-safe poses" icon="phone-portrait-outline" label="Physical proofs" onPress={() => onChange({ ...draft, movement: !draft.movement })} value={draft.movement} />
         <ForgeToggle detail="Private spoken tokens and crew tones" icon="mic-outline" label="Voice mechanics" onPress={() => onChange({ ...draft, voice: !draft.voice })} value={draft.voice} />
       </View>
       <View style={[styles.safety, { borderColor: theme.colors.ready }]}>
         <Ionicons color={theme.colors.ready} name="shield-checkmark-outline" size={18} />
-        <Text style={[styles.safetyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Every camera, voice, or movement challenge also has a manual fallback.</Text>
+        <Text style={[styles.safetyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Camera and voice challenges always include a touch fallback.</Text>
       </View>
     </View>
   );

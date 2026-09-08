@@ -61,6 +61,7 @@ const circuitRaceFlatSubmissionSchema = z.union([
     heldMs: z.number().int().min(0).max(30_000),
     mechanic: z.literal('flat-phone'),
     mode: z.literal('manual-hold'),
+    signalSequence: z.array(z.enum(['TILT_LEFT', 'TILT_RIGHT', 'TIP_FORWARD', 'TIP_BACK'])).length(3),
   }).strict(),
 ]);
 

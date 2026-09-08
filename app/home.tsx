@@ -132,7 +132,7 @@ export default function HomeScreen() {
           <View style={styles.tutorialCopy}>
             <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.bodyMedium }]}>{tutorialComplete ? 'Practice ready to replay' : 'New to Escape Cases?'}</Text>
             <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>First Light · 2 min</Text>
-            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn private clues, room communication, and phone movement by doing them once.</Text>
+            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn private clues, room communication, and shared contacts by doing them once.</Text>
           </View>
           <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="arrow-forward" size={23} />
         </Pressable>
@@ -231,7 +231,7 @@ export default function HomeScreen() {
 
         <View style={[styles.promiseBand, { borderColor: theme.colors.draft }]}>
           <Text style={[styles.promiseIndex, { color: activeMission.accent, fontFamily: theme.typography.families.displayHeavy }]}>Everyone holds a different piece.</Text>
-          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You have to talk, move, and put the story together as a family.</Text>
+          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You have to talk, combine private clues, and put the story together as a family.</Text>
         </View>
       </ScrollView>
 

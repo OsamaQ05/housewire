@@ -75,7 +75,7 @@ const STAGES: readonly StageDefinition[] = [
     kind: 'answer',
     title: 'Answer',
     objective: 'Lift the ringing phone.',
-    hints: ['Only one phone is ringing.', 'Lift it once, then hold steady.', 'No motion? Hold the red receiver.'],
+    hints: ['Only one phone is ringing.', 'Hold the red receiver until the ring closes.', 'Keep one finger on the contact.'],
   },
   {
     id: 'split-cipher',
@@ -102,8 +102,8 @@ const STAGES: readonly StageDefinition[] = [
     id: 'synchronized-hangup',
     kind: 'finale',
     title: 'Hang up',
-    objective: 'Count down. Place phones flat.',
-    hints: ['Everyone acts on the same countdown.', 'Screens face up on a flat surface.', 'All phones must close within 1.6 seconds.'],
+    objective: 'Count down. Close every contact.',
+    hints: ['Everyone acts on the same countdown.', 'Keep one finger over your contact.', 'All phones must close within 1.6 seconds.'],
   },
 ] as const;
 
@@ -624,10 +624,9 @@ function AnswerScene({ allowManualFallback, motion, onComplete, onStartMotion, p
         <Animated.View style={[styles.ringOne, { borderColor: theme.colors.wire }, ringMotion]} />
         <View style={[styles.ringTwo, { borderColor: theme.colors.wire }]} />
       </Animated.View>
-      <Text style={[styles.bigPrompt, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Pick up.</Text>
-      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{motion.active ? `motion live · ${Math.round(motion.steadiness * 100)}% steady` : 'the phone can feel the lift'}</Text>
-      {!motion.active && motion.available !== false && !motion.denied ? <QuietButton icon="phone-portrait-outline" label="Use motion" onPress={onStartMotion} /> : null}
-      {allowManualFallback ? <HoldDial durationMs={1_100} label="Accessible hold" onComplete={onComplete} /> : null}
+      <Text style={[styles.bigPrompt, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Answer the line.</Text>
+      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>hold the receiver contact</Text>
+      <HoldDial durationMs={1_100} label="Hold to answer" onComplete={onComplete} />
     </View>
   );
 }
@@ -731,12 +730,11 @@ function CourierScene({ allowManualFallback, destination, game, motion, onComple
           <View style={[styles.carryOrbit, { borderColor: theme.colors.draft }]} />
         </View>
         <Text style={[styles.bigPrompt, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Carry the open line.</Text>
-        <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep level. Find the decoded seals. Finish at {destination}.</Text>
+        <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Find the decoded seals. Finish at {destination}.</Text>
         <PrimaryButton icon="walk-outline" label="Arm the courier" onPress={() => {
           evidenceAtStartRef.current = motion.lastEvidence?.observedAt;
           steadyEvidenceRef.current = undefined;
           setMoving(true);
-          if (!motion.active) onStartMotion();
         }} />
       </View>
     );
@@ -750,8 +748,8 @@ function CourierScene({ allowManualFallback, destination, game, motion, onComple
       </View>
       <Seal label="ALL SEALS FOUND" tone="ready" />
       <Text style={[styles.bigPrompt, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Hold at {destination}.</Text>
-      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{Math.round(motion.steadiness * 100)}% line stability</Text>
-      {allowManualFallback ? <HoldDial durationMs={2_600} label="Accessible carry" onComplete={() => onComplete({ confidence: 1, kind: 'MANUAL_HOLD', observedAt: Date.now() })} /> : <Seal label="SENSOR VERIFYING THE CARRY" tone="ready" />}
+      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>keep the courier contact held</Text>
+      <HoldDial durationMs={2_600} label="Confirm arrival" onComplete={() => onComplete({ confidence: 1, kind: 'MANUAL_HOLD', observedAt: Date.now() })} />
     </View>
   );
 }
@@ -968,19 +966,19 @@ function FinaleScene({ allowManualFallback, clockOffsetMs, completedNodeIds, cre
   stageStartedAt?: number;
 }) {
   const { theme } = useHousewireTheme();
-  const [beat, setBeat] = useState<'READY' | '3' | '2' | '1' | 'FLAT'>('READY');
+  const [beat, setBeat] = useState<'READY' | '3' | '2' | '1' | 'CLOSE'>('READY');
   const localOriginRef = useRef(stageStartedAt ?? Date.now());
   const previousBeatRef = useRef<typeof beat>('READY');
   const activeCrew = crew.filter((node) => node.connected).slice(0, 4);
   useEffect(() => {
     const tick = () => {
       const elapsed = Math.max(0, Date.now() + clockOffsetMs - (stageStartedAt ?? localOriginRef.current)) % 6_000;
-      const next = elapsed < 1_500 ? 'READY' : elapsed < 2_500 ? '3' : elapsed < 3_500 ? '2' : elapsed < 4_500 ? '1' : elapsed < 5_500 ? 'FLAT' : 'READY';
+      const next = elapsed < 1_500 ? 'READY' : elapsed < 2_500 ? '3' : elapsed < 3_500 ? '2' : elapsed < 4_500 ? '1' : elapsed < 5_500 ? 'CLOSE' : 'READY';
       if (next === previousBeatRef.current) return;
       previousBeatRef.current = next;
       setBeat(next);
-      onWindowChange(next === 'FLAT');
-      play(next === 'FLAT' ? 'accept' : 'switch', next === 'FLAT' ? 0.6 : 0.28);
+      onWindowChange(next === 'CLOSE');
+      play(next === 'CLOSE' ? 'accept' : 'switch', next === 'CLOSE' ? 0.6 : 0.28);
     };
     tick();
     const interval = setInterval(tick, 80);
@@ -992,14 +990,13 @@ function FinaleScene({ allowManualFallback, clockOffsetMs, completedNodeIds, cre
   return (
     <View style={styles.centerScene}>
       <View style={styles.finalContacts}>{activeCrew.map((node) => {
-        const closed = sharedActive ? completedNodeIds.includes(node.id) : beat === 'FLAT';
+        const closed = sharedActive ? completedNodeIds.includes(node.id) : beat === 'CLOSE';
         return <View key={node.id} style={styles.finalContactItem}><View style={[styles.finalContact, { borderColor: node.color, backgroundColor: closed ? node.color : 'transparent' }]} /><Text style={[styles.finalContactLabel, { color: closed ? theme.colors.text : theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{node.nodeNumber}</Text></View>;
       })}</View>
-      <View style={[styles.flatPhone, { borderColor: theme.colors.wire }]}><View style={[styles.flatPhoneSpeaker, { backgroundColor: theme.colors.wire }]} /><Ionicons color={theme.colors.wire} name="arrow-down" size={38} /></View>
-      <Text style={[styles.countdownBeat, { color: beat === 'FLAT' ? theme.colors.ready : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{beat === 'READY' ? 'GET READY' : beat}</Text>
-      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{motion.active ? `flatness ${Math.round(motion.flatness * 100)}%` : preview ? 'simulated family follows the beat' : 'place screen-up together'}</Text>
-      {!motion.active && motion.available !== false && !motion.denied ? <QuietButton icon="phone-portrait-outline" label="Arm motion" onPress={onStartMotion} /> : null}
-      {allowManualFallback && beat === 'FLAT' ? <PrimaryButton icon="power-outline" label="Close now" onPress={onComplete} /> : <Seal label={beat === 'FLAT' ? 'PLACE FLAT NOW' : 'WAIT FOR FLAT'} tone="ready" />}
+      <View style={[styles.flatPhone, { borderColor: theme.colors.wire }]}><View style={[styles.flatPhoneSpeaker, { backgroundColor: theme.colors.wire }]} /><Ionicons color={theme.colors.wire} name="finger-print-outline" size={38} /></View>
+      <Text style={[styles.countdownBeat, { color: beat === 'CLOSE' ? theme.colors.ready : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{beat === 'READY' ? 'GET READY' : beat}</Text>
+      <Text style={[styles.microcopy, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{preview ? 'simulated family follows the beat' : 'touch together on CLOSE'}</Text>
+      {beat === 'CLOSE' ? <PrimaryButton icon="power-outline" label="Close now" onPress={onComplete} /> : <Seal label="WAIT FOR CLOSE" tone="ready" />}
     </View>
   );
 }
@@ -1024,7 +1021,7 @@ function WaitingScene({ completedNodeIds, crew, game, localNodeId, onAbandon, pl
   }
   const copy = stage.kind === 'finale'
     ? localComplete
-      ? 'Stay flat. Waiting for the others.'
+      ? 'Keep contact. Waiting for the others.'
       : completedNodeIds.length > 0
         ? 'Missed the window. Count again.'
         : 'Count together. Flat on zero.'

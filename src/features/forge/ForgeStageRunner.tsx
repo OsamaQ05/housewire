@@ -810,7 +810,9 @@ function MotionSyncWorkbench({
     void acoustic.stop();
   };
 
-  const manualOnly = mechanic.inputMode === 'touch' || !poseReading.sensorVerifiable;
+  // Directional phone poses were removed from the product. Legacy generated
+  // cases remain playable through the tactile proof path.
+  const manualOnly = true;
   const poseProgress = Math.max(0, Math.min(1, poseHeldMs / FORGE_POSE_HOLD_MS));
   const voiceTargetMs = forgeVocalHoldMs(assignment.vocalCue);
   const voiceProgress = voiceTargetMs === 0 ? 1 : Math.max(0, Math.min(1, voiceHeldMs / voiceTargetMs));
@@ -830,7 +832,7 @@ function MotionSyncWorkbench({
           <Ionicons color={readyProof ? forgeColors.ink : theme.colors.text} name={readyProof ? 'checkmark-circle' : 'phone-portrait-outline'} size={30} />
           <View style={styles.syncCopy}>
             <Text style={[styles.syncPlayer, { color: theme.colors.text, fontFamily: theme.typography.families.display }]}>{roleNames([assignment.playerId], roles)}</Text>
-            <Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{poseLabel(assignment.pose)}{needsVoice ? ` · ${assignment.vocalCue.replaceAll('_', ' ')}` : ''}</Text>
+            <Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>CONTACT{needsVoice ? ` · ${assignment.vocalCue.replaceAll('_', ' ')}` : ''}</Text>
           </View>
           <Text style={[styles.syncHold, { color: readyProof ? forgeColors.ink : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{readyProof ? readyProof.evidenceMode.toUpperCase() : sensorArmed ? 'LISTENING' : 'OPEN'}</Text>
         </View>
@@ -852,14 +854,13 @@ function MotionSyncWorkbench({
           </View>
         ) : null}
 
-        {!poseReading.sensorVerifiable && !readyProof ? <Text style={[styles.sensorFootnote, { color: theme.colors.warning, fontFamily: theme.typography.families.body }]}>Screen-down cannot be proven from normalized motion data, so this role uses the human-confirmed hold.</Text> : null}
         {issue && !readyProof ? <Text accessibilityLiveRegion="polite" style={[styles.sensorError, { color: theme.colors.warning, fontFamily: theme.typography.families.bodyMedium }]}>{issue}</Text> : null}
       </View>
 
       {!readyProof ? (
         <Pressable
-          accessibilityActions={[{ label: 'Confirm with touch fallback', name: 'activate' }]}
-          accessibilityHint="Hold to confirm this role without sensors"
+          accessibilityActions={[{ label: 'Confirm contact', name: 'activate' }]}
+          accessibilityHint="Hold to confirm this role's contact"
           accessibilityRole="button"
           delayLongPress={700}
           onAccessibilityAction={(event) => {
@@ -869,7 +870,7 @@ function MotionSyncWorkbench({
           style={({ pressed }) => [styles.syncPlate, { backgroundColor: pressed ? '#3B3517' : 'transparent', borderColor: theme.colors.draft }]}
         >
           <Ionicons color={forgeColors.ink} name="finger-print-outline" size={21} />
-          <View style={styles.syncCopy}><Text style={[styles.manualFallbackTitle, { color: theme.colors.text, fontFamily: theme.typography.families.display }]}>HOLD FALLBACK</Text><Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>SAME POSE + CUE · 0.7 SEC</Text></View>
+          <View style={styles.syncCopy}><Text style={[styles.manualFallbackTitle, { color: theme.colors.text, fontFamily: theme.typography.families.display }]}>HOLD CONTACT</Text><Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>CONTACT + CUE · 0.7 SEC</Text></View>
           <Text style={[styles.syncHold, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>HOLD</Text>
         </Pressable>
       ) : null}
