@@ -22,19 +22,19 @@ const LILAC = '#B9A7F8';
 
 const PAGES = [
   {
-    title: 'Choose. Tap. Play.',
-    body: 'Three different family games, each with one clear way to begin.',
+    title: 'Pick a game.',
+    body: 'Escape together, race in teams, or find out how well you know each other.',
     note: 'No account or setup quiz.',
   },
   {
-    title: 'Phones become game pieces.',
-    body: 'Host on one phone. For live games, everyone else scans the QR and gets their own clues.',
-    note: 'One phone is always enough to try it.',
+    title: 'One phone hosts.',
+    body: 'For multiplayer games, the host shows a QR. Everyone else scans it and receives a private role.',
+    note: 'You can preview every game on one phone.',
   },
   {
-    title: 'The app helps at the right moment.',
-    body: 'Camera, sound, and movement only appear inside puzzles that use them. The Guide offers a nudge if you get stuck.',
-    note: 'You can skip any permission.',
+    title: 'Help appears when needed.',
+    body: 'The AI Guide notices when you are stuck and offers a small hint. Camera or microphone access appears only inside a puzzle that needs it.',
+    note: 'Permissions are optional.',
   },
 ] as const;
 
@@ -104,7 +104,7 @@ export default function OnboardingScreen() {
             </Pressable>
             <Pressable accessibilityRole="button" onPress={() => finish(true)} style={({ pressed }) => [styles.practice, pressed && styles.pressed]}>
               <Ionicons color={SUN} name="sunny" size={18} />
-              <Text style={[styles.practiceText, { fontFamily: theme.typography.families.bodyMedium }]}>Try the 2-minute practice</Text>
+              <Text style={[styles.practiceText, { fontFamily: theme.typography.families.bodyMedium }]}>Play the 2-minute tutorial</Text>
             </Pressable>
           </View>
         ) : (

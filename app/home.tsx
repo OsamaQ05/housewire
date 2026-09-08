@@ -132,13 +132,13 @@ export default function HomeScreen() {
           <View style={styles.tutorialCopy}>
             <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.bodyMedium }]}>{tutorialComplete ? 'Practice ready to replay' : 'New to Escape Cases?'}</Text>
             <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>First Light · 2 min</Text>
-            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn private clues, room communication, and shared contacts by doing them once.</Text>
+            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn the basics through four quick actions.</Text>
           </View>
           <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="arrow-forward" size={23} />
         </Pressable>
 
         <Pressable
-          accessibilityHint="Creates a new locally generated five-scene escape case"
+          accessibilityHint="Uses AI to create a new five-scene escape case"
           accessibilityRole="button"
           onPress={() => {
             play('relay', 0.42);
@@ -150,9 +150,9 @@ export default function HomeScreen() {
             <Text style={[styles.forgeIndexText, { fontFamily: theme.typography.families.displayHeavy }]}>∞</Text>
           </View>
           <View style={styles.forgeCopy}>
-            <Text style={[styles.forgeOverline, { fontFamily: theme.typography.families.bodyMedium }]}>Make a fresh escape</Text>
+            <Text style={[styles.forgeOverline, { fontFamily: theme.typography.families.bodyMedium }]}>AI-BUILT · NEW EVERY TIME</Text>
             <Text style={[styles.forgeTitle, { fontFamily: theme.typography.families.displayHeavy }]}>CASE FORGE</Text>
-            <Text style={[styles.forgeBody, { fontFamily: theme.typography.families.body }]}>Build a playable five-scene case around your room, players, and difficulty.</Text>
+            <Text style={[styles.forgeBody, { fontFamily: theme.typography.families.body }]}>Choose the players, world and difficulty. AI builds and checks a complete escape case.</Text>
           </View>
           <Ionicons color="#F2D36D" name="hammer-outline" size={25} />
         </Pressable>

@@ -74,7 +74,7 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
   ];
   return (
     <View style={styles.panel}>
-      <Header eyebrow="Step 2 of 3" title="Pick a story world" />
+      <Header eyebrow="Step 2 of 3" title="Choose the world" />
       <View accessibilityRole="radiogroup" style={styles.optionStack}>
         {themes.map((item) => (
           <ForgeOption
@@ -89,7 +89,7 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
       </View>
 
       <View style={[styles.seedBrief, { borderColor: theme.colors.draft }]}>
-        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Add one story detail (optional)</Text>
+        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Add a detail (optional)</Text>
         <TextInput
           accessibilityHint="Adds a place, era, or situation to the generated case"
           autoCapitalize="sentences"
@@ -119,7 +119,7 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.panel}>
-      <Header eyebrow="Step 3 of 3" title="Choose the challenge" />
+      <Header eyebrow="Step 3 of 3" title="Tune the puzzles" />
       <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Puzzle difficulty</Text>
       <View accessibilityRole="radiogroup" style={styles.difficultyRail}>
         {([1, 2, 3, 4, 5] as const).map((difficulty) => (
@@ -137,7 +137,7 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
       </View>
       <Text style={[styles.difficultyCaption, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{draft.difficulty <= 2 ? 'Gentle clues with more signposts.' : draft.difficulty <= 4 ? 'Needs careful teamwork.' : 'Fewer hints and tighter timing.'}</Text>
 
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Pressure level</Text>
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Pace</Text>
       <View accessibilityRole="radiogroup" style={styles.threeRail}>
         {(['gentle', 'balanced', 'intense'] as const).map((intensity) => (
           <CompactRadio key={intensity} label={intensity} onPress={() => onChange({ ...draft, intensity })} selected={draft.intensity === intensity} />
@@ -145,8 +145,8 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
       </View>
 
       <View style={styles.toggleList}>
-        <ForgeToggle detail="Markers and visual fragments" icon="camera-outline" label="Camera clues" onPress={() => onChange({ ...draft, camera: !draft.camera })} value={draft.camera} />
-        <ForgeToggle detail="Private spoken tokens and crew tones" icon="mic-outline" label="Voice mechanics" onPress={() => onChange({ ...draft, voice: !draft.voice })} value={draft.voice} />
+        <ForgeToggle detail="Scan hidden markers and visual clues" icon="camera-outline" label="Camera clues" onPress={() => onChange({ ...draft, camera: !draft.camera })} value={draft.camera} />
+        <ForgeToggle detail="Sound, spoken clues and private audio" icon="mic-outline" label="Voice puzzles" onPress={() => onChange({ ...draft, voice: !draft.voice })} value={draft.voice} />
       </View>
       <View style={[styles.safety, { borderColor: theme.colors.ready }]}>
         <Ionicons color={theme.colors.ready} name="shield-checkmark-outline" size={18} />

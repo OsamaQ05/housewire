@@ -109,7 +109,7 @@ export default function CaseForgeScreen() {
         </Pressable>
         <View style={styles.brandBlock}>
           <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>CASE FORGE</Text>
-          <Text style={[styles.brandMeta, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>AI game builder</Text>
+          <Text style={[styles.brandMeta, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>AI-BUILT ESCAPE ROOMS</Text>
         </View>
         <Pressable accessibilityLabel="Generated casebook" accessibilityRole="button" hitSlop={8} onPress={() => router.push('/forge-library' as never)} style={({ pressed }) => [styles.iconButton, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
           <Ionicons color={theme.colors.text} name="albums-outline" size={20} />
@@ -120,11 +120,11 @@ export default function CaseForgeScreen() {
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={styles.workingPage}>
           <ForgeDiagram accent={caseFile?.accent ?? forgeColors.ink} playerCount={draft.playerCount} reducedMotion={reducedMotion} working />
           <View style={styles.workingCopy}>
-            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Building your case</Text>
+            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>AI is building your case</Text>
             <Text accessibilityLiveRegion="polite" style={[styles.workingLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>{workingLabel}</Text>
           </View>
           <View style={styles.checks}>
-            {['Splitting private clues', 'Checking every answer', 'Adding manual fallbacks'].map((label, index) => (
+            {['Writing linked clues', 'Balancing the difficulty', 'Checking every solution'].map((label, index) => (
               <View key={label} style={[styles.checkRow, { borderColor: theme.colors.draft }]}>
                 <Text style={[styles.checkIndex, { color: index === 0 ? forgeColors.ink : theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{String(index + 1).padStart(2, '0')}</Text>
                 <Text style={[styles.checkLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text>
@@ -152,6 +152,10 @@ export default function CaseForgeScreen() {
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={[styles.aiBrief, { borderColor: forgeColors.ink }]}>
+              <Ionicons color={forgeColors.ink} name="git-branch-outline" size={18} />
+              <Text style={[styles.aiBriefText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}><Text style={{ color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }}>You choose three things.</Text> AI writes five connected scenes, splits the clues between players, and verifies every answer.</Text>
+            </View>
             <ForgeProgress current={step} />
             <ForgeDiagram playerCount={draft.playerCount} reducedMotion={reducedMotion} working={false} />
             <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(260)} key={step}>
@@ -227,6 +231,8 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 const styles = StyleSheet.create({
+  aiBrief: { alignItems: 'flex-start', backgroundColor: 'rgba(242,211,109,0.06)', borderLeftWidth: 3, borderRadius: 12, flexDirection: 'row', gap: 9, paddingHorizontal: 12, paddingVertical: 10 },
+  aiBriefText: { flex: 1, fontSize: 12, lineHeight: 17 },
   brand: { fontSize: 24, letterSpacing: 0.5, lineHeight: 23 },
   brandBlock: { alignItems: 'center' },
   brandMeta: { fontSize: 11 },

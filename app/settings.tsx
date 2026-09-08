@@ -68,7 +68,7 @@ export default function SettingsScreen() {
         <View style={[styles.privacy, { borderColor: theme.colors.draft }]}>
           <OperationalLabel indicator status="ready">privacy circuit closed</OperationalLabel>
           <Text style={[styles.privacyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>
-            Camera frames and motion traces are processed live and never stored. DEAD AIR requests the microphone only for local pressure levels or a 1.8-second recipient-only burst; recorded bytes are removed after playback. Solo play needs no account, API key or backend.
+            Camera frames are processed live and never stored. DEAD AIR uses the microphone only for local sound levels or a 1.8-second private audio burst; recorded audio is removed after playback. Solo play needs no account, API key or backend.
           </Text>
         </View>
 

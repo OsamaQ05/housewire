@@ -33,9 +33,9 @@ export const FIRST_LIGHT_STEPS: readonly FirstLightStepDefinition[] = [
   {
     id: 'carry-signal',
     eyebrow: 'ROOM 03 · SHARED CONTACT',
-    title: 'Lock the signal',
-    instruction: 'Hold the contact until it locks. This is how physical actions work in a case.',
-    hint: 'Press and hold the contact plate for one second.',
+    title: 'Hold the signal',
+    instruction: 'Press and hold the signal button until it locks.',
+    hint: 'Keep one finger on the signal button until the ring fills.',
   },
   {
     id: 'finale',
