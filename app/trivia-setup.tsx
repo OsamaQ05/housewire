@@ -111,7 +111,7 @@ export default function TriviaSetupScreen() {
     } catch {
       if (!mounted.current) return;
       setStarting(false);
-      setStartError('The signal could not start. Check the player names and try again.');
+      setStartError('We could not prepare the game. Check the names and try again.');
     }
   };
 
@@ -132,12 +132,12 @@ export default function TriviaSetupScreen() {
 
           <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(440)} style={styles.hero}>
             <FrequencyTuner />
-            <Text style={[styles.heroTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>TUNE INTO EACH OTHER.</Text>
-            <Text style={[styles.heroBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Lock a choice, dial, sequence, or short answer. Everyone reads the signal before it is revealed.</Text>
+            <Text style={[styles.heroTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>How well do you know each other?</Text>
+            <Text style={[styles.heroBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Pass one phone around. Answer privately, predict each other, then reveal the truth together.</Text>
           </Animated.View>
 
           <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(80).duration(400)} style={[styles.how, { borderColor: theme.colors.draft }]}>
-            {['PICK', 'GUESS', 'REVEAL'].map((step, index) => (
+            {['ANSWER', 'PASS & GUESS', 'REVEAL'].map((step, index) => (
               <View key={step} style={styles.howStep}>
                 <Text style={[styles.howNumber, { color: index === 0 ? GOLD : index === 1 ? CYAN : CORAL, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text>
                 <Text style={[styles.howLabel, { color: theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{step}</Text>
@@ -185,7 +185,7 @@ export default function TriviaSetupScreen() {
           ) : null}
 
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>WHO&apos;S PLAYING?</Text>
+            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Who is playing?</Text>
             <View style={styles.nameList}>
               {names.map((name, index) => (
                 <View key={index} style={[styles.nameRow, { borderColor: theme.colors.draft, backgroundColor: theme.colors.surface }]}>
@@ -231,7 +231,7 @@ export default function TriviaSetupScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>PLAY AS</Text>
+            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Play as</Text>
             <View style={[styles.segment, { borderColor: theme.colors.draft }]}>
               <SegmentButton active={format === 'everyone'} label="Everyone" onPress={() => {
                 formDirty.current = true;
@@ -250,7 +250,7 @@ export default function TriviaSetupScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>ROUND LENGTH</Text>
+            <Text style={[styles.sectionLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>How long?</Text>
             <View style={styles.lengthRow}>
               {([4, 8, 12] as const).map((count) => (
                 <Pressable
@@ -263,8 +263,8 @@ export default function TriviaSetupScreen() {
                   }}
                   style={[styles.lengthKey, { backgroundColor: questionCount === count ? GOLD : theme.colors.surface, borderColor: questionCount === count ? GOLD : theme.colors.draft }]}
                 >
-                  <Text style={[styles.lengthCount, { color: questionCount === count ? '#171309' : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{count}</Text>
-                  <Text style={[styles.lengthLabel, { color: questionCount === count ? '#4D3A12' : theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{count === 4 ? 'QUICK' : count === 8 ? 'FULL' : 'LONG'}</Text>
+                  <Text style={[styles.lengthCount, { color: questionCount === count ? '#171309' : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{count === 4 ? '5 min' : count === 8 ? '10 min' : '15 min'}</Text>
+                  <Text style={[styles.lengthLabel, { color: questionCount === count ? '#4D3A12' : theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>{count} rounds</Text>
                 </Pressable>
               ))}
             </View>
@@ -282,12 +282,12 @@ export default function TriviaSetupScreen() {
             style={({ pressed }) => [styles.start, { backgroundColor: GOLD }, (!valid || starting) && styles.disabled, pressed && styles.pressed]}
           >
             <View>
-              <Text style={[styles.startOverline, { fontFamily: theme.typography.families.monoMedium }]}>{starting ? 'TUNING THE DIAL…' : 'ANSWERS STAY ON THIS PHONE'}</Text>
-              <Text style={[styles.startText, { fontFamily: theme.typography.families.displayHeavy }]}>{starting ? 'ONE MOMENT' : 'START THE SIGNAL'}</Text>
+              <Text style={[styles.startOverline, { fontFamily: theme.typography.families.bodyMedium }]}>{starting ? 'Preparing a fresh mix…' : 'Private answers stay on this phone'}</Text>
+              <Text style={[styles.startText, { fontFamily: theme.typography.families.displayHeavy }]}>{starting ? 'One moment' : 'Start Family Frequency'}</Text>
             </View>
             <Ionicons color="#171309" name="radio" size={27} />
           </Pressable>
-          <Text style={[styles.aiNote, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>AI ROTATES SAFE STYLES + CHECKS LOCAL QUESTION FINGERPRINTS · ANSWERS NEVER LEAVE</Text>
+          <Text style={[styles.aiNote, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>AI refreshes the question mix for your group. Private answers stay here.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenShell>
@@ -341,7 +341,7 @@ function FrequencyTuner() {
 const styles = StyleSheet.create({
   addPlayer: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: 6, minHeight: 34 },
   addPlayerText: { fontSize: 13 },
-  aiNote: { fontSize: 10, letterSpacing: 0.8, lineHeight: 15, paddingHorizontal: 20, textAlign: 'center' },
+  aiNote: { fontSize: 12, lineHeight: 17, paddingHorizontal: 28, textAlign: 'center' },
   disabled: { opacity: 0.36 },
   error: { fontSize: 13, marginTop: -5, textAlign: 'center' },
   flex: { flex: 1 },
@@ -349,28 +349,28 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 23 },
   hero: { alignItems: 'center', paddingHorizontal: 24 },
   heroBody: { fontSize: 15, lineHeight: 21, maxWidth: 370, textAlign: 'center' },
-  heroTitle: { fontSize: 43, letterSpacing: 0.2, lineHeight: 42, marginBottom: 7, textAlign: 'center' },
-  how: { borderBottomWidth: 1, borderTopWidth: 1, flexDirection: 'row', marginHorizontal: 20, paddingVertical: 11 },
-  howLabel: { fontSize: 10, letterSpacing: 1.2 },
+  heroTitle: { fontSize: 41, lineHeight: 43, marginBottom: 7, textAlign: 'center' },
+  how: { borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginHorizontal: 20, paddingVertical: 11 },
+  howLabel: { fontSize: 10, letterSpacing: 0.5 },
   howNumber: { fontSize: 26, lineHeight: 27 },
   howStep: { alignItems: 'center', flex: 1 },
   identity: { alignItems: 'center', flexDirection: 'row', gap: 7 },
   identityText: { fontSize: 19, letterSpacing: 0.7 },
-  lengthCount: { fontSize: 31, lineHeight: 31 },
-  lengthKey: { alignItems: 'center', borderWidth: 1, flex: 1, gap: 1, minHeight: 62, justifyContent: 'center' },
-  lengthLabel: { fontSize: 10, letterSpacing: 0.9 },
+  lengthCount: { fontSize: 21, lineHeight: 24 },
+  lengthKey: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flex: 1, gap: 2, minHeight: 62, justifyContent: 'center' },
+  lengthLabel: { fontSize: 11, lineHeight: 15 },
   lengthRow: { flexDirection: 'row', gap: 8 },
   nameIndex: { alignItems: 'center', borderRadius: 18, borderWidth: 1, height: 34, justifyContent: 'center', width: 34 },
   nameIndexText: { fontSize: 20 },
   nameInput: { flex: 1, fontSize: 16, minHeight: 50, paddingVertical: 0 },
   nameList: { gap: 7 },
-  nameRow: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 10, minHeight: 58, paddingHorizontal: 10 },
+  nameRow: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, minHeight: 58, paddingHorizontal: 10 },
   onAir: { borderRadius: 5, height: 9, width: 9 },
   page: { gap: 20, paddingBottom: 42 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.992 }] },
-  resume: { alignItems: 'center', borderLeftWidth: 3, borderWidth: 1, flexDirection: 'row', gap: 11, marginHorizontal: 20, minHeight: 67, paddingHorizontal: 13 },
+  resume: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 11, marginHorizontal: 20, minHeight: 67, paddingHorizontal: 13 },
   resumeCopy: { flex: 1, gap: 3 },
-  recentCard: { borderWidth: 1, gap: 2, minHeight: 78, paddingHorizontal: 12, paddingVertical: 10, width: 154 },
+  recentCard: { borderRadius: 14, borderWidth: 1, gap: 2, minHeight: 78, paddingHorizontal: 12, paddingVertical: 10, width: 154 },
   recentHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
   recentMeta: { fontSize: 9, letterSpacing: 0.5, marginTop: 2 },
   recentPrivate: { fontSize: 9, letterSpacing: 0.7 },
@@ -382,13 +382,13 @@ const styles = StyleSheet.create({
   resumeLamp: { borderRadius: 6, height: 11, width: 11 },
   resumeTitle: { fontSize: 15 },
   section: { gap: 10, paddingHorizontal: 20 },
-  sectionLabel: { fontSize: 10, letterSpacing: 1.2 },
-  segment: { borderWidth: 1, flexDirection: 'row', padding: 4 },
-  segmentKey: { alignItems: 'center', flex: 1, justifyContent: 'center', minHeight: 44 },
+  sectionLabel: { fontSize: 14, lineHeight: 18 },
+  segment: { borderRadius: 16, borderWidth: 1, flexDirection: 'row', padding: 4 },
+  segmentKey: { alignItems: 'center', borderRadius: 12, flex: 1, justifyContent: 'center', minHeight: 44 },
   segmentText: { fontSize: 15 },
-  start: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 20, minHeight: 78, paddingHorizontal: 18 },
-  startOverline: { color: '#5B4512', fontSize: 10, letterSpacing: 0.9 },
-  startText: { color: '#171309', fontSize: 26, letterSpacing: 0.4, lineHeight: 27 },
+  start: { alignItems: 'center', borderRadius: 18, flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 20, minHeight: 82, paddingHorizontal: 18 },
+  startOverline: { color: '#5B4512', fontSize: 11, lineHeight: 15 },
+  startText: { color: '#171309', fontSize: 23, lineHeight: 27 },
   teamHint: { fontSize: 12, lineHeight: 17 },
   teamTag: { fontSize: 10, letterSpacing: 0.7 },
   tuner: { height: 143, marginBottom: -4 },

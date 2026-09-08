@@ -29,8 +29,8 @@ export function CrewPlate({ draft, onChange }: { draft: ForgeDraft; onChange: (d
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.panel}>
-      <Header eyebrow="CREW PLATE" title="WHO IS INSIDE?" />
-      <Text style={[styles.lede, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The forge splits vital information across every person. No role gets the whole answer.</Text>
+      <Header eyebrow="Step 1 of 3" title="Who is playing?" />
+      <Text style={[styles.lede, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Every person gets a different piece, so the case only works when you talk.</Text>
       <View accessibilityRole="radiogroup" style={styles.countRail}>
         {([2, 3, 4] as const).map((count) => (
           <Pressable
@@ -42,21 +42,21 @@ export function CrewPlate({ draft, onChange }: { draft: ForgeDraft; onChange: (d
             style={({ pressed }) => [styles.count, { backgroundColor: draft.playerCount === count ? forgeColors.ink : 'transparent', borderColor: draft.playerCount === count ? forgeColors.ink : theme.colors.draft }, pressed && styles.pressed]}
           >
             <Text style={[styles.countValue, { color: draft.playerCount === count ? forgeColors.dark : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{count}</Text>
-            <Text style={[styles.countLabel, { color: draft.playerCount === count ? '#4B4214' : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>PLAYERS</Text>
+            <Text style={[styles.countLabel, { color: draft.playerCount === count ? '#4B4214' : theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>people</Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>HOW LONG SHOULD THE HOUSE HOLD?</Text>
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>How long?</Text>
       <View accessibilityRole="radiogroup" style={styles.optionStack}>
         {([20, 30, 45] as const).map((duration) => (
           <ForgeOption
-            detail={duration === 20 ? 'Tight five-scene cut' : duration === 30 ? 'Full evening case' : 'Long-form challenge'}
+            detail={duration === 20 ? 'Quick five-scene case' : duration === 30 ? 'A full game night' : 'Longer and more demanding'}
             key={duration}
             label={`${duration} minutes`}
             onPress={() => onChange({ ...draft, duration })}
             selected={draft.duration === duration}
-            value={duration === 30 ? 'RECOMMENDED' : undefined}
+            value={duration === 30 ? 'Recommended' : undefined}
           />
         ))}
       </View>
@@ -75,7 +75,7 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
   ];
   return (
     <View style={styles.panel}>
-      <Header eyebrow="STORY PLATE" title="CHOOSE A WORLD" />
+      <Header eyebrow="Step 2 of 3" title="Pick a story world" />
       <View accessibilityRole="radiogroup" style={styles.optionStack}>
         {themes.map((item) => (
           <ForgeOption
@@ -90,7 +90,7 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
       </View>
 
       <View style={[styles.seedBrief, { borderColor: theme.colors.draft }]}>
-        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>OPTIONAL STORY SEED</Text>
+        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Add one story detail (optional)</Text>
         <TextInput
           accessibilityHint="Adds a place, era, or situation to the generated case"
           autoCapitalize="sentences"
@@ -103,10 +103,10 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
           value={draft.customThemePrompt}
         />
         <Text style={[styles.seedCount, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{draft.customThemePrompt.length}/180</Text>
-        <Text style={[styles.seedPrivacy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Offline by default. With the optional story server, this seed and answer-free mechanic summaries go to the model; names, clues, and solutions do not.</Text>
+        <Text style={[styles.seedPrivacy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Used only to shape the story. Player names and puzzle answers are never sent.</Text>
       </View>
 
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>STORY TEMPERATURE</Text>
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Mood</Text>
       <View accessibilityRole="radiogroup" style={styles.threeRail}>
         {(['mystery', 'eerie', 'adventure'] as const).map((tone) => (
           <CompactRadio key={tone} label={tone} onPress={() => onChange({ ...draft, tone })} selected={draft.tone === tone} />
@@ -120,8 +120,8 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.panel}>
-      <Header eyebrow="MECHANISM PLATE" title="SET THE PRESSURE" />
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>PUZZLE DIFFICULTY</Text>
+      <Header eyebrow="Step 3 of 3" title="Choose the challenge" />
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Puzzle difficulty</Text>
       <View accessibilityRole="radiogroup" style={styles.difficultyRail}>
         {([1, 2, 3, 4, 5] as const).map((difficulty) => (
           <Pressable
@@ -136,9 +136,9 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
           </Pressable>
         ))}
       </View>
-      <Text style={[styles.difficultyCaption, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{draft.difficulty <= 2 ? 'Readable in one pass.' : draft.difficulty <= 4 ? 'Fragments need careful reconstruction.' : 'Little redundancy. Tight final window.'}</Text>
+      <Text style={[styles.difficultyCaption, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{draft.difficulty <= 2 ? 'Gentle clues with more signposts.' : draft.difficulty <= 4 ? 'Needs careful teamwork.' : 'Fewer hints and tighter timing.'}</Text>
 
-      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>PHYSICAL INTENSITY</Text>
+      <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Movement level</Text>
       <View accessibilityRole="radiogroup" style={styles.threeRail}>
         {(['gentle', 'balanced', 'intense'] as const).map((intensity) => (
           <CompactRadio key={intensity} label={intensity} onPress={() => onChange({ ...draft, intensity })} selected={draft.intensity === intensity} />
@@ -152,7 +152,7 @@ export function MechanismPlate({ draft, onChange }: { draft: ForgeDraft; onChang
       </View>
       <View style={[styles.safety, { borderColor: theme.colors.ready }]}>
         <Ionicons color={theme.colors.ready} name="shield-checkmark-outline" size={18} />
-        <Text style={[styles.safetyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Every selected mechanic gets an answer-preserving manual fallback before the case is saved.</Text>
+        <Text style={[styles.safetyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Every camera, voice, or movement challenge also has a manual fallback.</Text>
       </View>
     </View>
   );
@@ -162,7 +162,7 @@ function Header({ eyebrow, title }: { eyebrow: string; title: string }) {
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.header}>
-      <Text style={[styles.eyebrow, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>{eyebrow}</Text>
+      <Text style={[styles.eyebrow, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>{eyebrow}</Text>
       <Text accessibilityRole="header" style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{title}</Text>
     </View>
   );
@@ -177,36 +177,36 @@ function CompactRadio({ label, onPress, selected }: { label: string; onPress: ()
       onPress={onPress}
       style={({ pressed }) => [styles.compactRadio, { backgroundColor: selected ? forgeColors.ink : 'transparent', borderColor: selected ? forgeColors.ink : theme.colors.draft }, pressed && styles.pressed]}
     >
-      <Text numberOfLines={1} style={[styles.compactRadioText, { color: selected ? forgeColors.dark : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{label.toUpperCase()}</Text>
+      <Text numberOfLines={1} style={[styles.compactRadioText, { color: selected ? forgeColors.dark : theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  compactRadio: { alignItems: 'center', borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 44, paddingHorizontal: 6 },
-  compactRadioText: { fontSize: 8, letterSpacing: 0.6 },
-  count: { alignItems: 'center', borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 78 },
-  countLabel: { fontSize: 7, letterSpacing: 1 },
+  compactRadio: { alignItems: 'center', borderRadius: 13, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 44, paddingHorizontal: 6 },
+  compactRadioText: { fontSize: 12 },
+  count: { alignItems: 'center', borderRadius: 15, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 78 },
+  countLabel: { fontSize: 11, lineHeight: 14 },
   countRail: { flexDirection: 'row', gap: 8 },
   countValue: { fontSize: 38, lineHeight: 38 },
   difficultyCaption: { fontSize: 12, lineHeight: 17 },
-  difficultyNotch: { alignItems: 'center', borderWidth: 1, flex: 1, justifyContent: 'center' },
+  difficultyNotch: { alignItems: 'center', borderRadius: 10, borderWidth: 1, flex: 1, justifyContent: 'center' },
   difficultyRail: { alignItems: 'flex-end', flexDirection: 'row', gap: 6, height: 65 },
   difficultyText: { fontSize: 9 },
-  eyebrow: { fontSize: 8, letterSpacing: 1.6 },
+  eyebrow: { fontSize: 13, lineHeight: 18 },
   header: { gap: 2 },
   lede: { fontSize: 14, lineHeight: 20 },
-  microLabel: { fontSize: 8, letterSpacing: 1.2, marginTop: 4 },
+  microLabel: { fontSize: 13, lineHeight: 18, marginTop: 4 },
   optionStack: { gap: 7 },
   panel: { gap: 15 },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
-  safety: { alignItems: 'center', borderTopWidth: 1, flexDirection: 'row', gap: 9, paddingTop: 12 },
+  safety: { alignItems: 'center', borderRadius: 13, borderWidth: 1, flexDirection: 'row', gap: 9, padding: 12 },
   safetyText: { flex: 1, fontSize: 11, lineHeight: 16 },
-  seedBrief: { borderBottomWidth: 1, borderTopWidth: 1, gap: 5, paddingVertical: 11 },
+  seedBrief: { borderRadius: 16, borderWidth: 1, gap: 5, padding: 12 },
   seedCount: { fontSize: 7, textAlign: 'right' },
   seedInput: { fontSize: 20, lineHeight: 25, maxHeight: 88, minHeight: 56, padding: 0, textAlignVertical: 'top' },
   seedPrivacy: { fontSize: 10, lineHeight: 14 },
   threeRail: { flexDirection: 'row', gap: 7 },
-  title: { fontSize: 46, letterSpacing: 0.2, lineHeight: 44 },
-  toggleList: { gap: 0 },
+  title: { fontSize: 43, lineHeight: 45 },
+  toggleList: { gap: 8 },
 });

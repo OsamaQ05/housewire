@@ -38,17 +38,17 @@ const CASE_META = {
   'dead-air': {
     accent: '#C8F26A',
     minutes: 18,
-    stageNames: ['THREE DUCTS', 'SERVICE PLATES', 'SERVICE PAIR', 'ECHO MATRIX', 'COUNTERTONE'],
+    stageNames: ['Three ducts', 'Service plates', 'Service pair', 'Echo matrix', 'Countertone'],
   },
   'night-glass': {
     accent: '#9AE9F5',
     minutes: 18,
-    stageNames: ['THRESHOLD', 'PARALLAX DOORS', 'FLOORPLAN', 'CORRIDOR', 'FINAL FOLD'],
+    stageNames: ['Threshold', 'Parallax doors', 'Floorplan', 'Corridor', 'Final fold'],
   },
   'long-table': {
     accent: '#E4A84A',
     minutes: 22,
-    stageNames: ['TAKE YOUR PLACES', 'STOLEN PHOTOGRAPH', 'WHAT THE HOUSE KEPT', 'SERVICE PASS', 'LAST BELL'],
+    stageNames: ['Take your places', 'Stolen photograph', 'What the house kept', 'Service pass', 'Last bell'],
   },
 } as const;
 
@@ -464,7 +464,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
           </View>
           <View style={styles.progressRail}>{meta.stageNames.map((name, index) => <View key={name} style={[styles.progressSegment, { backgroundColor: index < stageIndex ? theme.colors.ready : index === stageIndex ? meta.accent : theme.colors.draft }]} />)}</View>
           <View style={styles.stageMeta}>
-            <TechnicalLabel color={meta.accent}>STAGE {stageIndex + 1}/5 · {meta.stageNames[stageIndex]}</TechnicalLabel>
+            <TechnicalLabel color={meta.accent}>Part {stageIndex + 1} of 5 · {meta.stageNames[stageIndex]}</TechnicalLabel>
             <AdaptiveGuideButton accent={meta.accent} assessment={pressure} hintLevel={hintLevel} onPress={() => setHintLevel((current) => Math.min(3, current + 1))} />
           </View>
         </View>
@@ -557,8 +557,8 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
               onNext={() => setHintLevel((current) => Math.min(3, current + 1))}
             />
           ) : null}
-          {error ? <View style={[styles.error, { borderColor: theme.colors.fault }]}><TechnicalLabel color={theme.colors.fault}>INSTRUMENT FAULT</TechnicalLabel><Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text></View> : null}
-          {shared ? <View style={styles.liveStatus}><View style={[styles.connectionDot, { backgroundColor: session.connectionState === 'connected' ? theme.colors.ready : theme.colors.fault }]} /><Text style={[styles.liveStatusText, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{session.connectionState.toUpperCase()} · {coordinator.liveNodeIds?.length ?? nodeIds.length} LIVE NODES · REV {coordinator.revision ?? 0}</Text></View> : <TechnicalLabel color={theme.colors.warning}>SOLO REHEARSAL · SWITCH BETWEEN SIMULATED PHONES ABOVE EACH PUZZLE</TechnicalLabel>}
+          {error ? <View style={[styles.error, { borderColor: theme.colors.fault }]}><TechnicalLabel color={theme.colors.fault}>Something went wrong</TechnicalLabel><Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text></View> : null}
+          {shared ? <View style={styles.liveStatus}><View style={[styles.connectionDot, { backgroundColor: session.connectionState === 'connected' ? theme.colors.ready : theme.colors.fault }]} /><Text style={[styles.liveStatusText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{session.connectionState === 'connected' ? `${coordinator.liveNodeIds?.length ?? nodeIds.length} phones connected` : 'Trying to reconnect'}</Text></View> : <TechnicalLabel color={theme.colors.warning}>One-phone preview · switch players above each puzzle</TechnicalLabel>}
         </ScrollView>
 
         {shared && !paused && (secondsLeft > 0 || overtimeAccepted) ? (
@@ -575,7 +575,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
         {paused ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={styles.pauseBackdrop}>
             <StagePanel tone={meta.accent}>
-              <TechnicalLabel color={meta.accent}>CASE PAUSED ON THIS PHONE</TechnicalLabel>
+              <TechnicalLabel color={meta.accent}>Case paused</TechnicalLabel>
               <Text style={[styles.pauseTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Keep the house safe.</Text>
               <Text style={[styles.pauseCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{shared && coordinator.isHost ? 'Stop moving before looking at the screen. Ending the run here closes it on every connected phone.' : shared ? 'Stop moving before looking at the screen. Leaving closes the case only on this phone; the host run continues.' : 'Stop moving before looking at the screen. Live phones retain the same authoritative stage.'}</Text>
               <ActionButton accent={meta.accent} icon="play" label="Resume" onPress={resume} />
@@ -587,7 +587,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
         {secondsLeft === 0 && !overtimeAccepted && !paused ? (
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={styles.pauseBackdrop}>
             <StagePanel tone={theme.colors.fault}>
-              <TechnicalLabel color={theme.colors.fault}>THE CASE CLOCK EXPIRED</TechnicalLabel>
+              <TechnicalLabel color={theme.colors.fault}>Time is up</TechnicalLabel>
               <Text style={[styles.pauseTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>The house is still open.</Text>
               <Text style={[styles.pauseCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep solving in overtime, or end the run safely. Overtime never changes a solved clue or fabricates a completion.</Text>
               <ActionButton accent={meta.accent} icon="time-outline" label="Continue in overtime" onPress={() => {
@@ -604,9 +604,9 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
 }
 
 function caseName(missionId: EscapeCaseId): string {
-  if (missionId === 'dead-air') return 'DEAD AIR';
-  if (missionId === 'night-glass') return 'NIGHT GLASS';
-  return 'THE LONG TABLE';
+  if (missionId === 'dead-air') return 'Dead Air';
+  if (missionId === 'night-glass') return 'Night Glass';
+  return 'The Long Table';
 }
 
 function closingEvent(missionId: EscapeCaseId): string {
@@ -617,7 +617,7 @@ function closingEvent(missionId: EscapeCaseId): string {
 
 const styles = StyleSheet.create({
   caseIdentity: { alignItems: 'center', flexDirection: 'row', gap: 7 },
-  caseName: { fontSize: 19, letterSpacing: 0.7 },
+  caseName: { fontSize: 20 },
   clock: { fontSize: 13, letterSpacing: 0.6 },
   connectionDot: { borderRadius: 5, height: 7, width: 7 },
   content: { gap: 18, paddingBottom: 48, paddingHorizontal: 18, paddingTop: 18 },
@@ -628,12 +628,12 @@ const styles = StyleSheet.create({
   headerTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   liveDot: { borderRadius: 5, height: 8, width: 8 },
   liveStatus: { alignItems: 'center', flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 6 },
-  liveStatusText: { fontSize: 7, letterSpacing: 0.65 },
+  liveStatusText: { fontSize: 12, lineHeight: 16 },
   pauseBackdrop: { backgroundColor: 'rgba(0,0,0,0.86)', bottom: 0, justifyContent: 'center', left: 0, padding: 20, position: 'absolute', right: 0, top: 0, zIndex: 10 },
   pauseCopy: { fontSize: 14, lineHeight: 20 },
   pauseTitle: { fontSize: 38, lineHeight: 38 },
   progressRail: { flexDirection: 'row', gap: 4 },
-  progressSegment: { flex: 1, height: 3 },
+  progressSegment: { borderRadius: 4, flex: 1, height: 4 },
   recovery: { flex: 1, gap: 16, justifyContent: 'center' },
   recoveryCopy: { fontSize: 15, lineHeight: 21 },
   recoveryTitle: { fontSize: 43, lineHeight: 43 },

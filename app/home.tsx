@@ -92,10 +92,10 @@ export default function HomeScreen() {
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(420)} style={styles.topline}>
           <View>
             <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>HOUSEWIRE</Text>
-            <Text style={[styles.collection, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>THE BLACKLINE FILES · FOUR CASES</Text>
+            <Text style={[styles.collection, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Story escapes · choose one together</Text>
           </View>
           <View style={styles.utilities}>
-            <IconButton label="House modes" name="grid-outline" onPress={() => router.push('/modes')} />
+            <IconButton label="All games" name="home-outline" onPress={() => router.push('/modes')} />
             <IconButton label="Case archive" name="archive-outline" onPress={() => router.push('/archive')} />
             <IconButton label="Settings" name="options-outline" onPress={() => router.push('/settings')} />
           </View>
@@ -113,7 +113,7 @@ export default function HomeScreen() {
           >
             <View style={[styles.resumePulse, { backgroundColor: theme.colors.ready }]} />
             <Text style={[styles.resumeText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{missions.find((mission) => mission.id === missionInProgressId)?.title ?? 'Case'} in progress</Text>
-            <Text style={[styles.resumeAction, { color: theme.colors.ready, fontFamily: theme.typography.families.monoMedium }]}>RE-ENTER →</Text>
+            <Text style={[styles.resumeAction, { color: theme.colors.ready, fontFamily: theme.typography.families.bodyMedium }]}>Continue →</Text>
           </Pressable>
         ) : null}
 
@@ -130,9 +130,9 @@ export default function HomeScreen() {
             <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="sunny-outline" size={31} />
           </View>
           <View style={styles.tutorialCopy}>
-            <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.monoMedium }]}>{tutorialComplete ? 'CASE 00 · READY TO REPLAY' : 'NEW HERE? START WITH CASE 00'}</Text>
-            <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>FIRST LIGHT</Text>
-            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn room communication, private clues and phone movement in four friendly steps.</Text>
+            <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.bodyMedium }]}>{tutorialComplete ? 'Practice ready to replay' : 'New to Escape Cases?'}</Text>
+            <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>First Light · 2 min</Text>
+            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn private clues, room communication, and phone movement by doing them once.</Text>
           </View>
           <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="arrow-forward" size={23} />
         </Pressable>
@@ -150,9 +150,9 @@ export default function HomeScreen() {
             <Text style={[styles.forgeIndexText, { fontFamily: theme.typography.families.displayHeavy }]}>∞</Text>
           </View>
           <View style={styles.forgeCopy}>
-            <Text style={[styles.forgeOverline, { fontFamily: theme.typography.families.monoMedium }]}>NEW · LOCAL CASE PRESS</Text>
+            <Text style={[styles.forgeOverline, { fontFamily: theme.typography.families.bodyMedium }]}>Make a fresh escape</Text>
             <Text style={[styles.forgeTitle, { fontFamily: theme.typography.families.displayHeavy }]}>CASE FORGE</Text>
-            <Text style={[styles.forgeBody, { fontFamily: theme.typography.families.body }]}>Cut a verified five-scene escape room around this crew.</Text>
+            <Text style={[styles.forgeBody, { fontFamily: theme.typography.families.body }]}>Build a playable five-scene case around your room, players, and difficulty.</Text>
           </View>
           <Ionicons color="#F2D36D" name="hammer-outline" size={25} />
         </Pressable>
@@ -229,36 +229,34 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(220).duration(420)} style={styles.actions}>
-          <Pressable
-            accessibilityHint="Creates a live game for nearby family phones"
-            accessibilityRole="button"
-            onPress={() => launch('lan')}
-            style={({ pressed }) => [styles.primary, { backgroundColor: activeMission.accent }, pressed && styles.pressed]}
-          >
-            <View>
-              <Text style={[styles.actionOverline, { color: '#07100D', fontFamily: theme.typography.families.monoMedium }]}>FULL ESCAPE ROOM</Text>
-              <Text style={[styles.primaryText, { color: '#07100D', fontFamily: theme.typography.families.bodyMedium }]}>Play together</Text>
-            </View>
-            <Ionicons color="#07100D" name="people" size={25} />
-          </Pressable>
-          <View style={styles.secondaryRow}>
-            <Pressable accessibilityHint="Runs every role on this phone for rehearsal" accessibilityRole="button" onPress={() => launch('preview')} style={({ pressed }) => [styles.secondary, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
-              <Ionicons color={theme.colors.text} name="phone-portrait-outline" size={20} />
-              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Solo rehearsal</Text>
-            </Pressable>
-            <Pressable accessibilityHint="Scans or enters a code from a host phone" accessibilityRole="button" onPress={() => router.push('/join')} style={({ pressed }) => [styles.secondary, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
-              <Ionicons color={theme.colors.text} name="scan-outline" size={20} />
-              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Join a house</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-
         <View style={[styles.promiseBand, { borderColor: theme.colors.draft }]}>
-          <Text style={[styles.promiseIndex, { color: activeMission.accent, fontFamily: theme.typography.families.displayHeavy }]}>NO SCREEN HAS THE WHOLE ANSWER.</Text>
-          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Phones become props. Family members become each other&apos;s missing information.</Text>
+          <Text style={[styles.promiseIndex, { color: activeMission.accent, fontFamily: theme.typography.families.displayHeavy }]}>Everyone holds a different piece.</Text>
+          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You have to talk, move, and put the story together as a family.</Text>
         </View>
       </ScrollView>
+
+      <Animated.View
+        entering={reducedMotion ? undefined : FadeInDown.delay(220).duration(420)}
+        style={[styles.stickyActions, { backgroundColor: theme.colors.background, borderColor: theme.colors.draft }]}
+      >
+        <Pressable
+          accessibilityHint="Creates a live game for nearby family phones"
+          accessibilityRole="button"
+          onPress={() => launch('lan')}
+          style={({ pressed }) => [styles.primary, { backgroundColor: activeMission.accent }, pressed && styles.pressed]}
+        >
+          <Text numberOfLines={1} style={[styles.primaryText, { color: '#182033', fontFamily: theme.typography.families.bodyMedium }]}>Host story</Text>
+          <Ionicons color="#07100D" name="people" size={23} />
+        </Pressable>
+        <Pressable accessibilityHint="Runs every role on this phone for rehearsal" accessibilityRole="button" onPress={() => launch('preview')} style={({ pressed }) => [styles.quickAction, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
+          <Ionicons color={theme.colors.text} name="phone-portrait-outline" size={20} />
+          <Text style={[styles.quickActionText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>One phone</Text>
+        </Pressable>
+        <Pressable accessibilityHint="Scans or enters a code from a host phone" accessibilityRole="button" onPress={() => router.push('/join')} style={({ pressed }) => [styles.quickAction, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
+          <Ionicons color={theme.colors.text} name="scan-outline" size={20} />
+          <Text style={[styles.quickActionText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Join</Text>
+        </Pressable>
+      </Animated.View>
     </ScreenShell>
   );
 }
@@ -273,10 +271,8 @@ function IconButton({ label, name, onPress }: { label: string; name: keyof typeo
 }
 
 const styles = StyleSheet.create({
-  actionOverline: { fontSize: 9, letterSpacing: 1.5, lineHeight: 13 },
-  actions: { gap: 10, paddingHorizontal: 20 },
   brand: { fontSize: 31, letterSpacing: 0.5, lineHeight: 32 },
-  caseCard: { borderWidth: 1, height: 474, justifyContent: 'space-between', overflow: 'hidden' },
+  caseCard: { borderRadius: 24, borderWidth: 1, height: 474, justifyContent: 'space-between', overflow: 'hidden' },
   caseCopy: { gap: 8, paddingBottom: 22, paddingHorizontal: 19 },
   caseDescription: { fontSize: 15, lineHeight: 21, maxWidth: 350 },
   caseDot: { borderRadius: 6, height: 6 },
@@ -290,42 +286,42 @@ const styles = StyleSheet.create({
   caseRail: { gap: 12, paddingHorizontal: 20 },
   caseRailBlock: { gap: 13 },
   caseShade: { backgroundColor: 'rgba(3,7,7,0.36)', position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  caseStatus: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
+  caseStatus: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 5 },
   caseStatusText: { fontSize: 9, letterSpacing: 1.3 },
   caseTitle: { fontSize: 57, letterSpacing: 0.3, lineHeight: 55 },
   caseTopline: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', padding: 17 },
-  collection: { fontSize: 8, letterSpacing: 1.5, lineHeight: 13 },
-  iconButton: { alignItems: 'center', borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
-  forgeBanner: { alignItems: 'center', backgroundColor: '#0C0D09', borderBottomColor: '#F2D36D', borderBottomWidth: 3, borderTopColor: '#544A22', borderTopWidth: 1, flexDirection: 'row', gap: 12, marginHorizontal: 20, minHeight: 112, paddingHorizontal: 14, paddingVertical: 12 },
-  forgeBody: { color: '#B9AF97', fontSize: 11, lineHeight: 16 },
-  forgeCopy: { flex: 1, gap: 1 },
-  forgeIndex: { alignItems: 'center', borderColor: '#F2D36D', borderRadius: 25, borderStyle: 'dashed', borderWidth: 1, height: 50, justifyContent: 'center', width: 50 },
+  collection: { fontSize: 12, lineHeight: 17 },
+  iconButton: { alignItems: 'center', borderRadius: 14, borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
+  forgeBanner: { alignItems: 'center', backgroundColor: '#1A2338', borderColor: '#5A4D24', borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: 12, marginHorizontal: 20, minHeight: 112, paddingHorizontal: 14, paddingVertical: 12 },
+  forgeBody: { color: '#CEC4AF', fontSize: 12, lineHeight: 17 },
+  forgeCopy: { flex: 1, gap: 2 },
+  forgeIndex: { alignItems: 'center', borderColor: '#F2D36D', borderRadius: 14, borderStyle: 'dashed', borderWidth: 1, height: 50, justifyContent: 'center', width: 50 },
   forgeIndexText: { color: '#F2D36D', fontSize: 31, lineHeight: 31 },
-  forgeOverline: { color: '#F2D36D', fontSize: 7, letterSpacing: 1.2 },
-  forgeTitle: { color: '#F4E8CF', fontSize: 31, lineHeight: 30 },
-  mechanic: { borderWidth: 1, paddingHorizontal: 7, paddingVertical: 4 },
+  forgeOverline: { color: '#F2D36D', fontSize: 11, lineHeight: 15 },
+  forgeTitle: { color: '#F4E8CF', fontSize: 29, lineHeight: 30 },
+  mechanic: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   mechanicText: { fontSize: 8, letterSpacing: 0.9 },
   mechanics: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, paddingTop: 2 },
-  page: { gap: 19, paddingBottom: 50, paddingTop: 12 },
+  page: { gap: 19, paddingBottom: 36, paddingTop: 12 },
   pressed: { opacity: 0.76, transform: [{ scale: 0.992 }] },
-  primary: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 68, paddingHorizontal: 18 },
-  primaryText: { fontSize: 20, lineHeight: 24 },
+  primary: { alignItems: 'center', borderRadius: 16, flex: 1.35, flexDirection: 'row', gap: 8, justifyContent: 'space-between', minHeight: 60, paddingHorizontal: 15 },
+  primaryText: { fontSize: 18, lineHeight: 22 },
   promiseBand: { borderBottomWidth: 1, borderTopWidth: 1, gap: 5, marginHorizontal: 20, paddingVertical: 18 },
   promiseIndex: { fontSize: 22, lineHeight: 23 },
   promiseText: { fontSize: 14, lineHeight: 20, maxWidth: 360 },
-  resume: { alignItems: 'center', borderBottomWidth: 1, borderTopWidth: 1, flexDirection: 'row', gap: 10, marginHorizontal: 20, minHeight: 48 },
+  resume: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, marginHorizontal: 20, minHeight: 48, paddingHorizontal: 12 },
   resumeAction: { fontSize: 9, letterSpacing: 1.1 },
   resumePulse: { borderRadius: 6, height: 9, width: 9 },
   resumeText: { flex: 1, fontSize: 15 },
-  secondary: { alignItems: 'center', borderWidth: 1, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', minHeight: 55, paddingHorizontal: 10 },
-  secondaryRow: { flexDirection: 'row', gap: 10 },
-  secondaryText: { fontSize: 14 },
+  quickAction: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flex: 1, gap: 2, justifyContent: 'center', minHeight: 60, paddingHorizontal: 8 },
+  quickActionText: { fontSize: 12 },
+  stickyActions: { borderTopWidth: 1, flexDirection: 'row', gap: 8, paddingBottom: 10, paddingHorizontal: 14, paddingTop: 10 },
   topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
-  tutorialBanner: { alignItems: 'center', backgroundColor: '#101713', borderLeftWidth: 3, borderRightWidth: 1, borderTopWidth: 1, borderBottomWidth: 1, flexDirection: 'row', gap: 12, marginHorizontal: 20, minHeight: 122, paddingHorizontal: 14, paddingVertical: 14 },
+  tutorialBanner: { alignItems: 'center', backgroundColor: '#1B2A42', borderWidth: 1, borderRadius: 18, flexDirection: 'row', gap: 12, marginHorizontal: 20, minHeight: 122, paddingHorizontal: 14, paddingVertical: 14 },
   tutorialBody: { fontSize: 12, lineHeight: 17 },
   tutorialCopy: { flex: 1, gap: 2 },
-  tutorialOverline: { fontSize: 8, letterSpacing: 1.1 },
+  tutorialOverline: { fontSize: 11, lineHeight: 15 },
   tutorialSun: { alignItems: 'center', borderRadius: 30, borderWidth: 1, height: 58, justifyContent: 'center', width: 58 },
-  tutorialTitle: { fontSize: 33, lineHeight: 32 },
+  tutorialTitle: { fontSize: 29, lineHeight: 31 },
   utilities: { flexDirection: 'row', gap: 8 },
 });

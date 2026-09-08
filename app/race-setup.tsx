@@ -74,26 +74,26 @@ export default function RaceSetupScreen() {
 
         <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(480)} style={styles.hero}>
           <RaceScope />
-          <Text style={[styles.kicker, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>BLACKLINE SUBSTATION · TWO MIRRORED ROUTES</Text>
-          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>OUTRUN THE OVERLOAD.</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Two crews get the same escape track at the same second. First to the breaker wins.</Text>
+          <Text style={[styles.kicker, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>2 teams · same course · 1 winner</Text>
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Ready, set, solve.</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Riddles, sounds, movement, and one final team lock. The first crew through wins.</Text>
         </Animated.View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(100).duration(420)} style={[styles.rules, { borderColor: theme.colors.draft }]}>
-          <Rule accent={EMBER} icon="people-outline" label="Split" value="Race with 2 phones (1v1) or 4 phones (2v2)." />
+          <Rule accent={EMBER} icon="people-outline" label="Start" value="Split into two crews with 2 or 4 phones." />
           <View style={[styles.ruleDivider, { backgroundColor: theme.colors.draft }]} />
-          <Rule accent={MINT} icon="git-compare-outline" label="Race" value="Solve identical riddles, rhythms, motion routes and gesture locks." />
+          <Rule accent={MINT} icon="git-compare-outline" label="Race" value="Both sides get the same challenges at the same time." />
           <View style={[styles.ruleDivider, { backgroundColor: theme.colors.draft }]} />
-          <Rule accent="#F2C14E" icon="link-outline" label="Reunite" value="Teammates exchange private fragments to close their breaker." />
+          <Rule accent="#F2C14E" icon="link-outline" label="Finish" value="Teammates combine private pieces to close the breaker." />
         </Animated.View>
 
         <View style={styles.actions}>
           <Pressable accessibilityHint="Creates a nearby race room and QR code" accessibilityRole="button" onPress={hostLive} style={({ pressed }) => [styles.liveButton, pressed && styles.pressed]}>
-            <View style={[styles.liveHalf, { backgroundColor: EMBER }]} />
-            <View style={[styles.liveHalf, { backgroundColor: MINT }]} />
+            <View style={[styles.liveHalf, styles.liveHalfLeft, { backgroundColor: EMBER }]} />
+            <View style={[styles.liveHalf, styles.liveHalfRight, { backgroundColor: MINT }]} />
             <View style={styles.liveCopy}>
-              <Text style={[styles.actionOverline, { fontFamily: theme.typography.families.monoMedium }]}>SAME WI-FI OR PHONE HOTSPOT</Text>
-              <Text style={[styles.liveTitle, { fontFamily: theme.typography.families.displayHeavy }]}>HOST LIVE RACE</Text>
+              <Text style={[styles.actionOverline, { fontFamily: theme.typography.families.bodyMedium }]}>2 or 4 phones · one host QR</Text>
+              <Text style={[styles.liveTitle, { fontFamily: theme.typography.families.displayHeavy }]}>Host a live race</Text>
             </View>
             <Ionicons color="#08100F" name="arrow-forward-circle" size={29} />
           </Pressable>
@@ -101,18 +101,18 @@ export default function RaceSetupScreen() {
           <View style={styles.secondaryRow}>
             <Pressable accessibilityRole="button" onPress={() => router.push('/race-join')} style={({ pressed }) => [styles.secondary, { borderColor: MINT }, pressed && styles.pressed]}>
               <Ionicons color={MINT} name="scan-outline" size={21} />
-              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Join crew</Text>
+              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Join with QR</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={practice} style={({ pressed }) => [styles.secondary, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
               <Ionicons color={theme.colors.text} name="phone-portrait-outline" size={21} />
-              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Try vs ghost</Text>
+              <Text style={[styles.secondaryText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Try on one phone</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={[styles.fairBand, { borderColor: theme.colors.draft }]}> 
           <View style={[styles.fairLamp, { backgroundColor: MINT }]} />
-          <Text style={[styles.fairText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The host clock starts every phone together. AI Guide pauses the phone that opens a hint.</Text>
+          <Text style={[styles.fairText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Hints pause only your phone, so the race stays fair.</Text>
         </View>
 
         {raceHistory[0] ? (
@@ -133,7 +133,7 @@ function Rule({ accent, icon, label, value }: { accent: string; icon: keyof type
     <View style={styles.rule}>
       <View style={[styles.ruleIcon, { borderColor: accent }]}><Ionicons color={accent} name={icon} size={19} /></View>
       <View style={styles.ruleCopy}>
-        <Text style={[styles.ruleLabel, { color: accent, fontFamily: theme.typography.families.monoMedium }]}>{label.toUpperCase()}</Text>
+      <Text style={[styles.ruleLabel, { color: accent, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text>
         <Text style={[styles.ruleValue, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{value}</Text>
       </View>
     </View>
@@ -157,39 +157,41 @@ function RaceScope() {
 }
 
 const styles = StyleSheet.create({
-  actionOverline: { color: '#23413C', fontSize: 7, letterSpacing: 1.1 },
+  actionOverline: { color: '#23413C', fontSize: 11, lineHeight: 15 },
   actions: { gap: 10, paddingHorizontal: 20 },
   brand: { fontSize: 21, letterSpacing: 0.8 },
-  fairBand: { alignItems: 'center', borderBottomWidth: 1, borderTopWidth: 1, flexDirection: 'row', gap: 10, marginHorizontal: 20, paddingVertical: 13 },
+  fairBand: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, marginHorizontal: 20, paddingHorizontal: 13, paddingVertical: 13 },
   fairLamp: { borderRadius: 5, height: 9, width: 9 },
   fairText: { flex: 1, fontSize: 12, lineHeight: 17 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12 },
   headerSpacer: { width: 23 },
   hero: { alignItems: 'center', paddingHorizontal: 24 },
-  kicker: { fontSize: 7, letterSpacing: 1.45 },
-  liveButton: { alignItems: 'center', flexDirection: 'row', minHeight: 80, overflow: 'hidden', paddingHorizontal: 17 },
+  kicker: { fontSize: 13, lineHeight: 18 },
+  liveButton: { alignItems: 'center', borderRadius: 18, flexDirection: 'row', minHeight: 80, overflow: 'hidden', paddingHorizontal: 17 },
   liveCopy: { flex: 1, gap: 2, zIndex: 2 },
   liveHalf: { bottom: 0, position: 'absolute', top: 0, width: '50%' },
-  liveTitle: { color: '#08100F', fontSize: 24, letterSpacing: 0.5, lineHeight: 25 },
+  liveHalfLeft: { left: 0 },
+  liveHalfRight: { right: 0 },
+  liveTitle: { color: '#08100F', fontSize: 24, lineHeight: 27 },
   page: { flexGrow: 1, gap: 20, paddingBottom: 38 },
   pressed: { opacity: 0.73, transform: [{ scale: 0.993 }] },
   rule: { alignItems: 'center', flexDirection: 'row', gap: 11 },
   ruleCopy: { flex: 1, gap: 2 },
   ruleDivider: { height: 1, marginLeft: 48 },
   ruleIcon: { alignItems: 'center', borderRadius: 20, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
-  ruleLabel: { fontSize: 7, letterSpacing: 1.2 },
+  ruleLabel: { fontSize: 12, lineHeight: 16 },
   ruleValue: { fontSize: 13, lineHeight: 18 },
-  rules: { borderBottomWidth: 1, borderTopWidth: 1, gap: 12, marginHorizontal: 20, paddingVertical: 15 },
+  rules: { borderRadius: 18, borderWidth: 1, gap: 12, marginHorizontal: 20, paddingHorizontal: 14, paddingVertical: 15 },
   recentLabel: { fontSize: 9, letterSpacing: 1.2 },
   recentRun: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'center', paddingHorizontal: 20 },
   recentTime: { fontSize: 10, letterSpacing: 0.7 },
   recentValue: { fontSize: 18, letterSpacing: 0.3 },
   scope: { height: 154 },
-  secondary: { alignItems: 'center', borderWidth: 1, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', minHeight: 58 },
+  secondary: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', minHeight: 58 },
   secondaryRow: { flexDirection: 'row', gap: 9 },
   secondaryText: { fontSize: 14 },
   subtitle: { fontSize: 15, lineHeight: 21, marginTop: 7, maxWidth: 360, textAlign: 'center' },
-  title: { fontSize: 48, letterSpacing: 0.2, lineHeight: 46, marginTop: 7, textAlign: 'center' },
+  title: { fontSize: 47, lineHeight: 48, marginTop: 7, textAlign: 'center' },
 });
 
 function formatRaceTime(ms: number): string {

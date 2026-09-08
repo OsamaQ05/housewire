@@ -33,7 +33,7 @@ export function CaseStageScaffold({
         </View>
       </View>
       <View style={[styles.doNow, { borderColor: accent }]}>
-        <TechnicalLabel color={accent}>DO THIS NOW</TechnicalLabel>
+        <TechnicalLabel color={accent}>Your next move</TechnicalLabel>
         <Text style={[styles.instruction, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{instruction}</Text>
       </View>
       {children}
@@ -52,7 +52,7 @@ export function StagePanel({ children, tone }: { children: ReactNode; tone?: str
 
 export function TechnicalLabel({ children, color }: { children: ReactNode; color?: string }) {
   const { theme } = useHousewireTheme();
-  return <Text style={[styles.technical, { color: color ?? theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{children}</Text>;
+  return <Text style={[styles.technical, { color: color ?? theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{children}</Text>;
 }
 
 export function ActionButton({
@@ -117,7 +117,7 @@ export function ChoiceChip({
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.chipText, { color: selected ? '#07100D' : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{label}</Text>
+      <Text style={[styles.chipText, { color: selected ? '#07100D' : theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -137,7 +137,7 @@ export function RoleStepper({
   if (!enabled) return null;
   return (
     <View style={styles.stepper}>
-      <TechnicalLabel color={theme.colors.warning}>SOLO · CHANGE PHONE</TechnicalLabel>
+      <TechnicalLabel color={theme.colors.warning}>One-phone preview · switch player</TechnicalLabel>
       <View style={styles.stepperRow}>
         {crew.map((node) => (
           <Pressable
@@ -162,7 +162,7 @@ export function RoleStepper({
   );
 }
 
-export function WaitingPanel({ accent, detail, title = 'Your instrument is waiting.' }: { accent: string; detail: string; title?: string }) {
+export function WaitingPanel({ accent, detail, title = 'You are ready. Waiting for the others.' }: { accent: string; detail: string; title?: string }) {
   const { theme } = useHousewireTheme();
   return (
     <StagePanel tone={accent}>
@@ -406,31 +406,31 @@ export function QrScanner({
 }
 
 const styles = StyleSheet.create({
-  action: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 55, paddingHorizontal: 15 },
+  action: { alignItems: 'center', borderRadius: 15, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 55, paddingHorizontal: 15 },
   actionText: { fontSize: 16 },
-  camera: { borderWidth: 1, height: 380, justifyContent: 'center', overflow: 'hidden' },
-  cameraCopy: { bottom: 18, fontSize: 8, left: 18, letterSpacing: 1.2, position: 'absolute' },
-  chip: { borderWidth: 1, minHeight: 42, paddingHorizontal: 12, paddingVertical: 11 },
-  chipText: { fontSize: 10, letterSpacing: 0.8, textAlign: 'center' },
-  closeCamera: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.58)', height: 42, justifyContent: 'center', position: 'absolute', right: 12, top: 12, width: 42 },
+  camera: { borderRadius: 18, borderWidth: 1, height: 380, justifyContent: 'center', overflow: 'hidden' },
+  cameraCopy: { bottom: 18, fontSize: 11, left: 18, lineHeight: 15, position: 'absolute' },
+  chip: { borderRadius: 999, borderWidth: 1, minHeight: 42, paddingHorizontal: 13, paddingVertical: 11 },
+  chipText: { fontSize: 12, lineHeight: 16, textAlign: 'center' },
+  closeCamera: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 13, height: 42, justifyContent: 'center', position: 'absolute', right: 12, top: 12, width: 42 },
   disabled: { opacity: 0.38 },
-  doNow: { borderLeftWidth: 3, gap: 3, paddingLeft: 11, paddingVertical: 2 },
+  doNow: { borderLeftWidth: 3, gap: 3, paddingLeft: 11, paddingVertical: 3 },
   fallbackCopy: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   heading: { alignItems: 'flex-start', flexDirection: 'row', gap: 13 },
   headingCopy: { flex: 1, gap: 3, paddingTop: 2 },
-  hold: { alignItems: 'center', borderWidth: 1, height: 58, justifyContent: 'center', overflow: 'hidden' },
+  hold: { alignItems: 'center', borderRadius: 15, borderWidth: 1, height: 58, justifyContent: 'center', overflow: 'hidden' },
   holdFill: { bottom: 0, left: 0, opacity: 0.9, position: 'absolute', top: 0 },
   holdText: { fontSize: 15, zIndex: 1 },
   instruction: { fontSize: 14, lineHeight: 20 },
-  manualInput: { borderWidth: 1, flex: 1, fontSize: 13, height: 48, letterSpacing: 2, paddingHorizontal: 12 },
+  manualInput: { borderRadius: 13, borderWidth: 1, flex: 1, fontSize: 13, height: 48, letterSpacing: 2, paddingHorizontal: 12 },
   manualRow: { flexDirection: 'row', gap: 7 },
-  manualSubmit: { alignItems: 'center', height: 48, justifyContent: 'center', width: 50 },
-  marker: { alignItems: 'center', borderWidth: 3, gap: 4, padding: 16 },
+  manualSubmit: { alignItems: 'center', borderRadius: 13, height: 48, justifyContent: 'center', width: 50 },
+  marker: { alignItems: 'center', borderRadius: 20, borderWidth: 3, gap: 4, padding: 16 },
   markerCode: { fontSize: 12, letterSpacing: 4 },
   markerLabel: { fontSize: 25, lineHeight: 27, marginTop: 3 },
-  node: { alignItems: 'center', borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
+  node: { alignItems: 'center', borderRadius: 12, borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
   nodeText: { fontSize: 18 },
-  panel: { borderWidth: 1, gap: 12, padding: 15 },
+  panel: { borderRadius: 18, borderWidth: 1, gap: 12, padding: 15 },
   poseCopy: { flex: 1, gap: 2 },
   poseName: { fontSize: 35, lineHeight: 35 },
   posePhone: { alignItems: 'center', borderWidth: 2, height: 86, paddingTop: 8, width: 49 },
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   stageNumber: { fontSize: 42, lineHeight: 42 },
   stepper: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   stepperRow: { flexDirection: 'row', gap: 6 },
-  technical: { fontSize: 8, letterSpacing: 1.15, lineHeight: 12 },
+  technical: { fontSize: 12, lineHeight: 16 },
   title: { fontSize: 38, lineHeight: 38 },
   waitingDetail: { fontSize: 14, lineHeight: 20 },
   waitingIcon: { alignItems: 'center', height: 42, justifyContent: 'center', width: 42 },

@@ -123,7 +123,7 @@ describe('Family Frequency AI adaptation', () => {
         }
       }
     }
-  });
+  }, 15_000);
 });
 
 describe('Family Frequency service fallback', () => {

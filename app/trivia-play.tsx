@@ -39,9 +39,9 @@ import { useFamilyFrequencyStore } from '@/src/store/use-family-frequency-store'
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
-const GOLD = '#F2C14E';
-const CYAN = '#63D9D1';
-const CORAL = '#F46A4E';
+const GOLD = '#FFD166';
+const CYAN = '#6ED8C7';
+const CORAL = '#FF7657';
 
 export default function TriviaPlayScreen() {
   const router = useRouter();
@@ -159,7 +159,7 @@ export default function TriviaPlayScreen() {
       <ScreenShell texture={false}>
         <View style={styles.missing}>
           <Ionicons color={CYAN} name="radio-outline" size={38} />
-          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>RESTORING SIGNAL</Text>
+          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Getting your game ready</Text>
         </View>
       </ScreenShell>
     );
@@ -170,7 +170,7 @@ export default function TriviaPlayScreen() {
       <ScreenShell texture={false}>
         <View style={styles.missing}>
           <Ionicons color={GOLD} name="podium-outline" size={38} />
-          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>SIGNAL COMPLETE</Text>
+          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>That was the last round</Text>
           <Pressable accessibilityRole="button" onPress={() => router.replace('/trivia-results')} style={[styles.smallButton, { borderColor: GOLD }]}>
             <Text style={[styles.smallButtonText, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>See the final board</Text>
           </Pressable>
@@ -184,7 +184,7 @@ export default function TriviaPlayScreen() {
       <ScreenShell texture={false}>
         <View style={styles.missing}>
           <Ionicons color={GOLD} name="radio-outline" size={38} />
-          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>NO SIGNAL YET</Text>
+          <Text style={[styles.missingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Start a game first</Text>
           <Pressable onPress={() => router.replace('/trivia-setup')} style={[styles.smallButton, { borderColor: GOLD }]}>
             <Text style={[styles.smallButtonText, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Set up a round</Text>
           </Pressable>
@@ -245,8 +245,8 @@ export default function TriviaPlayScreen() {
     <ScreenShell edgeWire="none" padded={false} texture={false}>
       <View style={[styles.top, { borderBottomColor: theme.colors.draft }]}>
         <View>
-          <Text style={[styles.topLabel, { color: GOLD, fontFamily: theme.typography.families.monoMedium }]}>FAMILY FREQUENCY</Text>
-          <Text style={[styles.round, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>ROUND {session.questionIndex + 1}<Text style={{ color: theme.colors.faint }}>/{session.pack.questions.length}</Text></Text>
+          <Text style={[styles.topLabel, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Family Frequency</Text>
+          <Text style={[styles.round, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Round {session.questionIndex + 1}<Text style={{ color: theme.colors.faint }}> / {session.pack.questions.length}</Text></Text>
         </View>
         <View style={styles.scoreRail}>
           {scores.map((score) => (
@@ -266,14 +266,14 @@ export default function TriviaPlayScreen() {
         <ScrollView contentContainerStyle={styles.playPage} showsVerticalScrollIndicator={false}>
           <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={[styles.revealHero, revealStyle]}>
             <WaveLine color={revealColor} />
-            <Text style={[styles.revealKicker, { color: revealColor, fontFamily: theme.typography.families.monoMedium }]}>{matches.length ? 'SIGNAL LOCKED' : closeReads.length ? 'CLOSE FREQUENCY' : 'SIGNAL MISSED'}</Text>
+            <Text style={[styles.revealKicker, { color: revealColor, fontFamily: theme.typography.families.bodyMedium }]}>{matches.length ? 'Right on' : closeReads.length ? 'Almost there' : 'Different answers'}</Text>
             <Text style={[styles.revealTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{answerLabel(question, reference)}</Text>
             <Text style={[styles.revealOwner, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{`${owner?.name ?? 'Player'}'s sealed answer`}</Text>
           </Animated.View>
 
           <View style={[styles.matchStrip, { borderColor: theme.colors.draft }]}>
-            <Text style={[styles.matchLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>WHO LOCKED ON</Text>
-            <Text style={[styles.matchNames, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{matches.length ? matches.join(' · ') : closeReads.length ? `${closeReads.join(' · ')} came close` : 'Nobody this round'}</Text>
+            <Text style={[styles.matchLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Who guessed it?</Text>
+            <Text style={[styles.matchNames, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{matches.length ? matches.join(' · ') : closeReads.length ? `${closeReads.join(' · ')} came close` : 'No exact match this round'}</Text>
           </View>
 
           <RevealReadouts question={question} session={session} />
@@ -293,7 +293,7 @@ export default function TriviaPlayScreen() {
           <Text style={[styles.afterReveal, { color: theme.colors.muted, fontFamily: theme.typography.families.story }]}>{question.afterRevealPrompt}</Text>
 
           <Pressable accessibilityRole="button" onPress={next} style={({ pressed }) => [styles.nextButton, { backgroundColor: GOLD }, pressed && styles.pressed]}>
-            <Text style={[styles.nextButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>{session.questionIndex === session.pack.questions.length - 1 ? 'SEE THE FINAL BOARD' : 'TUNE NEXT ROUND'}</Text>
+            <Text style={[styles.nextButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>{session.questionIndex === session.pack.questions.length - 1 ? 'See final scores' : 'Next round'}</Text>
             <Ionicons color="#171309" name="arrow-forward" size={22} />
           </Pressable>
         </ScrollView>
@@ -306,13 +306,13 @@ export default function TriviaPlayScreen() {
               {[0, 1, 2].map((dot) => <View key={dot} style={[styles.handoffDot, { backgroundColor: dot === 1 ? (isReference ? GOLD : CYAN) : theme.colors.draft }]} />)}
             </View>
           </View>
-          <Text style={[styles.handoffKicker, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.monoMedium }]}>{isReference ? 'PRIVATE PICK' : `PRIVATE GUESS · ABOUT ${owner?.name?.toUpperCase()}`}</Text>
-          <Text style={[styles.handoffTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>PASS TO {actor?.name?.toUpperCase()}</Text>
+          <Text style={[styles.handoffKicker, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'Your answer stays private' : `Guessing ${owner?.name ?? 'the answer owner'}`}</Text>
+          <Text style={[styles.handoffTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Pass the phone to {actor?.name}</Text>
           <Text style={[styles.handoffBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{isReference
             ? session.setup.teams.length
-              ? 'Lock honestly. Only your teammate reads you, so bluffing can only hurt your own side.'
-              : 'Lock honestly before anyone guesses. Every exact read scores you too.'
-            : 'Keep the screen hidden until they\'re holding the phone.'}</Text>
+              ? 'Answer honestly. Bluffing can only hurt your own team.'
+              : 'Answer honestly before anyone guesses. A correct guess gives both of you points.'
+            : 'Keep the screen hidden until they have the phone.'}</Text>
           <Pressable accessibilityRole="button" onPress={() => setPrivateReady(true)} style={({ pressed }) => [styles.readyButton, { borderColor: isReference ? GOLD : CYAN }, pressed && styles.pressed]}>
             <Ionicons color={isReference ? GOLD : CYAN} name="checkmark-circle-outline" size={22} />
             <Text style={[styles.readyText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>I&apos;m {actor?.name}</Text>
@@ -331,8 +331,8 @@ export default function TriviaPlayScreen() {
         >
           <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(320)} style={styles.questionBlock}>
             <View style={styles.questionMeta}>
-              <Text style={[styles.questionRole, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.monoMedium }]}>{isReference ? 'YOUR SEALED, HONEST PICK' : `PREDICT ${owner?.name?.toUpperCase()}`}</Text>
-              <Text style={[styles.questionKind, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{roundKindLabel(question)}</Text>
+              <Text style={[styles.questionRole, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'Your honest answer' : `What would ${owner?.name ?? 'they'} answer?`}</Text>
+              <Text style={[styles.questionKind, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{roundKindLabel(question)}</Text>
             </View>
             <Text style={[styles.question, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{question.prompt}</Text>
           </Animated.View>
@@ -341,6 +341,7 @@ export default function TriviaPlayScreen() {
             <View accessibilityRole="radiogroup" style={styles.optionList}>
               {question.options.map((option, index) => {
                 const selected = choiceId === option.id;
+                const optionColor = [CORAL, GOLD, CYAN, '#B8A5F2'][index] ?? GOLD;
                 return (
                   <Pressable
                     accessibilityRole="radio"
@@ -350,11 +351,11 @@ export default function TriviaPlayScreen() {
                       setChoiceId(option.id);
                       if (haptics) void Haptics.selectionAsync().catch(() => undefined);
                     }}
-                    style={({ pressed }) => [styles.option, { backgroundColor: selected ? (isReference ? GOLD : CYAN) : theme.colors.surface, borderColor: selected ? (isReference ? GOLD : CYAN) : theme.colors.draft }, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.option, { backgroundColor: selected ? optionColor : `${optionColor}1F`, borderColor: optionColor }, pressed && styles.pressed]}
                   >
                     <Text style={[styles.optionIndex, { color: selected ? '#171309' : theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{String.fromCharCode(65 + index)}</Text>
                     <Text style={[styles.optionText, { color: selected ? '#171309' : theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{option.label}</Text>
-                    <View style={[styles.optionSocket, { borderColor: selected ? '#171309' : theme.colors.faint }, selected && { backgroundColor: '#171309' }]} />
+                    <View style={[styles.optionSocket, { borderColor: selected ? '#171309' : optionColor }, selected && { backgroundColor: '#171309' }]} />
                   </Pressable>
                 );
               })}
@@ -382,7 +383,7 @@ export default function TriviaPlayScreen() {
                   value={textValue}
                 />
               </View>
-              <Text style={[styles.wordPrivacy, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>MATCHED LOCALLY · NEVER SENT TO AI</Text>
+              <Text style={[styles.wordPrivacy, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>Checked on this phone. Your answer is not sent to AI.</Text>
             </View>
           )}
 
@@ -395,16 +396,16 @@ export default function TriviaPlayScreen() {
               style={({ pressed }) => [styles.lockButton, { backgroundColor: isReference ? GOLD : CYAN }, !canLock && styles.disabled, pressed && styles.pressed]}
             >
               <Ionicons color="#171309" name="lock-closed" size={20} />
-              <Text style={[styles.lockText, { fontFamily: theme.typography.families.displayHeavy }]}>LOCK {isReference ? 'MY PICK' : 'MY GUESS'}</Text>
+              <Text style={[styles.lockText, { fontFamily: theme.typography.families.displayHeavy }]}>{isReference ? 'Save my answer' : 'Save my guess'}</Text>
             </Pressable>
             {isReference && question.canSkip ? (
               <View style={styles.voidArea}>
                 <Pressable accessibilityHint="Moves on without recording an answer or score" accessibilityRole="button" onPress={skipRound} style={({ pressed }) => [styles.skipButton, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
                   <Ionicons color={theme.colors.faint} name="play-skip-forward-outline" size={16} />
-                  <Text style={[styles.skipText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>NOT A REAL FIT? VOID CARD</Text>
+                  <Text style={[styles.skipText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>This question does not fit us</Text>
                 </Pressable>
                 {session.setup.teams.length ? (
-                  <Text style={[styles.voidNote, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>NO POINT OR ATTEMPT FOR EITHER SIDE</Text>
+                  <Text style={[styles.voidNote, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>No points or attempts are counted.</Text>
                 ) : null}
               </View>
             ) : null}
@@ -497,7 +498,7 @@ function SpectrumDial({
         <Text style={[styles.dialAnchor, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{question.scale.minLabel}</Text>
         <Text style={[styles.dialAnchor, styles.dialAnchorRight, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{question.scale.maxLabel}</Text>
       </View>
-      <Text style={[styles.dialHelp, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>TAP OR DRAG · ±5 LOCKS · ±15 IS NEAR</Text>
+      <Text style={[styles.dialHelp, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>Tap or drag. Within 5 is exact; within 15 is close.</Text>
     </View>
   );
 }
@@ -517,7 +518,7 @@ function RevealReadouts({ question, session }: { question: FamilyTriviaQuestion;
               <Text style={[styles.readoutName, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{player?.name?.toUpperCase()}</Text>
               <Text numberOfLines={2} style={[styles.readoutAnswer, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{answerLabel(question, guess)}</Text>
             </View>
-            <Text style={[styles.readoutPoints, { color: entry.exact ? CYAN : entry.points ? GOLD : CORAL, fontFamily: theme.typography.families.displayHeavy }]}>{entry.exact ? 'LOCK' : entry.points ? 'NEAR' : 'MISS'} · +{entry.points}</Text>
+            <Text style={[styles.readoutPoints, { color: entry.exact ? CYAN : entry.points ? GOLD : CORAL, fontFamily: theme.typography.families.displayHeavy }]}>{entry.exact ? 'Exact' : entry.points ? 'Close' : 'Miss'} · +{entry.points}</Text>
           </View>
         );
       })}
@@ -539,9 +540,9 @@ function OwnerReviewPanel({
   const result = session.results.at(-1);
   if (!result || result.questionId !== question.id) return null;
   const verdicts: readonly { color: string; label: string; value: FamilyTriviaOwnerVerdict }[] = [
-    { color: CYAN, label: 'EXACT', value: 'exact' },
-    { color: GOLD, label: 'CLOSE', value: 'close' },
-    { color: CORAL, label: 'MISS', value: 'miss' },
+    { color: CYAN, label: 'Exact', value: 'exact' },
+    { color: GOLD, label: 'Close', value: 'close' },
+    { color: CORAL, label: 'Miss', value: 'miss' },
   ];
   return (
     <View style={[styles.ownerReview, { backgroundColor: theme.colors.surface, borderColor: theme.colors.draft }]}>
@@ -550,11 +551,11 @@ function OwnerReviewPanel({
           <Ionicons color="#171309" name="shield-checkmark" size={18} />
         </View>
         <View style={styles.ownerReviewCopy}>
-          <Text style={[styles.ownerReviewKicker, { color: GOLD, fontFamily: theme.typography.families.monoMedium }]}>OWNER&apos;S FINAL CALL</Text>
-          <Text style={[styles.ownerReviewTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Pass to {owner?.name ?? 'the answer owner'}</Text>
+          <Text style={[styles.ownerReviewKicker, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Final say</Text>
+          <Text style={[styles.ownerReviewTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{owner?.name ?? 'Answer owner'}, check the guesses</Text>
         </View>
       </View>
-      <Text style={[styles.ownerReviewHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Judge the meaning, not the spelling. The automatic score stays unless you change it.</Text>
+      <Text style={[styles.ownerReviewHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You gave the answer. Mark what each person meant: Exact, Close, or Miss. Be fair—the score changes immediately.</Text>
       {result.playerPoints.map((entry) => {
         const player = session.setup.players.find((candidate) => candidate.id === entry.playerId);
         const selected: FamilyTriviaOwnerVerdict | undefined = entry.authorityReviewed
@@ -563,16 +564,16 @@ function OwnerReviewPanel({
         return (
           <View key={entry.playerId} style={[styles.ownerReviewRow, { borderTopColor: theme.colors.draft }]}>
             <View style={styles.ownerReviewAnswerLine}>
-              <Text style={[styles.ownerReviewName, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{player?.name?.toUpperCase()}</Text>
+              <Text style={[styles.ownerReviewName, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>{player?.name}</Text>
               <Text numberOfLines={2} style={[styles.ownerReviewAnswer, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{answerLabel(question, session.guesses[question.id]?.[entry.playerId])}</Text>
-              <Text style={[styles.ownerReviewStatus, { color: entry.authorityReviewed ? CYAN : theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{entry.authorityReviewed ? 'OWNER SCORED' : 'AUTO SCORE'}</Text>
+              <Text style={[styles.ownerReviewStatus, { color: entry.authorityReviewed ? CYAN : theme.colors.faint, fontFamily: theme.typography.families.body }]}>{entry.authorityReviewed ? 'Checked' : 'Suggested'}</Text>
             </View>
             <View style={styles.ownerVerdicts}>
               {verdicts.map((verdict) => {
                 const isSelected = selected === verdict.value;
                 return (
                   <Pressable
-                    accessibilityLabel={`Score ${player?.name ?? 'this guess'} as ${verdict.label.toLocaleLowerCase()}`}
+                    accessibilityLabel={`Score ${player?.name ?? 'this guess'} as ${verdict.label.toLowerCase()}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
                     key={verdict.value}
@@ -585,7 +586,7 @@ function OwnerReviewPanel({
                     ]}
                   >
                     <View style={[styles.ownerVerdictDot, { backgroundColor: verdict.color }]} />
-                    <Text style={[styles.ownerVerdictText, { color: isSelected ? verdict.color : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{verdict.label}</Text>
+                    <Text style={[styles.ownerVerdictText, { color: isSelected ? verdict.color : theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{verdict.label}</Text>
                   </Pressable>
                 );
               })}
@@ -664,12 +665,12 @@ function formatTeamRate(points: number): string {
 
 function roundKindLabel(question: FamilyTriviaQuestion): string {
   switch (question.kind) {
-    case 'preference-match': return 'QUICK CHOICE';
-    case 'who-knows-who': return 'ONE-TO-ONE';
-    case 'shared-memory-detail': return 'HOUSE MEMORY';
-    case 'family-lore-ordering': return 'FAMILY TIMELINE';
-    case 'spectrum-read': return 'READ THE DIAL';
-    case 'same-wavelength': return 'NO-OPTIONS SIGNAL';
+    case 'preference-match': return 'Quick choice';
+    case 'who-knows-who': return 'One person in focus';
+    case 'shared-memory-detail': return 'Shared memory';
+    case 'family-lore-ordering': return 'Put it in order';
+    case 'spectrum-read': return 'Move the dial';
+    case 'same-wavelength': return 'Write your own answer';
   }
 }
 
@@ -680,7 +681,7 @@ const styles = StyleSheet.create({
   dialAnchorRight: { textAlign: 'right' },
   dialAnchors: { flexDirection: 'row', gap: 24 },
   dialFill: { borderRadius: 4, height: 6, left: 0, position: 'absolute' },
-  dialHelp: { fontSize: 9, letterSpacing: 0.9, textAlign: 'center' },
+  dialHelp: { fontSize: 11, lineHeight: 15, textAlign: 'center' },
   dialKnob: { alignItems: 'center', borderRadius: 17, height: 34, justifyContent: 'center', marginLeft: -17, position: 'absolute', width: 34 },
   dialKnobCore: { backgroundColor: '#171309', borderRadius: 5, height: 10, width: 10 },
   dialRail: { borderRadius: 4, height: 6, left: 0, position: 'absolute', right: 0 },
@@ -694,45 +695,45 @@ const styles = StyleSheet.create({
   handoffBody: { fontSize: 15, lineHeight: 21, maxWidth: 320, textAlign: 'center' },
   handoffDot: { borderRadius: 3, height: 5, width: 5 },
   handoffDots: { flexDirection: 'row', gap: 6 },
-  handoffKicker: { fontSize: 10, letterSpacing: 1.4, marginTop: 23 },
+  handoffKicker: { fontSize: 13, lineHeight: 18, marginTop: 23 },
   handoffPhone: { alignItems: 'center', borderRadius: 28, borderWidth: 2, gap: 22, height: 204, justifyContent: 'center', width: 118 },
   handoffSpeaker: { borderRadius: 2, height: 4, width: 34 },
-  handoffTitle: { fontSize: 43, letterSpacing: 0.2, lineHeight: 43, marginTop: 7, textAlign: 'center' },
+  handoffTitle: { fontSize: 40, lineHeight: 42, marginTop: 7, textAlign: 'center' },
   keyboardLayer: { flex: 1 },
   lockArea: { gap: 8, paddingTop: 4 },
-  lockButton: { alignItems: 'center', flexDirection: 'row', gap: 9, justifyContent: 'center', minHeight: 62 },
-  lockText: { color: '#171309', fontSize: 21, letterSpacing: 0.5 },
-  matchLabel: { fontSize: 10, letterSpacing: 1.1 },
+  lockButton: { alignItems: 'center', borderRadius: 17, flexDirection: 'row', gap: 9, justifyContent: 'center', minHeight: 66 },
+  lockText: { color: '#171309', fontSize: 21 },
+  matchLabel: { fontSize: 13, lineHeight: 17 },
   matchNames: { fontSize: 16, lineHeight: 21 },
-  matchStrip: { borderBottomWidth: 1, borderTopWidth: 1, gap: 4, paddingVertical: 14 },
+  matchStrip: { borderRadius: 14, borderWidth: 1, gap: 4, paddingHorizontal: 14, paddingVertical: 14 },
   missing: { alignItems: 'center', flex: 1, gap: 14, justifyContent: 'center' },
   missingTitle: { fontSize: 36 },
-  nextButton: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, minHeight: 66, paddingHorizontal: 17 },
-  nextButtonText: { color: '#171309', fontSize: 21, letterSpacing: 0.4 },
-  option: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 11 },
+  nextButton: { alignItems: 'center', borderRadius: 17, flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, minHeight: 66, paddingHorizontal: 17 },
+  nextButtonText: { color: '#171309', fontSize: 21 },
+  option: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 14, paddingVertical: 12 },
   optionIndex: { fontSize: 26, width: 23 },
   optionList: { gap: 8 },
   optionSocket: { borderRadius: 10, borderWidth: 2, height: 18, width: 18 },
   optionText: { flex: 1, fontSize: 15, lineHeight: 20 },
-  ownerReview: { borderWidth: 1, gap: 12, padding: 14 },
+  ownerReview: { borderRadius: 18, borderWidth: 1, gap: 12, padding: 14 },
   ownerReviewAnswer: { flex: 1, fontSize: 15, lineHeight: 19 },
   ownerReviewAnswerLine: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   ownerReviewCopy: { flex: 1, gap: 2 },
   ownerReviewHeader: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   ownerReviewHelp: { fontSize: 13, lineHeight: 18 },
-  ownerReviewKicker: { fontSize: 9, letterSpacing: 1.1 },
-  ownerReviewName: { fontSize: 9, letterSpacing: 0.7, width: 54 },
+  ownerReviewKicker: { fontSize: 12, lineHeight: 16 },
+  ownerReviewName: { fontSize: 12, width: 54 },
   ownerReviewRow: { borderTopWidth: 1, gap: 9, paddingTop: 12 },
-  ownerReviewSeal: { alignItems: 'center', height: 34, justifyContent: 'center', width: 34 },
-  ownerReviewStatus: { fontSize: 8, letterSpacing: 0.6 },
+  ownerReviewSeal: { alignItems: 'center', borderRadius: 10, height: 34, justifyContent: 'center', width: 34 },
+  ownerReviewStatus: { fontSize: 11 },
   ownerReviewTitle: { fontSize: 20, lineHeight: 23 },
-  ownerVerdict: { alignItems: 'center', borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 39 },
+  ownerVerdict: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 44 },
   ownerVerdictDot: { borderRadius: 3, height: 6, width: 6 },
   ownerVerdicts: { flexDirection: 'row', gap: 6 },
-  ownerVerdictText: { fontSize: 9, letterSpacing: 0.7 },
+  ownerVerdictText: { fontSize: 12 },
   orderBoard: { gap: 9 },
   orderHelp: { fontSize: 13 },
-  orderLocked: { alignItems: 'center', borderLeftWidth: 3, flexDirection: 'row', gap: 10, minHeight: 52, paddingHorizontal: 11 },
+  orderLocked: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, minHeight: 54, paddingHorizontal: 11 },
   orderNumber: { fontSize: 25, width: 22 },
   orderText: { flex: 1, fontSize: 14, lineHeight: 19 },
   orderTrack: { gap: 5 },
@@ -740,22 +741,22 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72, transform: [{ scale: 0.993 }] },
   question: { fontSize: 28, lineHeight: 32 },
   questionBlock: { gap: 10 },
-  questionKind: { fontSize: 10, letterSpacing: 0.8 },
+  questionKind: { fontSize: 12 },
   questionMeta: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  questionRole: { fontSize: 10, letterSpacing: 1.1 },
-  readyButton: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', marginTop: 22, minHeight: 58, paddingHorizontal: 24 },
+  questionRole: { fontSize: 13, lineHeight: 18 },
+  readyButton: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', marginTop: 22, minHeight: 58, paddingHorizontal: 24 },
   readyText: { fontSize: 16 },
   readoutAnswer: { fontSize: 15, lineHeight: 19 },
   readoutCopy: { flex: 1, gap: 2 },
   readoutList: { gap: 7 },
-  readoutName: { fontSize: 9, letterSpacing: 0.8 },
-  readoutPoints: { fontSize: 16, letterSpacing: 0.5 },
-  readoutRow: { alignItems: 'center', borderBottomWidth: 1, flexDirection: 'row', gap: 12, minHeight: 58, paddingVertical: 8 },
+  readoutName: { fontSize: 11 },
+  readoutPoints: { fontSize: 16 },
+  readoutRow: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 58, paddingHorizontal: 12, paddingVertical: 8 },
   remainingGrid: { gap: 7 },
-  remainingOption: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 9, minHeight: 51, paddingHorizontal: 11 },
+  remainingOption: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 9, minHeight: 51, paddingHorizontal: 11 },
   remainingText: { flex: 1, fontSize: 13, lineHeight: 18 },
   revealHero: { alignItems: 'center', gap: 2, paddingTop: 16 },
-  revealKicker: { fontSize: 9, letterSpacing: 1.7, marginTop: 7 },
+  revealKicker: { fontSize: 14, lineHeight: 19, marginTop: 7 },
   revealOwner: { fontSize: 14, marginTop: 4 },
   revealTitle: { fontSize: 40, lineHeight: 41, maxWidth: 360, textAlign: 'center' },
   round: { fontSize: 23, lineHeight: 23 },
@@ -765,16 +766,16 @@ const styles = StyleSheet.create({
   scorePoints: { fontSize: 17 },
   scoreRail: { alignItems: 'center', flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 7, justifyContent: 'flex-end' },
   spectrumBoard: { gap: 8, paddingHorizontal: 5, paddingVertical: 6 },
-  skipButton: { alignItems: 'center', borderTopWidth: 1, flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 42 },
-  skipText: { fontSize: 10, letterSpacing: 0.7 },
-  smallButton: { borderWidth: 1, paddingHorizontal: 18, paddingVertical: 12 },
+  skipButton: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 42 },
+  skipText: { fontSize: 12 },
+  smallButton: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 18, paddingVertical: 12 },
   smallButtonText: { fontSize: 15 },
   top: { alignItems: 'center', borderBottomWidth: 1, flexDirection: 'row', gap: 12, justifyContent: 'space-between', minHeight: 76, paddingHorizontal: 20 },
-  topLabel: { fontSize: 10, letterSpacing: 1 },
-  wordBeacon: { alignItems: 'center', borderBottomWidth: 2, flexDirection: 'row', gap: 10, minHeight: 74, paddingHorizontal: 12 },
+  topLabel: { fontSize: 12 },
+  wordBeacon: { alignItems: 'center', borderRadius: 16, borderWidth: 2, flexDirection: 'row', gap: 10, minHeight: 74, paddingHorizontal: 12 },
   wordBoard: { gap: 10, paddingTop: 6 },
   wordInput: { flex: 1, fontSize: 23, minHeight: 68, paddingVertical: 10 },
-  wordPrivacy: { fontSize: 9, letterSpacing: 0.8, textAlign: 'center' },
+  wordPrivacy: { fontSize: 11, lineHeight: 15, textAlign: 'center' },
   voidArea: { gap: 3 },
-  voidNote: { fontSize: 8, letterSpacing: 0.7, textAlign: 'center' },
+  voidNote: { fontSize: 11, lineHeight: 15, textAlign: 'center' },
 });

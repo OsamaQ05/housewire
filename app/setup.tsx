@@ -8,7 +8,6 @@ import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import {
   useHousewireStore,
   type HouseRoom,
-  type SessionMode,
 } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
@@ -26,16 +25,9 @@ export default function SetupScreen() {
   const rooms = useHousewireStore((state) => state.rooms);
   const sessionMode = useHousewireStore((state) => state.sessionMode);
   const toggleRoomSafety = useHousewireStore((state) => state.toggleRoomSafety);
-  const prepareSession = useHousewireStore((state) => state.prepareSession);
   const { play } = useHousewireSound();
   const mission = missions.find((item) => item.id === selectedMission) ?? missions[0];
   const safeRooms = rooms.filter((room) => room.safe);
-
-  const chooseMode = (mode: SessionMode) => {
-    if (mode === sessionMode) return;
-    play('switch', 0.38);
-    prepareSession(mode);
-  };
 
   const toggleRoom = (room: HouseRoom) => {
     if (room.safe && safeRooms.length <= 2) return;
@@ -88,7 +80,7 @@ export default function SetupScreen() {
               { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy },
             ]}
           >
-            Where can everyone play safely?
+            Pick the rooms you can use.
           </Text>
           <Text
             style={[
@@ -96,7 +88,7 @@ export default function SetupScreen() {
               { color: theme.colors.muted, fontFamily: theme.typography.families.body },
             ]}
           >
-            Choose one clear, well-lit space per phone. {CASE_ROOM_COPY[selectedMission]}
+            We already selected the safest options. Tap only if you need to change them. {CASE_ROOM_COPY[selectedMission]}
           </Text>
         </View>
 
@@ -163,39 +155,22 @@ export default function SetupScreen() {
             },
           ]}
         >
-          {safeRooms.length} safe spaces ready · one phone goes in each
+          {safeRooms.length} rooms ready
         </Text>
 
-        <View style={styles.modeSection}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium },
-            ]}
-          >
-            How are you playing?
-          </Text>
-          <View style={styles.modeRow}>
-            <ModeChoice
-              active={sessionMode === 'lan'}
-              icon="people-outline"
-              label="Family game"
-              meta={selectedMission === 'dead-air' || selectedMission === 'long-table' ? '3 phones best' : '2–4 phones'}
-              onPress={() => chooseMode('lan')}
-            />
-            <ModeChoice
-              active={sessionMode === 'preview'}
-              icon="phone-portrait-outline"
-              label="Practice first"
-              meta="1 phone"
-              onPress={() => chooseMode('preview')}
-            />
+        <View style={[styles.playMode, { backgroundColor: theme.colors.surfaceRaised }]}>
+          <View style={[styles.playModeIcon, { backgroundColor: sessionMode === 'lan' ? theme.colors.wire : theme.colors.warning }]}>
+            <Ionicons color={theme.colors.textInverse} name={sessionMode === 'lan' ? 'people' : 'phone-portrait'} size={22} />
+          </View>
+          <View style={styles.playModeCopy}>
+            <Text style={[styles.playModeTitle, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'lan' ? 'Playing together on nearby phones' : 'Trying every role on this phone'}</Text>
+            <Text style={[styles.playModeMeta, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{sessionMode === 'lan' ? 'The next screen shows one QR for everyone.' : 'The app will tell you when to pass the phone.'}</Text>
           </View>
         </View>
 
         <PrimaryAction
           disabled={safeRooms.length < 2}
-          label={sessionMode === 'lan' ? 'Next: connect the phones' : 'Start one-phone practice'}
+          label={sessionMode === 'lan' ? 'Show the join QR' : 'Start the case'}
           onPress={() => {
             play('relay', 0.55);
             router.push('/lobby');
@@ -203,66 +178,6 @@ export default function SetupScreen() {
         />
       </ScrollView>
     </ScreenShell>
-  );
-}
-
-function ModeChoice({
-  active,
-  disabled = false,
-  icon,
-  label,
-  meta,
-  onPress,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  icon: 'people-outline' | 'phone-portrait-outline';
-  label: string;
-  meta: string;
-  onPress: () => void;
-}) {
-  const { theme } = useHousewireTheme();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ checked: active, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.mode,
-        {
-          backgroundColor: active ? theme.colors.surfaceRaised : 'transparent',
-          borderColor: active ? theme.colors.wire : theme.colors.draft,
-        },
-        disabled && styles.disabled,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.modeTopline}>
-        <Ionicons color={active ? theme.colors.wire : theme.colors.muted} name={icon} size={24} />
-        <Ionicons
-          color={active ? theme.colors.ready : theme.colors.faint}
-          name={active ? 'radio-button-on' : 'radio-button-off'}
-          size={20}
-        />
-      </View>
-      <Text
-        style={[
-          styles.modeLabel,
-          { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium },
-        ]}
-      >
-        {label}
-      </Text>
-      <Text
-        style={[
-          styles.modeMeta,
-          { color: theme.colors.muted, fontFamily: theme.typography.families.body },
-        ]}
-      >
-        {meta}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -305,7 +220,7 @@ function PrimaryAction({
 const styles = StyleSheet.create({
   action: {
     alignItems: 'center',
-    borderRadius: 4,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -318,7 +233,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    borderRadius: 4,
+    borderRadius: 14,
     borderWidth: 1,
     height: 46,
     justifyContent: 'center',
@@ -359,40 +274,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
   },
-  mode: {
-    borderRadius: 4,
-    borderWidth: 1,
-    flex: 1,
-    minHeight: 126,
-    padding: 14,
-  },
-  modeLabel: {
-    fontSize: 17,
-    lineHeight: 22,
-    marginTop: 18,
-  },
-  modeMeta: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  modeSection: {
-    gap: 11,
-  },
-  modeTopline: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  playMode: { alignItems: 'center', borderRadius: 16, flexDirection: 'row', gap: 12, padding: 13 },
+  playModeCopy: { flex: 1, gap: 2 },
+  playModeIcon: { alignItems: 'center', borderRadius: 12, height: 46, justifyContent: 'center', width: 46 },
+  playModeMeta: { fontSize: 12, lineHeight: 17 },
+  playModeTitle: { fontSize: 15, lineHeight: 20 },
   pressed: {
     opacity: 0.7,
   },
   room: {
-    borderRadius: 4,
+    borderRadius: 16,
     borderWidth: 1,
     flexBasis: '48%',
     flexGrow: 1,
@@ -413,10 +304,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  sectionTitle: {
-    fontSize: 17,
-    lineHeight: 22,
   },
   title: {
     fontSize: 48,

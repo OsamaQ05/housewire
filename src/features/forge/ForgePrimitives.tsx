@@ -20,7 +20,7 @@ import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
-const FORGE_INK = '#F2D36D';
+const FORGE_INK = '#FFD166';
 const FORGE_DARK = '#0A0B08';
 
 export function ForgeGrid({ color = FORGE_INK }: { color?: string }) {
@@ -104,7 +104,7 @@ export function ForgeDiagram({
         </Svg>
       </View>
       <View style={[styles.diagramCaption, { borderColor: accent }]}>
-        <Text style={[styles.diagramCaptionText, { color: accent }]}>HOUSEPRINT / {String(playerCount).padStart(2, '0')} NODES</Text>
+        <Text style={[styles.diagramCaptionText, { color: accent }]}>{playerCount} players · private clues split</Text>
       </View>
     </View>
   );
@@ -150,7 +150,7 @@ export function ForgeOption({ detail, icon, label, onPress, selected, style, val
       style={({ pressed }) => [
         styles.option,
         {
-          backgroundColor: selected ? FORGE_INK : 'rgba(10,11,8,0.74)',
+          backgroundColor: selected ? FORGE_INK : theme.colors.surface,
           borderColor: selected ? FORGE_INK : theme.colors.draft,
         },
         pressed && styles.pressed,
@@ -162,7 +162,7 @@ export function ForgeOption({ detail, icon, label, onPress, selected, style, val
         <Text style={[styles.optionLabel, { color: selected ? FORGE_DARK : theme.colors.text, fontFamily: theme.typography.families.display }]}>{label}</Text>
         {detail ? <Text numberOfLines={2} style={[styles.optionDetail, { color: selected ? '#39320E' : theme.colors.muted, fontFamily: theme.typography.families.body }]}>{detail}</Text> : null}
       </View>
-      {value ? <Text style={[styles.optionValue, { color: selected ? FORGE_DARK : FORGE_INK, fontFamily: theme.typography.families.monoMedium }]}>{value}</Text> : null}
+      {value ? <Text style={[styles.optionValue, { color: selected ? FORGE_DARK : FORGE_INK, fontFamily: theme.typography.families.bodyMedium }]}>{value}</Text> : null}
       <View style={[styles.optionPin, { borderColor: selected ? FORGE_DARK : theme.colors.faint }]}>
         {selected ? <View style={styles.optionPinCore} /> : null}
       </View>
@@ -243,28 +243,28 @@ export const forgeColors = {
 
 const styles = StyleSheet.create({
   blueprintCore: { alignItems: 'center', height: 154, justifyContent: 'center', position: 'absolute', width: 154 },
-  button: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 10, justifyContent: 'space-between', minHeight: 56, paddingHorizontal: 16 },
+  button: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: 10, justifyContent: 'space-between', minHeight: 56, paddingHorizontal: 16 },
   buttonText: { fontSize: 17, lineHeight: 21 },
   diagram: { alignItems: 'center', alignSelf: 'center', height: 248, justifyContent: 'center', overflow: 'hidden', width: '100%' },
-  diagramCaption: { backgroundColor: FORGE_DARK, borderWidth: 1, bottom: 5, paddingHorizontal: 9, paddingVertical: 5, position: 'absolute' },
-  diagramCaptionText: { fontFamily: 'SplineSansMono_600SemiBold', fontSize: 8, letterSpacing: 1.2 },
+  diagramCaption: { backgroundColor: FORGE_DARK, borderRadius: 14, borderWidth: 1, bottom: 5, paddingHorizontal: 12, paddingVertical: 6, position: 'absolute' },
+  diagramCaptionText: { fontFamily: 'SplineSansMono_600SemiBold', fontSize: 11, letterSpacing: 0.2 },
   gridHorizontal: { height: StyleSheet.hairlineWidth, left: 0, opacity: 0.1, position: 'absolute', right: 0 },
   gridVertical: { bottom: 0, opacity: 0.1, position: 'absolute', top: 0, width: StyleSheet.hairlineWidth },
   noPointerEvents: { pointerEvents: 'none' },
-  option: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 11, minHeight: 65, paddingHorizontal: 13, paddingVertical: 9 },
+  option: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: 11, minHeight: 65, paddingHorizontal: 13, paddingVertical: 9 },
   optionCopy: { flex: 1 },
   optionDetail: { fontSize: 11, lineHeight: 15 },
-  optionLabel: { fontSize: 21, lineHeight: 23, textTransform: 'uppercase' },
+  optionLabel: { fontSize: 21, lineHeight: 23 },
   optionPin: { alignItems: 'center', borderRadius: 10, borderWidth: 1, height: 15, justifyContent: 'center', width: 15 },
   optionPinCore: { backgroundColor: FORGE_DARK, borderRadius: 5, height: 7, width: 7 },
-  optionValue: { fontSize: 10, letterSpacing: 0.8 },
+  optionValue: { fontSize: 12 },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
   progress: { flexDirection: 'row', gap: 4, height: 4 },
-  progressSegment: { height: 4 },
+  progressSegment: { borderRadius: 4, height: 4 },
   rotor: { alignItems: 'center', height: 208, justifyContent: 'center', position: 'absolute', width: 208 },
-  toggle: { alignItems: 'center', borderBottomWidth: 1, flexDirection: 'row', gap: 11, minHeight: 72, paddingHorizontal: 4 },
+  toggle: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: 11, minHeight: 72, paddingHorizontal: 13, paddingVertical: 8 },
   toggleDetail: { fontSize: 11, lineHeight: 15 },
-  toggleKnob: { height: 16, width: 16 },
-  toggleLabel: { fontSize: 20, lineHeight: 22, textTransform: 'uppercase' },
-  toggleTrack: { height: 20, padding: 2, width: 36 },
+  toggleKnob: { borderRadius: 8, height: 16, width: 16 },
+  toggleLabel: { fontSize: 20, lineHeight: 22 },
+  toggleTrack: { borderRadius: 10, height: 20, padding: 2, width: 36 },
 });

@@ -53,7 +53,7 @@ export default function RootLayout() {
   }, [fontError, fontsLoaded, hydrated, raceHydrated]);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(settings.daylight ? '#EFE6D2' : '#070806');
+    void SystemUI.setBackgroundColorAsync(settings.daylight ? '#F7EEDB' : '#15223A');
   }, [settings.daylight]);
 
   if ((!fontsLoaded && !fontError) || !hydrated || !raceHydrated) return null;
@@ -62,11 +62,11 @@ export default function RootLayout() {
     ...DarkTheme,
     colors: {
       ...DarkTheme.colors,
-      background: settings.daylight ? '#EFE6D2' : '#070806',
-      card: settings.daylight ? '#EFE6D2' : '#070806',
-      primary: '#F04A2E',
-      text: settings.daylight ? '#101310' : '#F4E8CF',
-      border: settings.daylight ? '#BDB5A2' : '#393329',
+      background: settings.daylight ? '#F7EEDB' : '#15223A',
+      card: settings.daylight ? '#F7EEDB' : '#15223A',
+      primary: '#FF7657',
+      text: settings.daylight ? '#1B263B' : '#FFF6E5',
+      border: settings.daylight ? '#D6CBB8' : '#3A4A65',
     },
   };
 

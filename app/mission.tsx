@@ -473,10 +473,10 @@ function Line13MissionScreen() {
           <View style={[styles.sceneTitleRow, compact && styles.sceneTitleRowCompact]}>
             <View>
               <Text style={[styles.stageTitle, compact && styles.stageTitleCompact, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{stage.title}</Text>
-              <Text style={[styles.doNowLabel, { color: theme.colors.wire, fontFamily: theme.typography.families.monoMedium }]}>DO THIS NOW</Text>
+              <Text style={[styles.doNowLabel, { color: theme.colors.wire, fontFamily: theme.typography.families.bodyMedium }]}>Your next move</Text>
               <Text style={[styles.objective, compact && styles.objectiveCompact, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{stage.objective}</Text>
             </View>
-            {judgeCut ? <Seal label="SIMULATION" tone="warning" /> : null}
+            {judgeCut ? <Seal label="One-phone preview" tone="warning" /> : null}
           </View>
           <View style={styles.clueCanvas}>
             {sharedActive && shared.membershipError ? (
@@ -528,8 +528,8 @@ function MissionHeader({ compact, failed, onPause, preview, secondsLeft, stageIn
       <View style={styles.brandLockup}>
         <View style={[styles.brandSlash, { backgroundColor: theme.colors.wire }]} />
         <View>
-          <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>LINE 13</Text>
-          <Text style={[styles.mode, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>{preview ? 'solo rehearsal' : 'live house'}</Text>
+          <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Line 13</Text>
+          <Text style={[styles.mode, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{preview ? 'one-phone preview' : 'live with family'}</Text>
         </View>
       </View>
       <View accessibilityLabel={`Phase ${stageIndex + 1} of ${STAGES.length}`} style={styles.phaseWire}>
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
   brandLockup: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 82 },
   brandSlash: { height: 36, transform: [{ rotate: '13deg' }], width: 4 },
   brand: { fontSize: 22, letterSpacing: 0.8, lineHeight: 22 },
-  mode: { fontSize: 7, letterSpacing: 0.8, textTransform: 'uppercase' },
+  mode: { fontSize: 11, lineHeight: 14 },
   phaseWire: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
   phasePiece: { alignItems: 'center', flexDirection: 'row' },
   phaseLine: { height: 1, width: 13 },
@@ -1286,10 +1286,10 @@ const styles = StyleSheet.create({
   scene: { flex: 1 },
   sceneTitleRow: { alignItems: 'flex-end', flexDirection: 'row', justifyContent: 'space-between', minHeight: 64, paddingBottom: 10 },
   sceneTitleRowCompact: { minHeight: 48, paddingBottom: 5 },
-  stageTitle: { fontSize: 35, lineHeight: 35 },
+  stageTitle: { fontSize: 35, lineHeight: 37 },
   stageTitleCompact: { fontSize: 29, lineHeight: 30 },
-  objective: { fontSize: 13, lineHeight: 18 },
-  objectiveCompact: { fontSize: 11, lineHeight: 14 },
+  objective: { fontSize: 15, lineHeight: 20 },
+  objectiveCompact: { fontSize: 13, lineHeight: 17 },
   clueCanvas: { flex: 1, minHeight: 0 },
   centerScene: { alignItems: 'center', flex: 1, gap: 12, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8 },
   puzzleScene: { flex: 1, gap: 9 },
@@ -1316,7 +1316,7 @@ const styles = StyleSheet.create({
   knockBar: { width: 3 },
   decoderRow: { alignItems: 'center', flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 48 },
   decoderRowCompact: { minHeight: 38 },
-  doNowLabel: { fontSize: 7, letterSpacing: 0.8, marginTop: 2 },
+  doNowLabel: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   mapping: { alignItems: 'center', flexDirection: 'row', gap: 3 },
   mappingDigit: { fontSize: 23 },
   codePad: { alignSelf: 'center', flex: 1, maxWidth: 330, width: '100%' },
@@ -1326,7 +1326,7 @@ const styles = StyleSheet.create({
   pinSlotCompact: { height: 29 },
   pinDigit: { fontSize: 24 },
   keyGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 5, justifyContent: 'center' },
-  numberKey: { alignItems: 'center', borderWidth: 1, height: '22%', justifyContent: 'center', minHeight: 34, width: '30%' },
+  numberKey: { alignItems: 'center', borderRadius: 12, borderWidth: 1, height: '22%', justifyContent: 'center', minHeight: 34, width: '30%' },
   numberKeyText: { fontSize: 18 },
   roomStepper: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 42 },
   roomIdentity: { alignItems: 'center' },
@@ -1335,7 +1335,7 @@ const styles = StyleSheet.create({
   iconSpacer: { width: 38 },
   carryOrb: { alignItems: 'center', borderRadius: 80, borderWidth: 2, height: 134, justifyContent: 'center', position: 'relative', width: 134 },
   carryOrbit: { borderRadius: 90, borderWidth: 1, height: 162, position: 'absolute', transform: [{ rotate: '23deg' }], width: 112 },
-  lensFrame: { alignItems: 'center', borderWidth: 1, flex: 1, justifyContent: 'center', overflow: 'hidden', position: 'relative' },
+  lensFrame: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flex: 1, justifyContent: 'center', overflow: 'hidden', position: 'relative' },
   previewLensImage: { opacity: 0.5 },
   lensShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(4,7,5,0.46)' },
   cameraTint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(20,38,27,0.2)' },
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
   manualCorner: { bottom: 12, padding: 10, position: 'absolute', right: 12 },
   lensIcon: { alignItems: 'center', borderRadius: 60, borderWidth: 2, height: 112, justifyContent: 'center', width: 112 },
   manualGlyphGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 310 },
-  manualGlyph: { alignItems: 'center', borderWidth: 1, height: 72, justifyContent: 'center', width: '29%' },
+  manualGlyph: { alignItems: 'center', borderRadius: 12, borderWidth: 1, height: 72, justifyContent: 'center', width: '29%' },
   markerScene: { alignItems: 'center', flex: 1, gap: 8, justifyContent: 'center' },
   markerTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
   markerPager: { flexDirection: 'row', gap: 6 },
@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
   routeGlyphs: { alignItems: 'center', flexDirection: 'row', gap: 14 },
   routeFlags: { flexDirection: 'row', gap: 5 },
   routeTileStack: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center', width: '100%' },
-  circuitTile: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 5, height: 68, justifyContent: 'center', maxWidth: 138, minWidth: 96, paddingHorizontal: 8, position: 'relative' },
+  circuitTile: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 5, height: 68, justifyContent: 'center', maxWidth: 138, minWidth: 96, paddingHorizontal: 8, position: 'relative' },
   circuitTileCompact: { height: 58 },
   sourceNotch: { height: 4, left: -1, position: 'absolute', right: -1, top: -1 },
   sourceLabel: { fontSize: 6, left: 5, letterSpacing: 0.7, position: 'absolute', top: 6 },
@@ -1371,7 +1371,7 @@ const styles = StyleSheet.create({
   pathSlot: { alignItems: 'center', borderBottomColor: '#625A4B', borderBottomWidth: 1, flex: 1, height: 29, justifyContent: 'center' },
   pathSlotText: { fontSize: 14 },
   roomChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, justifyContent: 'center' },
-  roomChoice: { alignItems: 'center', borderWidth: 1, justifyContent: 'center', minHeight: 48, width: '30%' },
+  roomChoice: { alignItems: 'center', borderRadius: 12, borderWidth: 1, justifyContent: 'center', minHeight: 48, width: '30%' },
   roomChoiceText: { fontSize: 16 },
   routeActions: { flexDirection: 'row', gap: 7, justifyContent: 'center' },
   finalContacts: { alignItems: 'center', flexDirection: 'row', gap: 18, justifyContent: 'center' },
@@ -1379,13 +1379,13 @@ const styles = StyleSheet.create({
   finalContact: { borderRadius: 20, borderWidth: 2, height: 28, width: 28 },
   finalContactLabel: { fontSize: 8 },
   countdownBeat: { fontSize: 48, letterSpacing: 1.2, lineHeight: 50, textAlign: 'center' },
-  flatPhone: { alignItems: 'center', borderWidth: 2, height: 130, justifyContent: 'center', transform: [{ perspective: 600 }, { rotateX: '55deg' }], width: 190 },
+  flatPhone: { alignItems: 'center', borderRadius: 18, borderWidth: 2, height: 130, justifyContent: 'center', transform: [{ perspective: 600 }, { rotateX: '55deg' }], width: 190 },
   flatPhoneSpeaker: { height: 3, position: 'absolute', top: 8, width: 34 },
   waitOrbit: { alignItems: 'center', height: 116, justifyContent: 'center', position: 'relative', width: 116 },
   waitRing: { borderRadius: 58, borderStyle: 'dashed', borderWidth: 1, height: 116, position: 'absolute', transform: [{ rotate: '13deg' }], width: 116 },
   crewWaitRow: { flexDirection: 'row', gap: 10 },
   waitDot: { borderRadius: 12, borderWidth: 2, height: 20, width: 20 },
-  holdDial: { alignItems: 'center', borderWidth: 1, height: 48, justifyContent: 'center', maxWidth: 330, overflow: 'hidden', width: '100%' },
+  holdDial: { alignItems: 'center', borderRadius: 14, borderWidth: 1, height: 48, justifyContent: 'center', maxWidth: 330, overflow: 'hidden', width: '100%' },
   holdDialPressed: { transform: [{ scale: 0.99 }] },
   holdDialFill: { height: '100%', left: 0, position: 'absolute', top: 0 },
   holdDialLabel: { fontSize: 18, letterSpacing: 0.2 },
@@ -1396,14 +1396,14 @@ const styles = StyleSheet.create({
   dockNodeText: { fontSize: 10 },
   dockMode: { fontSize: 8, marginLeft: 3, textTransform: 'uppercase' },
   interruptionBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 20, zIndex: 30 },
-  interruption: { borderWidth: 1, gap: 11, maxWidth: 360, padding: 20, width: '100%' },
+  interruption: { borderRadius: 20, borderWidth: 1, gap: 11, maxWidth: 360, padding: 20, width: '100%' },
   interruptionTitle: { fontSize: 30, lineHeight: 33 },
-  primaryButton: { alignItems: 'center', flexDirection: 'row', gap: 8, height: 46, justifyContent: 'center', maxWidth: 330, paddingHorizontal: 18, width: '100%' },
+  primaryButton: { alignItems: 'center', borderRadius: 14, flexDirection: 'row', gap: 8, height: 46, justifyContent: 'center', maxWidth: 330, paddingHorizontal: 18, width: '100%' },
   primaryButtonText: { fontSize: 18 },
-  quietButton: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 7, height: 42, justifyContent: 'center', maxWidth: 330, paddingHorizontal: 15 },
+  quietButton: { alignItems: 'center', borderRadius: 13, borderWidth: 1, flexDirection: 'row', gap: 7, height: 42, justifyContent: 'center', maxWidth: 330, paddingHorizontal: 15 },
   quietButtonText: { fontSize: 16 },
-  iconButton: { alignItems: 'center', borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
-  seal: { alignSelf: 'flex-start', borderWidth: 1, paddingHorizontal: 6, paddingVertical: 3 },
+  iconButton: { alignItems: 'center', borderRadius: 12, borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
+  seal: { alignSelf: 'flex-start', borderRadius: 999, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
   sealText: { fontSize: 8, letterSpacing: 1 },
   pressed: { opacity: 0.62, transform: [{ scale: 0.985 }] },
 });

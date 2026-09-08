@@ -272,13 +272,13 @@ export default function JoinScreen() {
               <Pressable accessibilityRole="button" hitSlop={10} onPress={() => router.back()} style={styles.back}>
                 <Text style={[styles.backText, { color: theme.colors.muted }]}>‹ Back</Text>
               </Pressable>
-              <OperationalLabel tone="wire">JOIN HOUSEWIRE</OperationalLabel>
+              <OperationalLabel tone="wire">Join Escape Cases</OperationalLabel>
             </View>
 
             <View style={styles.heroCopy}>
-              <Text style={[styles.eyebrow, { color: theme.colors.wire, fontFamily: theme.typography.families.monoMedium }]}>ANOTHER PHONE IS HOSTING</Text>
-              <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Scan their house.</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>One QR connects both phones.</Text>
+              <Text style={[styles.eyebrow, { color: theme.colors.wire, fontFamily: theme.typography.families.bodyMedium }]}>Your family is hosting</Text>
+              <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Scan the host phone</Text>
+              <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Point at their join QR. We will connect you.</Text>
             </View>
 
             <Pressable
@@ -296,8 +296,8 @@ export default function JoinScreen() {
               <Corner position="bottomLeft" ready={ticketReady} />
               <Corner position="bottomRight" ready={ticketReady} />
               <GlyphMark color={ticketReady ? theme.colors.ready : theme.colors.wire} glyph={ticketReady ? 'KEY' : 'EYE'} size={82} />
-              <Text style={[styles.scanTitle, { color: ticketReady ? theme.colors.ready : theme.colors.text, fontFamily: theme.typography.families.display }]}>{ticketReady ? 'HOUSE FOUND' : 'SCAN QR'}</Text>
-              <Text style={[styles.scanSub, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{ticketReady ? cleanCode : 'Camera stays on this screen'}</Text>
+              <Text style={[styles.scanTitle, { color: ticketReady ? theme.colors.ready : theme.colors.text, fontFamily: theme.typography.families.display }]}>{ticketReady ? 'Ready to join' : 'Open camera'}</Text>
+              <Text style={[styles.scanSub, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{ticketReady ? `Code ${cleanCode}` : 'Scan the big QR on the host phone'}</Text>
             </Pressable>
 
             <Field
@@ -408,7 +408,7 @@ export default function JoinScreen() {
                 <Text style={[styles.soloText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Only one phone? Try solo preview</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => router.push('/forge-join' as never)} style={styles.soloAction}>
-                <Text style={[styles.soloText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Joining a generated Case Forge room? Enter its file details</Text>
+                <Text style={[styles.soloText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Have a generated case file? Open advanced join</Text>
               </Pressable>
             </View>
           </ScrollView>
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   bottomLeft: { borderBottomWidth: 3, borderLeftWidth: 3, bottom: 13, left: 13 },
   bottomRight: { borderBottomWidth: 3, borderRightWidth: 3, bottom: 13, right: 13 },
   chevron: { fontSize: 24, lineHeight: 24 },
-  caseChoice: { borderWidth: 1, flex: 1, gap: 2, minHeight: 58, padding: 8 },
+  caseChoice: { borderRadius: 12, borderWidth: 1, flex: 1, gap: 2, minHeight: 58, padding: 8 },
   caseChoices: { flexDirection: 'row', gap: 6 },
   caseHelp: { fontSize: 11, lineHeight: 16 },
   caseIndex: { fontSize: 7, letterSpacing: 1 },
@@ -581,18 +581,18 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 30, lineHeight: 32 },
   content: { flexGrow: 1, gap: 18, paddingBottom: 36, paddingHorizontal: 20, paddingTop: 4 },
   corner: { height: 34, position: 'absolute', width: 34 },
-  eyebrow: { fontSize: 10, letterSpacing: 2 },
+  eyebrow: { fontSize: 13, lineHeight: 18 },
   field: { gap: 7 },
   fieldLabel: { fontSize: 13 },
   heroCopy: { gap: 5 },
-  input: { borderRadius: 2, borderWidth: 1, fontSize: 17, minHeight: 54, paddingHorizontal: 14, paddingVertical: 10 },
+  input: { borderRadius: 14, borderWidth: 1, fontSize: 17, minHeight: 54, paddingHorizontal: 14, paddingVertical: 10 },
   keyboard: { flex: 1 },
-  manualForm: { borderLeftWidth: 2, gap: 15, paddingLeft: 14 },
+  manualForm: { borderRadius: 16, borderWidth: 1, gap: 15, padding: 14 },
   manualToggle: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 48 },
   manualToggleText: { fontSize: 14 },
   notice: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
   reticle: { alignSelf: 'center', height: 255, marginTop: 116, position: 'relative', width: 255 },
-  scanPortal: { alignItems: 'center', borderRadius: 3, borderWidth: 1, gap: 5, height: 222, justifyContent: 'center', overflow: 'hidden' },
+  scanPortal: { alignItems: 'center', borderRadius: 20, borderWidth: 1, gap: 5, height: 222, justifyContent: 'center', overflow: 'hidden' },
   scannerBody: { fontSize: 14, lineHeight: 20 },
   scannerPanel: { bottom: 0, gap: 5, left: 0, paddingBottom: 40, paddingHorizontal: 22, paddingTop: 22, position: 'absolute', right: 0 },
   scannerScreen: { flex: 1 },
@@ -600,11 +600,11 @@ const styles = StyleSheet.create({
   scannerTitle: { fontSize: 37, lineHeight: 38 },
   scannerTopline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 48 },
   scanSub: { fontSize: 13 },
-  scanTitle: { fontSize: 30, letterSpacing: 1.1, lineHeight: 31 },
+  scanTitle: { fontSize: 30, lineHeight: 32 },
   soloAction: { alignItems: 'center', justifyContent: 'center', minHeight: 48 },
   soloText: { fontSize: 14 },
   subtitle: { fontSize: 15, lineHeight: 21 },
-  title: { fontSize: 47, lineHeight: 47 },
+  title: { fontSize: 45, lineHeight: 47 },
   topLeft: { borderLeftWidth: 3, borderTopWidth: 3, left: 13, top: 13 },
   topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   topRight: { borderRightWidth: 3, borderTopWidth: 3, right: 13, top: 13 },

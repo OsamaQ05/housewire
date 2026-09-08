@@ -13,9 +13,9 @@ import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
-const GOLD = '#F2C14E';
-const CYAN = '#63D9D1';
-const CORAL = '#F46A4E';
+const GOLD = '#FFD166';
+const CYAN = '#6ED8C7';
+const CORAL = '#FF7657';
 
 export default function TriviaResultsScreen() {
   const router = useRouter();
@@ -71,7 +71,7 @@ export default function TriviaResultsScreen() {
       <ScreenShell texture={false}>
         <View style={styles.missing}>
           <Ionicons color={CYAN} name="radio-outline" size={38} />
-          <Text style={[styles.missingText, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>RESTORING SCORE</Text>
+          <Text style={[styles.missingText, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Getting the scores</Text>
         </View>
       </ScreenShell>
     );
@@ -82,7 +82,7 @@ export default function TriviaResultsScreen() {
     return (
       <ScreenShell texture={false}>
         <View style={styles.missing}>
-          <Text style={[styles.missingText, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{canResume ? 'THE SIGNAL IS STILL LIVE' : 'NO SCORE ON THE DIAL'}</Text>
+          <Text style={[styles.missingText, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{canResume ? 'The game is still going' : 'No scores yet'}</Text>
           <Pressable accessibilityRole="button" onPress={() => router.replace(canResume ? '/trivia-play' : '/trivia-setup')} style={[styles.outlineButton, { borderColor: GOLD }]}>
             <Text style={[styles.outlineText, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>{canResume ? 'Return to the current round' : 'Start Family Frequency'}</Text>
           </Pressable>
@@ -107,8 +107,8 @@ export default function TriviaResultsScreen() {
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(480)} style={styles.hero}>
           <ResultDial accent={winners[0]?.color ?? GOLD} />
-          <Text style={[styles.kicker, { color: GOLD, fontFamily: theme.typography.families.monoMedium }]}>FREQUENCY LOCKED</Text>
-          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{winners.length > 1 ? 'SAME WAVELENGTH' : `${winners[0]?.label.toUpperCase()} TAKES IT`}</Text>
+          <Text style={[styles.kicker, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>That is the final signal</Text>
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{winners.length > 1 ? 'Same wavelength' : `${winners[0]?.label} takes it`}</Text>
           <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.story }]}>{exactTotal} exact {exactTotal === 1 ? 'match' : 'matches'} landed across {session.results.length} rounds.</Text>
         </Animated.View>
 
@@ -118,7 +118,7 @@ export default function TriviaResultsScreen() {
               <Text style={[styles.rank, { color: entry.color, fontFamily: theme.typography.families.displayHeavy }]}>{String(index + 1).padStart(2, '0')}</Text>
               <View style={styles.boardCopy}>
                 <Text style={[styles.boardName, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{entry.label}</Text>
-                <Text style={[styles.boardMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{entry.opportunities === undefined ? `${entry.exact} EXACT` : `${entry.exact}/${entry.opportunities} EXACT LOCKS`}</Text>
+                <Text style={[styles.boardMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{entry.opportunities === undefined ? `${entry.exact} exact` : `${entry.exact} of ${entry.opportunities} exact`}</Text>
               </View>
               <Text style={[styles.points, { color: entry.color, fontFamily: theme.typography.families.displayHeavy }]}>{entry.opportunities === undefined ? entry.points : formatTeamRate(entry.points)}</Text>
             </Animated.View>
@@ -129,14 +129,14 @@ export default function TriviaResultsScreen() {
           <Ionicons color={source === 'ai' ? CYAN : GOLD} name="checkmark-circle-outline" size={22} />
           <View style={styles.keptCopy}>
             <Text style={[styles.keptTitle, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Tonight&apos;s answers stayed private</Text>
-            <Text style={[styles.keptMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{source === 'ai' ? 'AI MIX · ANSWERS ON-DEVICE' : 'OFFLINE MIX · ANSWERS ON-DEVICE'} · SAVED WITH {history.length} RECENT {history.length === 1 ? 'SIGNAL' : 'SIGNALS'}</Text>
+            <Text style={[styles.keptMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{source === 'ai' ? 'Fresh AI question mix' : 'Offline question mix'} · saved with {history.length} recent {history.length === 1 ? 'game' : 'games'}</Text>
           </View>
         </View>
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={replay} style={({ pressed }) => [styles.primary, { backgroundColor: GOLD }, pressed && styles.pressed]}>
             <Ionicons color="#171309" name="refresh" size={21} />
-            <Text style={[styles.primaryText, { fontFamily: theme.typography.families.displayHeavy }]}>PLAY A FRESH MIX</Text>
+            <Text style={[styles.primaryText, { fontFamily: theme.typography.families.displayHeavy }]}>Play a fresh mix</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={leaveResults} style={({ pressed }) => [styles.outlineButton, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
             <Text style={[styles.outlineText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Back to house modes</Text>
@@ -170,26 +170,26 @@ const styles = StyleSheet.create({
   actions: { gap: 9, paddingHorizontal: 20 },
   board: { gap: 8, paddingHorizontal: 20 },
   boardCopy: { flex: 1, gap: 2 },
-  boardMeta: { fontSize: 10, letterSpacing: 0.8 },
+  boardMeta: { fontSize: 12, lineHeight: 16 },
   boardName: { fontSize: 17 },
-  boardRow: { alignItems: 'center', borderLeftWidth: 4, borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 13 },
+  boardRow: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 13 },
   dial: { height: 142 },
   hero: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 10 },
-  kept: { alignItems: 'center', borderBottomWidth: 1, borderTopWidth: 1, flexDirection: 'row', gap: 11, marginHorizontal: 20, paddingVertical: 14 },
+  kept: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 11, marginHorizontal: 20, paddingHorizontal: 13, paddingVertical: 14 },
   keptCopy: { flex: 1, gap: 3 },
-  keptMeta: { fontSize: 10, letterSpacing: 0.65, lineHeight: 15 },
+  keptMeta: { fontSize: 11, lineHeight: 15 },
   keptTitle: { fontSize: 14 },
-  kicker: { fontSize: 10, letterSpacing: 1.4 },
+  kicker: { fontSize: 13, lineHeight: 18 },
   missing: { alignItems: 'center', flex: 1, gap: 16, justifyContent: 'center' },
   missingText: { fontSize: 34 },
-  outlineButton: { alignItems: 'center', borderWidth: 1, justifyContent: 'center', minHeight: 55, paddingHorizontal: 18 },
+  outlineButton: { alignItems: 'center', borderRadius: 14, borderWidth: 1, justifyContent: 'center', minHeight: 55, paddingHorizontal: 18 },
   outlineText: { fontSize: 15 },
   page: { flexGrow: 1, gap: 20, paddingBottom: 38 },
   points: { fontSize: 37, lineHeight: 38 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.993 }] },
-  primary: { alignItems: 'center', flexDirection: 'row', gap: 9, justifyContent: 'center', minHeight: 64 },
-  primaryText: { color: '#171309', fontSize: 20, letterSpacing: 0.4 },
+  primary: { alignItems: 'center', borderRadius: 16, flexDirection: 'row', gap: 9, justifyContent: 'center', minHeight: 64 },
+  primaryText: { color: '#171309', fontSize: 20 },
   rank: { fontSize: 28, width: 32 },
   subtitle: { fontSize: 21, lineHeight: 25, maxWidth: 340, textAlign: 'center' },
-  title: { fontSize: 43, letterSpacing: 0.2, lineHeight: 42, marginVertical: 7, textAlign: 'center' },
+  title: { fontSize: 43, lineHeight: 44, marginVertical: 7, textAlign: 'center' },
 });

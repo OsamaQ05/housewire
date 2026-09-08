@@ -217,6 +217,7 @@ function resolveTreatment(
 const styles = StyleSheet.create({
   body: {
     alignItems: 'stretch',
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     minHeight: 62,
@@ -226,6 +227,7 @@ const styles = StyleSheet.create({
     width: 5,
   },
   contact: {
+    borderRadius: 5,
     borderWidth: 1,
     height: 9,
     width: 9,
@@ -241,10 +243,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   label: {
-    fontSize: 25,
-    letterSpacing: 0.6,
+    fontSize: 23,
     lineHeight: 26,
-    textTransform: 'uppercase',
   },
   terminal: {
     alignItems: 'center',

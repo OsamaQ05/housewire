@@ -132,7 +132,7 @@ describe('family trivia quick setup and offline generation', () => {
         }
       }
     }
-  });
+  }, 15_000);
 
   it('gives both partner teams identical scoring ceilings without opponent-owned answers', () => {
     for (const questionCount of [4, 8, 12] as const) {

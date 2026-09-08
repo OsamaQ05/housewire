@@ -59,7 +59,7 @@ export default function CaseForgeScreen() {
 
   const workingLabel = useMemo(() => {
     if (!working) return '';
-    return caseFile ? 'RECUTTING THE MECHANISM' : 'CUTTING FIVE LINKED SCENES';
+    return caseFile ? 'Rebuilding the case' : 'Building five linked scenes';
   }, [caseFile, working]);
 
   const back = () => {
@@ -110,7 +110,7 @@ export default function CaseForgeScreen() {
         </Pressable>
         <View style={styles.brandBlock}>
           <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>CASE FORGE</Text>
-          <Text style={[styles.brandMeta, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>LOCAL CASE PRESS</Text>
+          <Text style={[styles.brandMeta, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>AI game builder</Text>
         </View>
         <Pressable accessibilityLabel="Generated casebook" accessibilityRole="button" hitSlop={8} onPress={() => router.push('/forge-library' as never)} style={({ pressed }) => [styles.iconButton, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
           <Ionicons color={theme.colors.text} name="albums-outline" size={20} />
@@ -121,14 +121,14 @@ export default function CaseForgeScreen() {
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={styles.workingPage}>
           <ForgeDiagram accent={caseFile?.accent ?? forgeColors.ink} playerCount={draft.playerCount} reducedMotion={reducedMotion} working />
           <View style={styles.workingCopy}>
-            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>THE PRESS IS LIVE</Text>
-            <Text accessibilityLiveRegion="polite" style={[styles.workingLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>{workingLabel}</Text>
+            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Building your case</Text>
+            <Text accessibilityLiveRegion="polite" style={[styles.workingLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>{workingLabel}</Text>
           </View>
           <View style={styles.checks}>
-            {['DISTRIBUTING PRIVATE CLUES', 'PROVING ONE VALID ANSWER', 'ADDING SENSOR FALLBACKS'].map((label, index) => (
+            {['Splitting private clues', 'Checking every answer', 'Adding manual fallbacks'].map((label, index) => (
               <View key={label} style={[styles.checkRow, { borderColor: theme.colors.draft }]}>
                 <Text style={[styles.checkIndex, { color: index === 0 ? forgeColors.ink : theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{String(index + 1).padStart(2, '0')}</Text>
-                <Text style={[styles.checkLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{label}</Text>
+                <Text style={[styles.checkLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text>
               </View>
             ))}
           </View>
@@ -168,18 +168,18 @@ export default function CaseForgeScreen() {
             ) : null}
           </ScrollView>
           <View style={[styles.footer, { backgroundColor: theme.colors.background, borderColor: theme.colors.draft }]}>
-            {step > 1 ? <ForgeButton icon="arrow-back" label="Previous plate" onPress={back} secondary /> : <View />}
+            {step > 1 ? <ForgeButton icon="arrow-back" label="Back" onPress={back} secondary /> : <View />}
             <View style={styles.footerPrimary}>
               {step < 3 ? (
                 <ForgeButton
                   icon="arrow-forward"
-                  label={step === 1 ? 'Choose the world' : 'Set the mechanisms'}
+                  label={step === 1 ? 'Choose a theme' : 'Choose the challenges'}
                   onPress={() => {
                     play('switch', 0.3);
                     setStep((value) => value + 1);
                   }}
                 />
-              ) : <ForgeButton icon="hammer-outline" label="Cut this case" onPress={() => void generate()} />}
+              ) : <ForgeButton icon="hammer-outline" label="Build my case" onPress={() => void generate()} />}
             </View>
           </View>
         </>
@@ -231,22 +231,22 @@ function wait(milliseconds: number): Promise<void> {
 const styles = StyleSheet.create({
   brand: { fontSize: 24, letterSpacing: 0.5, lineHeight: 23 },
   brandBlock: { alignItems: 'center' },
-  brandMeta: { fontSize: 7, letterSpacing: 1.3 },
+  brandMeta: { fontSize: 11 },
   checkIndex: { fontSize: 8, letterSpacing: 1 },
-  checkLabel: { flex: 1, fontSize: 8, letterSpacing: 0.8 },
+  checkLabel: { flex: 1, fontSize: 14 },
   checkRow: { alignItems: 'center', borderBottomWidth: 1, flexDirection: 'row', gap: 10, minHeight: 45 },
   checks: { width: '100%' },
-  error: { alignItems: 'center', borderLeftWidth: 3, flexDirection: 'row', gap: 9, paddingLeft: 11, paddingVertical: 9 },
+  error: { alignItems: 'center', borderLeftWidth: 3, borderRadius: 14, flexDirection: 'row', gap: 9, paddingHorizontal: 11, paddingVertical: 9 },
   errorText: { flex: 1, fontSize: 12, lineHeight: 17 },
   footer: { alignItems: 'center', borderTopWidth: 1, flexDirection: 'row', gap: 8, paddingBottom: 10, paddingHorizontal: 18, paddingTop: 10 },
   footerPrimary: { flex: 1 },
   formContent: { gap: 16, paddingBottom: 108, paddingHorizontal: 20, paddingTop: 10 },
-  iconButton: { alignItems: 'center', borderWidth: 1, height: 40, justifyContent: 'center', width: 40 },
+  iconButton: { alignItems: 'center', borderRadius: 14, borderWidth: 1, height: 40, justifyContent: 'center', width: 40 },
   pressed: { opacity: 0.68, transform: [{ scale: 0.98 }] },
   resultPage: { flex: 1, paddingHorizontal: 20, paddingTop: 9 },
   topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
   workingCopy: { alignItems: 'center', gap: 5 },
-  workingLabel: { fontSize: 8, letterSpacing: 1.5, textAlign: 'center' },
+  workingLabel: { fontSize: 14, textAlign: 'center' },
   workingPage: { alignItems: 'center', flex: 1, gap: 17, justifyContent: 'center', paddingHorizontal: 28 },
-  workingTitle: { fontSize: 46, lineHeight: 44, textAlign: 'center' },
+  workingTitle: { fontSize: 42, lineHeight: 42, textAlign: 'center' },
 });

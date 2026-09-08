@@ -1,43 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { ScreenShell } from '@/src/components/ScreenShell';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
+import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
-const GOLD = '#FFD166';
-const MINT = '#6DD6C9';
+const NIGHT = '#15223A';
+const PAPER = '#FFF6E5';
+const INK = '#182033';
 const CORAL = '#FF7657';
-const INK = '#07100D';
+const SUN = '#FFD166';
+const MINT = '#6ED8C7';
+const LILAC = '#B9A7F8';
 
-const pages = [
+const PAGES = [
   {
-    eyebrow: 'WELCOME TO HOUSEWIRE',
-    title: 'Your home is the game board.',
-    body: 'Choose a story escape, a family prediction game, or a two-team race. Every mode gets people doing something together.',
-    action: 'See how escapes work',
+    title: 'Choose. Tap. Play.',
+    body: 'Three different family games, each with one clear way to begin.',
+    note: 'No account or setup quiz.',
   },
   {
-    eyebrow: 'BEFORE THE CASE',
-    title: 'Start together. Then split up.',
-    body: 'One person creates the game. Everyone else scans one QR. Then each player takes a phone to a safe room.',
-    action: 'Next: stay connected',
+    title: 'Phones become game pieces.',
+    body: 'Host on one phone. For live games, everyone else scans the QR and gets their own clues.',
+    note: 'One phone is always enough to try it.',
   },
   {
-    eyebrow: 'THE HOUSE LINE',
-    title: 'Talk between rooms.',
-    body: 'Hold the orange ring, speak, then release. Every room hears your short voice pulse. Private lines clearly name the only listener.',
-    action: 'I’ve got it',
-  },
-  {
-    eyebrow: 'ON-DEVICE AI GUIDE',
-    title: 'Help appears when you need it.',
-    body: 'The Guide uses time, retries and unavailable sensors—not your conversations—to offer one small nudge. It never solves the puzzle for you.',
-    action: 'Play First Light',
+    title: 'The app helps at the right moment.',
+    body: 'Camera, sound, and movement only appear inside puzzles that use them. The Guide offers a nudge if you get stuck.',
+    note: 'You can skip any permission.',
   },
 ] as const;
 
@@ -46,227 +43,119 @@ export default function OnboardingScreen() {
   const { theme } = useHousewireTheme();
   const { play } = useHousewireSound();
   const finishOnboarding = useHousewireStore((state) => state.finishOnboarding);
+  const haptics = useHousewireStore((state) => state.settings.haptics);
+  const reducedMotion = useHousewireStore((state) => state.settings.reducedMotion);
   const [page, setPage] = useState(0);
-  const [talking, setTalking] = useState(false);
-  const [lineTested, setLineTested] = useState(false);
-  const [replyVisible, setReplyVisible] = useState(false);
-  const [guideHintVisible, setGuideHintVisible] = useState(false);
-  const talkingRef = useRef(false);
-  const replyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const current = pages[page];
+  const current = PAGES[page];
+  const finalPage = page === PAGES.length - 1;
 
-  useEffect(() => () => {
-    if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
-  }, []);
-
-  const skip = () => {
+  const finish = (practice: boolean) => {
     finishOnboarding();
-    play('switch', 0.38);
-    router.replace('/modes');
+    if (haptics) void Haptics.selectionAsync().catch(() => undefined);
+    play(practice ? 'relay' : 'switch', 0.42);
+    router.replace(practice ? '/tutorial' : '/modes');
   };
 
-  const advance = () => {
-    if (page === pages.length - 1) {
-      finishOnboarding();
-      play('relay', 0.58);
-      router.replace('/tutorial');
+  const next = () => {
+    if (finalPage) {
+      finish(false);
       return;
     }
-    play('switch', 0.36);
+    if (haptics) void Haptics.selectionAsync().catch(() => undefined);
+    play('switch', 0.25);
     setPage((value) => value + 1);
-  };
-
-  const finishLinePulse = () => {
-    if (!talkingRef.current) return;
-    talkingRef.current = false;
-    setTalking(false);
-    setLineTested(true);
-    play('relay', 0.5);
-    replyTimerRef.current = setTimeout(() => {
-      setReplyVisible(true);
-      play('node2', 0.42);
-    }, 620);
   };
 
   return (
     <ScreenShell edgeWire="none" padded={false} texture={false}>
-      <ScrollView contentContainerStyle={styles.screen} overScrollMode="never" showsVerticalScrollIndicator={false}>
-        <View style={styles.topline}>
-          <Text style={[styles.brand, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>HOUSEWIRE</Text>
-          <Pressable accessibilityHint="Skips the introduction and opens the game modes" accessibilityRole="button" hitSlop={10} onPress={skip} style={({ pressed }) => pressed && styles.pressed}>
-            <Text style={[styles.skip, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Skip tour</Text>
-          </Pressable>
-        </View>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: NIGHT }]} />
+      <View style={styles.topbar}>
+        <Pressable accessibilityLabel="Close how it works" accessibilityRole="button" hitSlop={10} onPress={() => finish(false)} style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
+          <Ionicons color={PAPER} name="close" size={23} />
+        </Pressable>
+        <Text style={[styles.brand, { fontFamily: theme.typography.families.displayHeavy }]}>HOW HOUSEWIRE WORKS</Text>
+        <Text style={[styles.count, { fontFamily: theme.typography.families.bodyMedium }]}>{page + 1}/{PAGES.length}</Text>
+      </View>
 
-        <Animated.View entering={FadeIn.duration(260)} key={page} style={styles.page}>
-          <View style={styles.visual}>
-            {page === 0 ? <HomeVisual /> : null}
-            {page === 1 ? <JoinVisual /> : null}
-            {page === 2 ? (
-              <LineVisual
-                lineTested={lineTested}
-                onPressIn={() => { talkingRef.current = true; setTalking(true); play('pulse', 0.24); }}
-                onPressOut={finishLinePulse}
-                replyVisible={replyVisible}
-                talking={talking}
-              />
-            ) : null}
-            {page === 3 ? <GuideVisual hintVisible={guideHintVisible} onReveal={() => { setGuideHintVisible(true); play('accept', 0.42); }} /> : null}
-          </View>
-
-          <View style={styles.copy}>
-            <Text style={[styles.eyebrow, { color: page === 2 ? CORAL : GOLD, fontFamily: theme.typography.families.monoMedium }]}>{current.eyebrow}</Text>
-            <Text accessibilityRole="header" style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{current.title}</Text>
-            <Text style={[styles.body, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{current.body}</Text>
-          </View>
+      <View style={styles.body}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(260)} key={`visual-${page}`} style={styles.visual}>
+          {page === 0 ? <ModeVisual /> : page === 1 ? <PhoneVisual /> : <GuideVisual />}
         </Animated.View>
 
-        <View style={styles.controls}>
-          <View accessibilityLabel={`Step ${page + 1} of ${pages.length}`} accessible style={styles.dots}>
-            {pages.map((item, index) => <View key={item.eyebrow} style={[styles.dot, { backgroundColor: index <= page ? GOLD : theme.colors.draft }]} />)}
+        <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(300)} key={`copy-${page}`} style={styles.copy}>
+          <Text accessibilityRole="header" style={[styles.title, { fontFamily: theme.typography.families.storyBold }]}>{current.title}</Text>
+          <Text style={[styles.description, { fontFamily: theme.typography.families.body }]}>{current.body}</Text>
+          <View style={styles.note}>
+            <Ionicons color={MINT} name="checkmark-circle" size={19} />
+            <Text style={[styles.noteText, { fontFamily: theme.typography.families.bodyMedium }]}>{current.note}</Text>
           </View>
-          <Pressable accessibilityRole="button" onPress={advance} style={({ pressed }) => [styles.action, { backgroundColor: GOLD }, pressed && styles.pressed]}>
-            <Text style={[styles.actionText, { color: INK, fontFamily: theme.typography.families.bodyMedium }]}>{current.action}</Text>
+        </Animated.View>
+      </View>
+
+      <View style={styles.bottom}>
+        <View accessibilityLabel={`Page ${page + 1} of ${PAGES.length}`} style={styles.dots}>
+          {PAGES.map((item, index) => <View key={item.title} style={[styles.dot, index === page && styles.dotActive]} />)}
+        </View>
+        {finalPage ? (
+          <View style={styles.finalActions}>
+            <Pressable accessibilityRole="button" onPress={() => finish(false)} style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
+              <Text style={[styles.primaryText, { fontFamily: theme.typography.families.bodyMedium }]}>Choose a game</Text>
+              <Ionicons color={INK} name="arrow-forward" size={21} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => finish(true)} style={({ pressed }) => [styles.practice, pressed && styles.pressed]}>
+              <Ionicons color={SUN} name="sunny" size={18} />
+              <Text style={[styles.practiceText, { fontFamily: theme.typography.families.bodyMedium }]}>Try the 2-minute practice</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable accessibilityRole="button" onPress={next} style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
+            <Text style={[styles.primaryText, { fontFamily: theme.typography.families.bodyMedium }]}>Next</Text>
             <Ionicons color={INK} name="arrow-forward" size={21} />
           </Pressable>
-        </View>
-      </ScrollView>
+        )}
+      </View>
     </ScreenShell>
   );
 }
 
-function HomeVisual() {
-  const { theme } = useHousewireTheme();
+function ModeVisual() {
   return (
-    <View accessibilityLabel="Three family phones in different rooms connected by one glowing line" accessibilityRole="image" style={styles.house}>
-      <View style={[styles.roofLeft, { borderBottomColor: theme.colors.draft }]} />
-      <View style={[styles.roofRight, { borderBottomColor: theme.colors.draft }]} />
-      <View style={[styles.houseBody, { borderColor: theme.colors.draft }]}>
-        <View style={[styles.houseDividerVertical, { backgroundColor: theme.colors.draft }]} />
-        <View style={[styles.houseDividerHorizontal, { backgroundColor: theme.colors.draft }]} />
-        <View style={[styles.houseWire, { backgroundColor: GOLD }]} />
-        {[
-          { left: 34, top: 26 },
-          { left: 178, top: 26 },
-          { left: 105, top: 137 },
-        ].map((position, index) => (
-          <View key={index} style={[styles.miniPhone, position, { backgroundColor: theme.colors.surfaceRaised, borderColor: index === 0 ? CORAL : MINT }]}>
-            <Ionicons color={index === 0 ? CORAL : MINT} name="phone-portrait-outline" size={30} />
-          </View>
-        ))}
-      </View>
+    <View {...decorativeAccessibilityProps} style={styles.modeVisual}>
+      <View style={[styles.modeTile, { backgroundColor: CORAL, transform: [{ rotate: '-5deg' }] }]}><Ionicons color={INK} name="key" size={38} /></View>
+      <View style={[styles.modeTile, styles.modeTileMiddle, { backgroundColor: SUN }]}><Ionicons color={INK} name="radio" size={38} /></View>
+      <View style={[styles.modeTile, { backgroundColor: MINT, transform: [{ rotate: '5deg' }] }]}><Ionicons color={INK} name="flag" size={38} /></View>
     </View>
   );
 }
 
-function JoinVisual() {
-  const { theme } = useHousewireTheme();
+function PhoneVisual() {
   return (
-    <View accessibilityLabel="One host phone shares a QR with two joining phones" accessibilityRole="image" style={styles.joinVisual}>
-      <View style={[styles.hostPhone, { borderColor: GOLD }]}>
-        <Text style={[styles.hostLabel, { color: GOLD, fontFamily: theme.typography.families.monoMedium }]}>HOST</Text>
-        <View style={styles.qrMock}>
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((cell) => <View key={cell} style={[styles.qrCell, { backgroundColor: cell % 2 === 0 || cell === 5 ? INK : 'transparent' }]} />)}
-        </View>
-      </View>
-      <View style={styles.joinArrow}>
-        <View style={[styles.joinArrowLine, { backgroundColor: GOLD }]} />
-        <Ionicons color={GOLD} name="arrow-forward" size={23} />
-      </View>
-      <View style={styles.guestStack}>
-        {[0, 1].map((index) => <View key={index} style={[styles.guestPhone, { backgroundColor: theme.colors.surface, borderColor: MINT }]}><Ionicons color={MINT} name={index === 0 ? 'scan-outline' : 'checkmark-circle-outline'} size={32} /></View>)}
-      </View>
-      <View style={[styles.checklist, { backgroundColor: theme.colors.surface }]}>
-        {['Same Wi‑Fi', 'Sound on', 'Clear paths'].map((label) => <View key={label} style={styles.checkItem}><Ionicons color={MINT} name="checkmark" size={16} /><Text style={[styles.checkText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{label}</Text></View>)}
-      </View>
+    <View {...decorativeAccessibilityProps} style={styles.phoneVisual}>
+      <Svg height="225" viewBox="0 0 330 225" width="330">
+        <Path d="M32 111 C84 40 117 177 164 112 S246 57 298 111" fill="none" stroke={CORAL} strokeLinecap="round" strokeWidth="7" />
+        <Rect fill={PAPER} height="142" rx="22" stroke={SUN} strokeWidth="6" width="82" x="124" y="41" />
+        <Rect fill={INK} height="71" rx="7" width="58" x="136" y="70" />
+        <Rect fill={PAPER} height="21" width="21" x="143" y="77" /><Rect fill={PAPER} height="15" width="14" x="174" y="78" /><Rect fill={PAPER} height="13" width="20" x="142" y="113" /><Rect fill={PAPER} height="21" width="15" x="173" y="107" />
+        <Circle cx="165" cy="162" fill={MINT} r="8" />
+        <Rect fill={PAPER} height="96" rx="16" stroke={LILAC} strokeWidth="5" width="57" x="30" y="79" /><Circle cx="58" cy="144" fill={CORAL} r="8" />
+        <Rect fill={PAPER} height="96" rx="16" stroke={MINT} strokeWidth="5" width="57" x="243" y="79" /><Circle cx="271" cy="144" fill={SUN} r="8" />
+      </Svg>
     </View>
   );
 }
 
-function LineVisual({ lineTested, onPressIn, onPressOut, replyVisible, talking }: { lineTested: boolean; onPressIn: () => void; onPressOut: () => void; replyVisible: boolean; talking: boolean }) {
-  const { theme } = useHousewireTheme();
+function GuideVisual() {
   return (
-    <View style={styles.lineVisual}>
-      <View style={[styles.linePill, { borderColor: MINT }]}><View style={[styles.lineLiveDot, { backgroundColor: MINT }]} /><Text style={[styles.linePillText, { color: theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>HOUSE LINE · ALL ROOMS</Text></View>
-      <Pressable accessibilityHint="This is a visual practice control; no microphone permission is requested" accessibilityLabel="Hold to practise the House Line" accessibilityRole="button" onPress={onPressOut} onPressIn={onPressIn} onPressOut={onPressOut} style={({ pressed }) => [styles.talkButton, { backgroundColor: talking || pressed ? GOLD : CORAL, borderColor: GOLD }]}>
-        <Ionicons color={INK} name={lineTested ? 'checkmark' : 'mic-outline'} size={37} />
-        <Text style={[styles.talkButtonText, { color: INK, fontFamily: theme.typography.families.displayHeavy }]}>{lineTested ? 'SENT' : talking ? 'SPEAK' : 'HOLD'}</Text>
-      </Pressable>
-      <Text style={[styles.tryLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{replyVisible ? 'Mara · Hall: “Heard you.”' : lineTested ? 'Waiting for Hall…' : 'Try it: hold, speak, release.'}</Text>
-    </View>
-  );
-}
-
-function GuideVisual({ hintVisible, onReveal }: { hintVisible: boolean; onReveal: () => void }) {
-  const { theme } = useHousewireTheme();
-  return (
-    <View style={[styles.guideCard, { backgroundColor: theme.colors.surface, borderColor: GOLD }]}>
-      <View style={styles.guideTopline}>
-        <View style={[styles.guideIcon, { borderColor: GOLD }]}><Ionicons color={GOLD} name="compass-outline" size={28} /></View>
-        <View style={styles.guideCopy}>
-          <Text style={[styles.guideLabel, { color: GOLD, fontFamily: theme.typography.families.monoMedium }]}>ON-DEVICE AI GUIDE</Text>
-          <Text style={[styles.guideReason, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You’ve paused on this step.</Text>
-        </View>
-      </View>
-      <Text style={[styles.guideQuestion, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{hintVisible ? 'Try combining one detail from every room.' : 'Want one small nudge?'}</Text>
-      {!hintVisible ? <Pressable accessibilityRole="button" onPress={onReveal} style={[styles.guideReveal, { borderColor: GOLD }]}><Text style={[styles.guideRevealText, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Show one clue</Text><Ionicons color={GOLD} name="arrow-forward" size={18} /></Pressable> : <Animated.View entering={FadeInDown.duration(220)} style={styles.guidePrivacy}><Ionicons color={MINT} name="shield-checkmark-outline" size={18} /><Text style={[styles.guidePrivacyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>No voice or camera content is analyzed.</Text></Animated.View>}
+    <View {...decorativeAccessibilityProps} style={styles.guideVisual}>
+      <View style={styles.guideHouse}><Ionicons color={INK} name="home" size={72} /></View>
+      <View style={[styles.permission, styles.permissionCamera]}><Ionicons color={INK} name="camera" size={27} /></View>
+      <View style={[styles.permission, styles.permissionSound]}><Ionicons color={INK} name="volume-high" size={27} /></View>
+      <View style={[styles.permission, styles.permissionMotion]}><Ionicons color={INK} name="phone-portrait" size={27} /></View>
+      <View style={styles.guideBubble}><Ionicons color={INK} name="compass" size={28} /></View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  action: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 59, paddingHorizontal: 18 },
-  actionText: { fontSize: 18 },
-  body: { fontSize: 17, lineHeight: 25 },
-  brand: { fontSize: 26, letterSpacing: 0.5 },
-  checkItem: { alignItems: 'center', flexDirection: 'row', gap: 7 },
-  checkText: { fontSize: 13 },
-  checklist: { bottom: 0, flexDirection: 'row', gap: 13, justifyContent: 'center', left: 0, paddingHorizontal: 10, paddingVertical: 11, position: 'absolute', right: 0 },
-  controls: { gap: 18 },
-  copy: { gap: 9 },
-  dot: { flex: 1, height: 4 },
-  dots: { flexDirection: 'row', gap: 6 },
-  eyebrow: { fontSize: 10, letterSpacing: 1.3 },
-  guestPhone: { alignItems: 'center', borderWidth: 1, height: 76, justifyContent: 'center', width: 48 },
-  guestStack: { gap: 12 },
-  guideCard: { borderLeftWidth: 3, gap: 17, padding: 18, width: '100%' },
-  guideCopy: { flex: 1, gap: 2 },
-  guideIcon: { alignItems: 'center', borderRadius: 28, borderWidth: 1, height: 54, justifyContent: 'center', width: 54 },
-  guideLabel: { fontSize: 10, letterSpacing: 1.1 },
-  guidePrivacy: { alignItems: 'center', flexDirection: 'row', gap: 7 },
-  guidePrivacyText: { fontSize: 12 },
-  guideQuestion: { fontSize: 25, lineHeight: 29 },
-  guideReason: { fontSize: 13, lineHeight: 18 },
-  guideReveal: { alignItems: 'center', borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingTop: 13 },
-  guideRevealText: { fontSize: 15 },
-  guideTopline: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  hostLabel: { fontSize: 8, letterSpacing: 0.9 },
-  hostPhone: { alignItems: 'center', borderWidth: 2, gap: 9, height: 142, justifyContent: 'center', width: 88 },
-  house: { alignItems: 'center', height: 275, justifyContent: 'flex-end', width: 300 },
-  houseBody: { borderWidth: 1, height: 214, overflow: 'hidden', width: 282 },
-  houseDividerHorizontal: { height: 1, left: 0, position: 'absolute', right: 0, top: 106 },
-  houseDividerVertical: { bottom: 0, left: 140, position: 'absolute', top: 0, width: 1 },
-  houseWire: { height: 3, left: 30, position: 'absolute', right: 30, top: 103 },
-  joinArrow: { alignItems: 'center', flexDirection: 'row', width: 52 },
-  joinArrowLine: { flex: 1, height: 2 },
-  joinVisual: { alignItems: 'center', flexDirection: 'row', height: 275, justifyContent: 'center', paddingBottom: 48, width: '100%' },
-  lineLiveDot: { borderRadius: 5, height: 9, width: 9 },
-  linePill: { alignItems: 'center', borderBottomWidth: 1, borderTopWidth: 1, flexDirection: 'row', gap: 8, paddingVertical: 9 },
-  linePillText: { fontSize: 9, letterSpacing: 0.9 },
-  lineVisual: { alignItems: 'center', gap: 18, justifyContent: 'center', minHeight: 275, width: '100%' },
-  miniPhone: { alignItems: 'center', borderWidth: 1, height: 62, justifyContent: 'center', position: 'absolute', width: 40 },
-  page: { gap: 22 },
-  pressed: { opacity: 0.7, transform: [{ scale: 0.985 }] },
-  qrCell: { height: 12, width: 12 },
-  qrMock: { backgroundColor: '#F1E9D7', flexDirection: 'row', flexWrap: 'wrap', height: 44, padding: 4, width: 44 },
-  roofLeft: { borderBottomWidth: 54, borderLeftColor: 'transparent', borderLeftWidth: 0, borderRightColor: 'transparent', borderRightWidth: 142, height: 0, left: 9, position: 'absolute', top: 8, width: 0 },
-  roofRight: { borderBottomWidth: 54, borderLeftColor: 'transparent', borderLeftWidth: 142, borderRightColor: 'transparent', borderRightWidth: 0, height: 0, position: 'absolute', right: 9, top: 8, width: 0 },
-  screen: { flexGrow: 1, gap: 20, justifyContent: 'space-between', paddingBottom: 28, paddingHorizontal: 20, paddingTop: 14 },
-  skip: { fontSize: 15 },
-  talkButton: { alignItems: 'center', borderRadius: 72, borderWidth: 3, gap: 5, height: 142, justifyContent: 'center', width: 142 },
-  talkButtonText: { fontSize: 20 },
-  title: { fontSize: 46, letterSpacing: 0.1, lineHeight: 45 },
-  topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  tryLabel: { fontSize: 14 },
-  visual: { alignItems: 'center', justifyContent: 'center', minHeight: 280 },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 22 }, bottom: { gap: 17, paddingBottom: 24, paddingHorizontal: 22 }, brand: { color: PAPER, fontSize: 18, letterSpacing: 0.6 }, close: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 13, height: 42, justifyContent: 'center', width: 42 }, copy: { gap: 12 }, count: { color: '#B9C2D0', fontSize: 13, width: 42, textAlign: 'right' }, description: { color: '#D5DCE8', fontSize: 17, lineHeight: 25 }, dot: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, height: 7, width: 7 }, dotActive: { backgroundColor: SUN, width: 28 }, dots: { flexDirection: 'row', gap: 7, justifyContent: 'center' }, finalActions: { gap: 10 }, guideBubble: { alignItems: 'center', backgroundColor: LILAC, borderRadius: 18, height: 56, justifyContent: 'center', position: 'absolute', right: 48, top: 18, transform: [{ rotate: '7deg' }], width: 56 }, guideHouse: { alignItems: 'center', backgroundColor: PAPER, borderRadius: 36, height: 150, justifyContent: 'center', width: 190 }, guideVisual: { alignItems: 'center', height: 255, justifyContent: 'center', width: 330 }, modeTile: { alignItems: 'center', borderRadius: 24, height: 112, justifyContent: 'center', width: 92 }, modeTileMiddle: { marginHorizontal: -4, marginTop: -25, transform: [{ rotate: '1deg' }] }, modeVisual: { alignItems: 'center', flexDirection: 'row', height: 250, justifyContent: 'center' }, note: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: 'rgba(110,216,199,0.12)', borderRadius: 999, flexDirection: 'row', gap: 7, paddingHorizontal: 12, paddingVertical: 9 }, noteText: { color: PAPER, fontSize: 13 }, permission: { alignItems: 'center', borderRadius: 16, height: 52, justifyContent: 'center', position: 'absolute', width: 52 }, permissionCamera: { backgroundColor: CORAL, left: 40, top: 36, transform: [{ rotate: '-8deg' }] }, permissionMotion: { backgroundColor: MINT, bottom: 22, right: 38, transform: [{ rotate: '8deg' }] }, permissionSound: { backgroundColor: SUN, bottom: 14, left: 56, transform: [{ rotate: '5deg' }] }, phoneVisual: { alignItems: 'center', height: 250, justifyContent: 'center' }, practice: { alignItems: 'center', borderColor: 'rgba(255,209,102,0.4)', borderRadius: 15, borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', minHeight: 52 }, practiceText: { color: SUN, fontSize: 15 }, pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] }, primary: { alignItems: 'center', backgroundColor: SUN, borderRadius: 15, flexDirection: 'row', justifyContent: 'space-between', minHeight: 58, paddingHorizontal: 18 }, primaryText: { color: INK, fontSize: 17 }, title: { color: PAPER, fontSize: 41, lineHeight: 44 }, topbar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 10 }, visual: { alignItems: 'center', height: 270, justifyContent: 'center' },
 });

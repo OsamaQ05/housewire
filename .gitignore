@@ -45,6 +45,9 @@ housewire-*.log
 # typescript
 *.tsbuildinfo
 
+# generated submission previews
+/tmp/
+
 app-example
 
 # generated native folders
