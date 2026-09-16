@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { useFamilyClubStore } from './use-family-club-store';
+import { escapeRecord } from '../features/family-club/records';
+import { prepareHostCrew } from '../features/session/host-crew';
 
 export type RoomKind =
   | 'living'
@@ -58,6 +61,7 @@ interface HousewireSettings {
   reducedMotion: boolean;
   haptics: boolean;
   sound: boolean;
+  music: boolean;
   highContrast: boolean;
 }
 
@@ -95,7 +99,7 @@ interface HousewireState {
   prepareSession: (mode: SessionMode, sessionCode?: string, relayUrl?: string) => void;
   startMission: () => void;
   updateMissionProgress: (stageIndex: number, retries: number) => void;
-  completeMission: (result: MissionResult) => void;
+  completeMission: (result: MissionResult, participants?: readonly CrewNode[], practice?: boolean) => void;
   updateSettings: (settings: Partial<HousewireSettings>) => void;
   resetProduct: () => void;
 }
@@ -156,6 +160,7 @@ const defaultSettings: HousewireSettings = {
   reducedMotion: false,
   haptics: true,
   sound: true,
+  music: true,
   highContrast: false,
 };
 
@@ -166,7 +171,7 @@ const randomCode = () => {
 
 const SAFE_NODE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 
-export const useHousewireStore = create<HousewireState>()((set) => ({
+export const useHousewireStore = create<HousewireState>()((set, get) => ({
       hydrated: false,
       onboardingComplete: false,
       tutorialComplete: false,
@@ -206,7 +211,11 @@ export const useHousewireStore = create<HousewireState>()((set) => ({
       resetCalibration: () => set({ calibration: defaultCalibration }),
       selectMission: (selectedMission) => set({ selectedMission }),
       prepareSession: (sessionMode, sessionCode, relayUrl) =>
-        set({
+        set((state) => ({
+          ...(sessionMode === 'lan' && sessionCode === undefined ? {
+            localNodeId: 'local',
+            crew: prepareHostCrew(state.crew, state.localNodeId, state.rooms.filter((room) => room.safe)),
+          } : {}),
           sessionMode,
           sessionCode: sessionCode ?? randomCode(),
           relayUrl: relayUrl ?? null,
@@ -215,21 +224,24 @@ export const useHousewireStore = create<HousewireState>()((set) => ({
           missionStageIndex: 0,
           missionRetries: 0,
           calibration: defaultCalibration,
-        }),
+        })),
       startMission: () => set((state) => ({ missionInProgressId: state.selectedMission, missionStartedAt: Date.now(), missionStageIndex: 0, missionRetries: 0 })),
       updateMissionProgress: (missionStageIndex, missionRetries) =>
         set({
           missionStageIndex: Math.max(0, Math.min(4, Math.trunc(missionStageIndex))),
           missionRetries: Math.max(0, Math.trunc(missionRetries)),
         }),
-      completeMission: (result) =>
+      completeMission: (result, participants, practice) => {
+        const record = escapeRecord(result, participants ?? get().crew, get().sessionMode);
+        useFamilyClubStore.getState().record(practice === undefined ? record : { ...record, practice });
         set((state) => ({
           results: [result, ...state.results].slice(0, 20),
           missionStartedAt: null,
           missionInProgressId: null,
           missionStageIndex: 0,
           missionRetries: 0,
-        })),
+        }));
+      },
       updateSettings: (settings) =>
         set((state) => ({ settings: { ...state.settings, ...settings } })),
       resetProduct: () =>

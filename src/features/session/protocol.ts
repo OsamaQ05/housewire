@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EVIDENCE_KINDS, type EvidenceKind } from '../../domain/types';
 import type { MissionId } from '@/src/store/use-housewire-store';
+import { storyActionEventSchema, storyRequestSchema, storySnapshotSchema } from '../story-rooms/story-protocol';
 
 export const MAXIMUM_SESSION_NODES = 4;
 export const MAXIMUM_SESSION_FEED = 192;
@@ -144,6 +145,12 @@ const abortSchema = z
   })
   .strict();
 
+const lineMistakeSchema = z.object({
+  kind: z.literal('mission.mistake'), missionId: z.literal('line-13'),
+  operationId: safeIdSchema, nodeId: safeIdSchema, attemptId: safeIdSchema,
+  stageIndex: z.number().int().min(0).max(4), observedAt: timestampSchema,
+}).strict();
+
 const pulseSchema = z
   .object({
     kind: z.literal('signal.pulse'),
@@ -183,6 +190,9 @@ const snapshotSchema = z
     finishedAt: timestampSchema.optional(),
     abortedAt: timestampSchema.optional(),
     abortedByNodeId: safeIdSchema.optional(),
+    mistakeIds: z.array(safeIdSchema).max(3).default([]),
+    failedAt: timestampSchema.optional(),
+    failureReason: z.enum(['attempts', 'time']).optional(),
   })
   .strict();
 
@@ -247,6 +257,12 @@ const escapeProofSchema = z
   })
   .strict();
 
+const escapeMistakeSchema = z.object({
+  kind: z.literal('escape.mistake'), missionId: escapeMissionIdSchema,
+  operationId: safeIdSchema, nodeId: safeIdSchema, attemptId: safeIdSchema,
+  stageIndex: z.number().int().min(0).max(4), observedAt: timestampSchema,
+}).strict();
+
 const escapeCompletionSchema = z
   .object({
     nodeId: safeIdSchema,
@@ -270,6 +286,10 @@ const escapeSnapshotSchema = z
     liveNodeIds: uniqueNodeIds(2),
     requiredNodeIds: uniqueNodeIds(1),
     completions: z.array(escapeCompletionSchema).max(16),
+    mistakes: z.number().int().min(0).max(5).optional(),
+    mistakeIds: z.array(safeIdSchema).max(5).optional(),
+    failedAt: timestampSchema.optional(),
+    failureReason: z.enum(['attempts', 'time']).optional(),
     finishedAt: timestampSchema.optional(),
     abortedAt: timestampSchema.optional(),
   })
@@ -352,7 +372,15 @@ const forgeSnapshotSchema = z
     title: z.string().trim().min(1).max(180),
     accent: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
     playerCount: z.number().int().min(1).max(MAXIMUM_SESSION_NODES),
-    status: z.enum(['waiting', 'playing', 'finished', 'aborted']),
+    status: z.enum(['waiting', 'playing', 'finished', 'aborted', 'failed']),
+    attemptsUsed: z.number().int().min(0).max(5).default(0),
+    failedAt: timestampSchema.optional(),
+    failureReview: z.array(z.object({
+      stageId: safeIdSchema,
+      title: z.string().min(1).max(180),
+      answer: z.string().min(1).max(1200),
+      explanation: z.string().max(2000),
+    }).strict()).max(5).default([]),
     revision: z.number().int().min(0).max(16_384),
     stageIndex: z.number().int().min(0).max(5),
     assignments: z.array(forgeAssignmentSchema).min(1).max(MAXIMUM_SESSION_NODES),
@@ -367,6 +395,9 @@ const forgeSnapshotSchema = z
   .strict();
 
 const baseEventSchema = z.discriminatedUnion('kind', [
+  storyActionEventSchema,
+  storyRequestSchema,
+  storySnapshotSchema,
   presenceSchema,
   lobbyProfileSchema,
   lobbyCommandSchema,
@@ -374,6 +405,7 @@ const baseEventSchema = z.discriminatedUnion('kind', [
   stageSchema,
   evidenceSchema,
   abortSchema,
+  lineMistakeSchema,
   pulseSchema,
   snapshotSchema,
   snapshotRequestSchema,
@@ -381,6 +413,7 @@ const baseEventSchema = z.discriminatedUnion('kind', [
   escapeStartSchema,
   escapeAbortSchema,
   escapeProofSchema,
+  escapeMistakeSchema,
   escapeSnapshotSchema,
   escapeSnapshotRequestSchema,
   escapeSignalSchema,
@@ -447,6 +480,12 @@ export const housewireSessionEventSchema = baseEventSchema.superRefine((event, c
     }
   }
   if (event.kind === 'mission.snapshot') {
+    if (new Set(event.mistakeIds).size !== event.mistakeIds.length) addIssue(context, 'Mistakes must be unique.', ['mistakeIds']);
+    if ((event.failedAt === undefined) !== (event.failureReason === undefined)) addIssue(context, 'Failure needs its reason and terminal time.', ['failedAt']);
+    if (event.failedAt !== undefined && (event.finishedAt !== undefined || event.abortedAt !== undefined)) addIssue(context, 'A failed room cannot also finish or abort.', ['failedAt']);
+    if (event.failureReason === 'attempts' && event.mistakeIds.length !== 3) addIssue(context, 'Attempt failure requires three mistakes.', ['mistakeIds']);
+    if (event.mistakeIds.length === 3 && event.failureReason !== 'attempts') addIssue(context, 'Three mistakes end the room.', ['failedAt']);
+    if (event.failureReason === 'time' && event.failedAt !== event.startedAt + 13 * 60_000) addIssue(context, 'The room ends at its original deadline.', ['failedAt']);
     const liveNodes = new Set(event.liveNodeIds);
     if (!liveNodes.has(event.hostNodeId)) {
       addIssue(context, 'Snapshot host must be a live mission node.', ['hostNodeId']);
@@ -490,6 +529,12 @@ export const housewireSessionEventSchema = baseEventSchema.superRefine((event, c
     addIssue(context, 'The escape host must be one of the live nodes.', ['hostNodeId']);
   }
   if (event.kind === 'escape.snapshot') {
+    const limit = event.missionId === 'long-table' ? 5 : 4;
+    if (event.failedAt !== undefined && (event.finishedAt !== undefined || event.abortedAt !== undefined || !event.failureReason)) addIssue(context, 'A failed case cannot also finish or abort.', ['failedAt']);
+    if (event.failureReason && event.failedAt === undefined) addIssue(context, 'Failure needs a terminal time.', ['failedAt']);
+    if ((event.mistakes ?? 0) > limit || ((event.mistakes ?? 0) >= limit && event.failedAt === undefined)) addIssue(context, 'The mistake limit ends the run.', ['mistakes']);
+    if (event.failureReason === 'attempts' && event.mistakes !== limit) addIssue(context, 'Attempt failure requires an exhausted budget.', ['mistakes']);
+    if (new Set(event.mistakeIds ?? []).size !== (event.mistakeIds ?? []).length) addIssue(context, 'Mistakes must be unique.', ['mistakeIds']);
     const liveNodes = new Set(event.liveNodeIds);
     if (!liveNodes.has(event.hostNodeId)) {
       addIssue(context, 'Escape snapshot host must be a live node.', ['hostNodeId']);
@@ -515,6 +560,16 @@ export const housewireSessionEventSchema = baseEventSchema.superRefine((event, c
     }
   }
   if (event.kind === 'forge.snapshot') {
+    if (event.status === 'failed') {
+      if (event.failedAt === undefined || event.attemptsUsed !== 5 || event.stageIndex >= 5 || event.failureReview.length !== 5 - event.stageIndex) {
+        addIssue(context, 'A failed generated case requires five mistakes and its remaining answer review.', ['failedAt']);
+      }
+    } else if (event.failureReview.length || event.failedAt !== undefined || event.attemptsUsed >= 5) {
+      addIssue(context, 'Answers remain sealed until the whole generated case has failed.', ['failureReview']);
+    }
+    if (event.failedAt !== undefined && (event.finishedAt !== undefined || event.abortedAt !== undefined)) {
+      addIssue(context, 'A failed generated case cannot also be won or aborted.', ['failedAt']);
+    }
     const nodeIds = new Set<string>();
     const playerIds = new Set<string>();
     for (const [index, assignment] of event.assignments.entries()) {

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { ClubLink } from '@/src/features/family-club/ClubLink';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -10,6 +11,7 @@ import { useCircuitRaceRuntime } from '@/src/features/race';
 import { useCircuitRaceStore } from '@/src/store/use-circuit-race-store';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
+import { circuitRaceResultFromSnapshot } from '@/src/features/race/runtime-state';
 
 const EMBER = '#FF7657';
 const MINT = '#6ED8C7';
@@ -27,23 +29,11 @@ export default function RaceResultsScreen() {
   const leavingRef = useRef(false);
   const operationId = Array.isArray(params.operationId) ? params.operationId[0] : params.operationId;
   const storedResult = operationId ? history.find((result) => result.id === operationId) : undefined;
-  const liveFinished = (runtime.view?.standings ?? []).filter((standing) => standing.finishedAt !== undefined);
-  const hasLiveResult = Boolean(runtime.view && liveFinished.length >= 2);
-  const storedRows = storedResult?.standings.flatMap((standing) => standing.elapsedMs === undefined
-    ? []
-    : [{ teamId: standing.teamId, elapsedMs: standing.elapsedMs }]) ?? [];
-  const rows = hasLiveResult
-    ? liveFinished.map((standing) => ({
-        teamId: standing.teamId,
-        elapsedMs: standing.finishedAt! - runtime.view!.startsAt,
-      }))
-    : storedRows.length === storedResult?.standings.length ? storedRows : [];
-  const firstElapsed = rows.length ? Math.min(...rows.map((standing) => standing.elapsedMs)) : 0;
-  const winningTeamIds = hasLiveResult
-    ? rows
-        .filter((standing) => standing.elapsedMs - firstElapsed <= (runtime.snapshot?.tieWindowMs ?? 750))
-        .map((standing) => standing.teamId)
-    : storedResult?.winningTeamIds ?? [];
+  const liveResult = runtime.snapshot ? circuitRaceResultFromSnapshot(runtime.snapshot) : undefined;
+  const result = liveResult ?? storedResult;
+  const rows = result?.standings ?? [];
+  const winningTeamIds = result?.winningTeamIds ?? [];
+  const answerReview = result?.answerReview ?? [];
   const winner = winningTeamIds.length === 1 ? winningTeamIds[0] : undefined;
 
   const leaveRace = (destination: '/modes' | '/race-setup') => {
@@ -85,17 +75,18 @@ export default function RaceResultsScreen() {
   }
 
   const winnerColor = winner === 'mint' ? MINT : winner === 'ember' ? EMBER : GOLD;
-  const ordered = [...rows].sort((left, right) => left.elapsedMs - right.elapsedMs);
-  const gap = ordered.length > 1 ? ordered[1].elapsedMs - ordered[0].elapsedMs : 0;
+  const ordered = [...rows].sort((left, right) => Number(Boolean(left.failed)) - Number(Boolean(right.failed)) || left.elapsedMs - right.elapsedMs);
+  const bothFinished = ordered.every((row) => !row.failed);
+  const gap = bothFinished && ordered.length > 1 ? ordered[1].elapsedMs - ordered[0].elapsedMs : 0;
 
   return (
     <ScreenShell edgeWire="none" padded={false} texture={false}>
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         <Animated.View entering={reducedMotion ? undefined : FadeInUp.duration(480)} style={styles.hero}>
           <FinishGlyph accent={winner ? winnerColor : GOLD} />
-          <Text style={[styles.kicker, { color: winner ? winnerColor : GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Circuit complete</Text>
-          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{winner ? `${winner === 'mint' ? 'Mint' : 'Coral'} wins` : 'Photo finish'}</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.story }]}>{winner ? `${formatGap(gap)} between the two crews.` : 'Both circuits closed inside the tie window.'}</Text>
+          <Text style={[styles.kicker, { color: winner ? winnerColor : GOLD, fontFamily: theme.typography.families.bodyMedium }]}>Race ended</Text>
+          <Text style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{winner ? `${winner === 'mint' ? 'Mint' : 'Coral'} wins` : winningTeamIds.length ? 'Photo finish' : 'No crew finished'}</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted, fontFamily: theme.typography.families.story }]}>{bothFinished ? winner ? `${formatGap(gap)} between the two crews.` : 'Both circuits closed inside the tie window.' : 'Four mistakes or fifteen minutes ends a crew’s run. Here’s what you missed.'}</Text>
         </Animated.View>
 
         <View style={styles.board}>
@@ -103,16 +94,26 @@ export default function RaceResultsScreen() {
             const color = standing.teamId === 'mint' ? MINT : EMBER;
             return (
               <Animated.View entering={reducedMotion ? undefined : FadeInDown.delay(100 * index).duration(400)} key={standing.teamId} style={[styles.result, { backgroundColor: theme.colors.surface, borderColor: color }]}>
-                <View style={[styles.position, { backgroundColor: color }]}><Text style={[styles.positionText, { fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text></View>
+                <View style={[styles.position, { backgroundColor: color }]}><Text style={[styles.positionText, { fontFamily: theme.typography.families.displayHeavy }]}>{standing.failed ? '—' : index + 1}</Text></View>
                 <View style={styles.resultCopy}>
                   <Text style={[styles.resultName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{standing.teamId === 'mint' ? 'Mint team' : 'Coral team'}</Text>
-                  <Text style={[styles.resultMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>4 challenges · host verified</Text>
+                  <Text style={[styles.resultMeta, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{standing.failed ? standing.failureReason === 'time' ? 'Time expired' : 'Four mistakes used' : '4 challenges · host verified'}</Text>
                 </View>
-                <Text style={[styles.resultTime, { color, fontFamily: theme.typography.families.displayHeavy }]}>{formatTime(standing.elapsedMs)}</Text>
+                <Text style={[styles.resultTime, { color, fontFamily: theme.typography.families.displayHeavy }]}>{standing.failed ? 'DNF' : formatTime(standing.elapsedMs)}</Text>
               </Animated.View>
             );
           })}
         </View>
+
+        {answerReview.length ? <View style={styles.board}>
+          <Text style={[styles.resultName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Your missed answers</Text>
+          <Text style={[styles.bondBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Now that every crew has stopped, you can see the solutions.</Text>
+          {answerReview.map((item) => <View key={item.stageId} style={[styles.reviewCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.draft }]}>
+            <Text style={[styles.bondTitle, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>{item.title}</Text>
+            <Text selectable style={[styles.reviewAnswer, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{item.answer}</Text>
+            <Text style={[styles.bondBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{item.explanation}</Text>
+          </View>)}
+        </View> : null}
 
         <View style={[styles.bond, { borderColor: theme.colors.draft }]}>
           <Ionicons color={GOLD} name="link-outline" size={24} />
@@ -123,6 +124,7 @@ export default function RaceResultsScreen() {
         </View>
 
         <View style={styles.actions}>
+          <ClubLink label="See your family standings" />
           <Pressable onPress={() => leaveRace('/race-setup')} style={({ pressed }) => [styles.primary, { backgroundColor: winnerColor }, pressed && styles.pressed]}>
             <Ionicons color="#08100F" name="refresh" size={21} />
             <Text style={[styles.primaryText, { fontFamily: theme.typography.families.displayHeavy }]}>Race again</Text>
@@ -165,6 +167,8 @@ const styles = StyleSheet.create({
   primary: { alignItems: 'center', borderRadius: 16, flexDirection: 'row', gap: 9, justifyContent: 'center', minHeight: 64 },
   primaryText: { color: '#08100F', fontSize: 19 },
   result: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 11, minHeight: 80, paddingHorizontal: 11 },
+  reviewCard: { borderRadius: 16, borderWidth: 1, gap: 9, padding: 17 },
+  reviewAnswer: { fontSize: 25, lineHeight: 29 },
   resultCopy: { flex: 1 },
   resultMeta: { fontSize: 11, lineHeight: 15 },
   resultName: { fontSize: 22, lineHeight: 23 },

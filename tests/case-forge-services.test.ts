@@ -107,6 +107,38 @@ describe('Case Forge repositories and exports', () => {
 });
 
 describe('Case Forge providers and service', () => {
+  it('does not silently substitute a template for a requested custom AI story', async () => {
+    const remote: ForgeCaseProvider = { id: 'test-remote', mode: 'remote', isAvailable: async () => true, generate: async () => { throw new Error('AI busy'); } };
+    const repository = new MemoryForgeCaseRepository();
+    const service = createCaseForgeService({ repository, providers: [remote] });
+    const input = request({ customThemePrompt: 'A bakery\non the moon' });
+    await expect(service.generate(input, { providerId: remote.id })).rejects.toThrow('AI busy');
+    expect(await service.list()).toHaveLength(0);
+    const local = await service.generate(input, { providerId: remote.id, allowOfflineFallback: true });
+    expect(local.providerId).toBe('housewire-local-forge-v1');
+    expect(local.recipe.customThemePrompt).toBe('A bakery on the moon');
+    const rebuilt = await service.regenerate(local.id);
+    expect(rebuilt.recipe.customThemePrompt).toBe('A bakery on the moon');
+  });
+
+  it('reports unavailable custom AI instead of saving a misleading result', async () => {
+    const remote: ForgeCaseProvider = { id: 'unavailable-remote', mode: 'remote', isAvailable: async () => false, generate: vi.fn() };
+    const service = createCaseForgeService({ repository: new MemoryForgeCaseRepository(), providers: [remote] });
+    await expect(service.generate(request({ customThemePrompt: 'A desert hotel' }), { providerId: remote.id })).rejects.toThrow(/unavailable/i);
+    expect(remote.generate).not.toHaveBeenCalled();
+    expect(await service.list()).toHaveLength(0);
+  });
+
+  it('explains rate limiting and preserves the requested description', async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.request.customThemePrompt).toBe('A desert hotel');
+      return new Response('{}', { status: 429 });
+    });
+    const provider = new HttpNarrativeCaseForgeProvider({ baseUrl: 'http://localhost:8788', fetchImpl: fetchImpl as typeof fetch });
+    await expect(provider.generate(request({ customThemePrompt: ' A desert\n hotel ' }))).rejects.toThrow(/generation limit/i);
+  });
+
   it('allows only narrative reskin fields to change', () => {
     const base = generateOfflineForgeCase(request());
     const narrative = JSON.parse(JSON.stringify(base)) as ForgeCase;

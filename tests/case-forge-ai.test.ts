@@ -79,6 +79,8 @@ describe('CaseForgeAiServer', () => {
       expect(payload.store).toBe(false);
       expect(payload.text.format.type).toBe('json_schema');
       expect(payload.input).toContain('"candidates"');
+      expect(JSON.parse(payload.input)).toMatchObject({ requestedTheme: request.customThemePrompt, customWorld: true });
+      expect(payload.input).toContain('"instruction"');
       expect(payload.input).not.toContain('"solution"');
       expect(payload.input).not.toContain('"privateClues"');
       expect(payload.input).not.toContain('"playerName"');
@@ -135,6 +137,29 @@ describe('CaseForgeAiServer', () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({ code: 'ORIGIN_DENIED' });
     expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it('normalizes multiline custom worlds and accepts shuffled but matching narrative ids', async () => {
+    const input = { ...request, themeId: 'abyssal-relay' as const, customThemePrompt: ' A desert hotel\nwith a missing\tguest book ' };
+    const mechanical = createForgeNarrativeCandidates(input)[0];
+    const upstream = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(JSON.parse(body.input)).toMatchObject({ selectedWorld: 'abyssal-relay', requestedTheme: 'A desert hotel with a missing guest book', customWorld: true });
+      expect(body.instructions).toContain('do not replace a custom setting');
+      return new Response(JSON.stringify({ output_text: JSON.stringify({
+        candidateIndex: 0, title: 'The Desert Guest Book', tagline: 'Recover the hotel’s vanished register.', premise: 'A sandstorm seals the hotel.', objective: 'Find the register and reopen the courtyard.', ending: 'The courtyard opens.',
+        roles: [...mechanical.roles].reverse().map(({ id, title, brief, responsibility }) => ({ id, title, brief, responsibility })),
+        stages: [...mechanical.stages].reverse().map(({ id, title, storyBeat }) => ({ id, title, storyBeat })),
+      }) }), { status: 200 });
+    });
+    const server = new CaseForgeAiServer({ host: '127.0.0.1', port: 0, apiKey: 'test-key', fetchImpl: upstream as typeof fetch });
+    running.push(server);
+    const { url } = await server.start();
+    const response = await fetch(url + '/case-forge/reskin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocolVersion: 1, request: input }) });
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.case.recipe.customThemePrompt).toBe('A desert hotel with a missing guest book');
+    expect(preservesForgeMechanicalContract(mechanical, result.case)).toBe(true);
   });
 
   it('cancels the model request when the phone disconnects', async () => {

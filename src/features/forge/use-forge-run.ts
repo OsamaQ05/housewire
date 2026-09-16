@@ -1,14 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-
-interface StoredForgeRun {
-  activePlayerId: string;
-  caseId: string;
-  completedAt: number | null;
-  hintsByStage: Readonly<Record<string, number>>;
-  startedAt: number;
-  stageIndex: number;
-}
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createForgeRun, parseStoredForgeRun, reduceForgeRunSubmission, type ForgeCase, type ForgeStageSubmission, type StoredForgeRun, type ForgeSubmissionResult } from '../../domain/case-forge';
 
 const RUN_KEY_PREFIX = 'housewire-forge-run-v1:';
 
@@ -19,45 +11,44 @@ export function clearStoredForgeRun(caseId: string): Promise<void> {
 export function useForgeRun(caseId: string | null, firstPlayerId: string | null, stageCount: number) {
   const initial = useMemo<StoredForgeRun | null>(() => {
     if (!caseId || !firstPlayerId) return null;
-    return {
-      activePlayerId: firstPlayerId,
-      caseId,
-      completedAt: null,
-      hintsByStage: {},
-      startedAt: Date.now(),
-      stageIndex: 0,
-    };
+    return createForgeRun(caseId, firstPlayerId, Date.now());
   }, [caseId, firstPlayerId]);
   const [run, setRun] = useState<StoredForgeRun | null>(initial);
   const [hydrated, setHydrated] = useState(false);
+  const runRef = useRef(run);
+  const writesRef = useRef(Promise.resolve());
+  const commit = useCallback((next: StoredForgeRun | null, persist = true) => {
+    runRef.current = next;
+    setRun(next);
+    if (next && persist) {
+      const serialized = JSON.stringify(next);
+      writesRef.current = writesRef.current.then(() => AsyncStorage.setItem(`${RUN_KEY_PREFIX}${next.caseId}`, serialized)).catch(() => undefined);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     setHydrated(false);
+    commit(null, false);
     if (!caseId || !firstPlayerId) {
-      setRun(null);
       setHydrated(true);
       return () => {
         cancelled = true;
       };
     }
 
-    void AsyncStorage.getItem(`${RUN_KEY_PREFIX}${caseId}`)
+    void writesRef.current.then(() => AsyncStorage.getItem(`${RUN_KEY_PREFIX}${caseId}`))
       .then((serialized) => {
         if (cancelled) return;
         if (!serialized) {
-          setRun(initial);
+          commit(initial);
           return;
         }
         const parsed: unknown = JSON.parse(serialized);
-        if (!isStoredForgeRun(parsed, caseId, stageCount)) {
-          setRun(initial);
-          return;
-        }
-        setRun(parsed);
+        commit(parseStoredForgeRun(parsed, caseId, stageCount) ?? initial);
       })
       .catch(() => {
-        if (!cancelled) setRun(initial);
+        if (!cancelled) commit(initial);
       })
       .finally(() => {
         if (!cancelled) setHydrated(true);
@@ -66,67 +57,31 @@ export function useForgeRun(caseId: string | null, firstPlayerId: string | null,
     return () => {
       cancelled = true;
     };
-  }, [caseId, firstPlayerId, initial, stageCount]);
-
-  useEffect(() => {
-    if (!hydrated || !run) return;
-    void AsyncStorage.setItem(`${RUN_KEY_PREFIX}${run.caseId}`, JSON.stringify(run)).catch(() => undefined);
-  }, [hydrated, run]);
+  }, [caseId, firstPlayerId, initial, stageCount, commit]);
 
   const setActivePlayerId = useCallback((activePlayerId: string) => {
-    setRun((value) => value ? { ...value, activePlayerId } : value);
-  }, []);
+    if (runRef.current) commit({ ...runRef.current, activePlayerId });
+  }, [commit]);
 
   const revealHint = useCallback((stageId: string, maximum: number) => {
-    setRun((value) => {
-      if (!value) return value;
-      const next = Math.min(maximum, (value.hintsByStage[stageId] ?? 0) + 1);
-      return { ...value, hintsByStage: { ...value.hintsByStage, [stageId]: next } };
-    });
-  }, []);
+    const value = runRef.current;
+    if (!value || value.failedAt !== null || value.completedAt !== null) return;
+    const next = Math.min(maximum, (value.hintsByStage[stageId] ?? 0) + 1);
+    commit({ ...value, hintsByStage: { ...value.hintsByStage, [stageId]: next } });
+  }, [commit]);
 
-  const advance = useCallback(() => {
-    setRun((value) => {
-      if (!value) return value;
-      const nextStage = Math.min(stageCount, value.stageIndex + 1);
-      return {
-        ...value,
-        completedAt: nextStage >= stageCount ? Date.now() : null,
-        stageIndex: nextStage,
-      };
-    });
-  }, [stageCount]);
+  const submit = useCallback((game: ForgeCase, submission: ForgeStageSubmission): ForgeSubmissionResult => {
+    const value = runRef.current;
+    if (!hydrated || !value) return { accepted: false, code: 'INVALID_STAGE' };
+    const reduced = reduceForgeRunSubmission(value, game, submission, Date.now());
+    if (reduced.run !== value) commit(reduced.run);
+    return reduced.result;
+  }, [commit, hydrated]);
 
   const restart = useCallback(() => {
     if (!caseId || !firstPlayerId) return;
-    setRun({
-      activePlayerId: firstPlayerId,
-      caseId,
-      completedAt: null,
-      hintsByStage: {},
-      startedAt: Date.now(),
-      stageIndex: 0,
-    });
-  }, [caseId, firstPlayerId]);
+    commit(createForgeRun(caseId, firstPlayerId, Date.now()));
+  }, [caseId, firstPlayerId, commit]);
 
-  return { advance, hydrated, restart, revealHint, run, setActivePlayerId };
-}
-
-function isStoredForgeRun(value: unknown, caseId: string, stageCount: number): value is StoredForgeRun {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<StoredForgeRun>;
-  return (
-    candidate.caseId === caseId &&
-    typeof candidate.activePlayerId === 'string' &&
-    typeof candidate.startedAt === 'number' &&
-    Number.isSafeInteger(candidate.startedAt) &&
-    candidate.startedAt > 0 &&
-    typeof candidate.stageIndex === 'number' &&
-    Number.isInteger(candidate.stageIndex) &&
-    candidate.stageIndex >= 0 &&
-    candidate.stageIndex <= stageCount &&
-    (candidate.completedAt === null || (typeof candidate.completedAt === 'number' && Number.isSafeInteger(candidate.completedAt))) &&
-    Boolean(candidate.hintsByStage) &&
-    typeof candidate.hintsByStage === 'object'
-  );
+  return { submit, hydrated, restart, revealHint, run, setActivePlayerId };
 }

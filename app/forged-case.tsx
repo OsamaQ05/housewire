@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenShell } from '@/src/components';
 import {
-  validateForgeSubmission,
+  forgeFailureReview,
   type ForgeCase,
   type ForgeStageSubmission,
   type ForgeSubmissionResult,
@@ -14,8 +14,13 @@ import { caseForgeClient } from '@/src/features/forge/case-forge-client';
 import { ForgeButton, forgeColors } from '@/src/features/forge/ForgePrimitives';
 import { ForgeStageRunner } from '@/src/features/forge/ForgeStageRunner';
 import { useForgeRun } from '@/src/features/forge/use-forge-run';
+import { ForgeAnswerReview, ForgeTries } from '@/src/features/forge/ForgeAnswerReview';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireTheme } from '@/src/theme';
+import { useFamilyClubStore } from '@/src/store/use-family-club-store';
+import { useHousewireStore } from '@/src/store/use-housewire-store';
+import { ClubLink } from '@/src/features/family-club/ClubLink';
+import { GuideChat, guideMechanicFor, forgeGuideContext } from '@/src/features/director';
 
 export default function ForgedCaseScreen() {
   const router = useRouter();
@@ -51,7 +56,7 @@ export default function ForgedCaseScreen() {
   }, [caseId]);
 
   const firstPlayerId = caseFile?.roles[0]?.playerId ?? null;
-  const { advance, hydrated, restart, revealHint, run, setActivePlayerId } = useForgeRun(
+  const { submit: submitRun, hydrated, restart, revealHint, run, setActivePlayerId } = useForgeRun(
     caseFile?.id ?? null,
     firstPlayerId,
     caseFile?.stages.length ?? 0,
@@ -60,6 +65,20 @@ export default function ForgedCaseScreen() {
     ? caseFile.stages[run.stageIndex]
     : null;
   const complete = Boolean(caseFile && run && run.stageIndex >= caseFile.stages.length);
+  const failed = Boolean(run?.failedAt);
+
+  useEffect(() => {
+    const endedAt = run?.completedAt ?? run?.failedAt;
+    if (!hydrated || (!complete && !failed) || !caseFile || !run || !endedAt) return;
+    const house = useHousewireStore.getState();
+    useFamilyClubStore.getState().record({
+      id: `forge:${caseFile.id}:${run.startedAt}`, mode: 'forge', title: caseFile.title,
+      playedAt: new Date(endedAt).toISOString(), durationSeconds: Math.max(0, (endedAt - run.startedAt) / 1000),
+      practice: true, caseId: caseFile.id, rounds: run.stageIndex,
+      hints: Object.values(run.hintsByStage).reduce((sum, value) => sum + value, 0),
+      participants: [{ name: house.crew.find((p) => p.id === house.localNodeId)?.name ?? 'You', won: complete && !failed }],
+    });
+  }, [hydrated, complete, failed, caseFile, run]);
 
   useEffect(() => {
     setAdvancing(false);
@@ -68,11 +87,10 @@ export default function ForgedCaseScreen() {
 
   const submit = (submission: ForgeStageSubmission): ForgeSubmissionResult => {
     if (!caseFile || !run || !stage || advancing) return { accepted: false, code: 'INVALID_STAGE' };
-    const result = validateForgeSubmission(caseFile, run.stageIndex, submission);
+    const result = submitRun(caseFile, submission);
     if (result.accepted) {
       setAdvancing(true);
       play(run.stageIndex === caseFile.stages.length - 1 ? 'complete' : 'accept', 0.72);
-      setTimeout(advance, 850);
     } else {
       play('warning', 0.5);
     }
@@ -103,6 +121,18 @@ export default function ForgedCaseScreen() {
     );
   }
 
+  if (failed) return <ScreenShell edgeWire="none" padded={false} texture={false}>
+    <ScrollView contentContainerStyle={styles.completedPage}>
+      <Ionicons color={theme.colors.warning} name="lock-closed-outline" size={44} />
+      <Text style={[styles.stateTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Out of tries</Text>
+      <Text style={[styles.stateBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Five wrong answers ended this case. You solved {run.stageIndex} of {caseFile.stages.length} scenes. Let’s look at the rest together.</Text>
+      <ForgeAnswerReview entries={forgeFailureReview(caseFile, run.stageIndex)} />
+      <ForgeButton icon="albums-outline" label="Choose a new case" onPress={() => router.replace('/forge-library' as never)} />
+      <ForgeButton icon="refresh" label="Rehearse this case again" secondary onPress={restart} />
+      <ClubLink label="See game history" />
+    </ScrollView>
+  </ScreenShell>;
+
   if (complete) {
     const hints = Object.values(run.hintsByStage).reduce((sum, value) => sum + value, 0);
     const durationSeconds = Math.max(1, Math.floor(((run.completedAt ?? Date.now()) - run.startedAt) / 1000));
@@ -121,9 +151,10 @@ export default function ForgedCaseScreen() {
           <View style={[styles.runMetrics, { borderColor: theme.colors.draft }]}>
             <RunMetric label="ELAPSED" value={formatElapsed(durationSeconds)} />
             <RunMetric label="SCENES" value={`${caseFile.stages.length}`} />
-            <RunMetric label="HINTS" value={`${hints}`} />
+            <RunMetric label="GUIDE QUESTIONS" value={`${hints}`} />
           </View>
           <View style={styles.completedActions}>
+            <ClubLink label="See game history" />
             <ForgeButton icon="albums-outline" label="Back to casebook" onPress={() => router.replace('/forge-library' as never)} />
             <ForgeButton
               icon="refresh"
@@ -135,7 +166,7 @@ export default function ForgedCaseScreen() {
               secondary
             />
           </View>
-          <Text style={[styles.localNote, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Progress and hints are saved locally. Live play shares only each role’s projection over your LAN; the optional story engine never receives puzzle clues or answers.</Text>
+          <Text style={[styles.localNote, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Progress and guide conversations are saved on this phone. The guide helps with your reasoning and never gives away the solution.</Text>
         </ScrollView>
       </ScreenShell>
     );
@@ -164,25 +195,22 @@ export default function ForgedCaseScreen() {
         ))}
       </View>
       <ScrollView contentContainerStyle={styles.runContent} keyboardShouldPersistTaps="handled" ref={scrollRef} showsVerticalScrollIndicator={false}>
+        <ForgeTries used={run.attemptsUsed} />
         <View style={[styles.rehearsalNotice, { borderColor: theme.colors.warning }]}>
           <Ionicons color={theme.colors.warning} name="phone-portrait-outline" size={18} />
           <Text style={[styles.rehearsalNoticeText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>This generated case runs offline on one phone. Switch roles and physically pass it so each player sees only their fragment.</Text>
         </View>
         <ForgeStageRunner
           activePlayerId={activePlayerId}
-          hintsRevealed={run.hintsByStage[stage.id] ?? 0}
           onChangePlayer={(playerId) => {
             play('switch', 0.22);
             setActivePlayerId(playerId);
-          }}
-          onRevealHint={() => {
-            play('relay', 0.3);
-            revealHint(stage.id, stage.hints.length);
           }}
           onSubmit={submit}
           roles={caseFile.roles}
           stage={stage}
         />
+        <GuideChat context={forgeGuideContext(stage, activePlayerId)} runId={`forge:${caseFile.id}:${run.startedAt}`} stageId={stage.id} mechanic={guideMechanicFor(stage.mechanic.kind === 'motion-sync' ? 'split-riddle' : stage.mechanic.kind)} roleLabel={activePlayerId} accent={caseFile.accent} onQuestion={() => revealHint(stage.id, 999)} />
       </ScrollView>
     </ScreenShell>
   );

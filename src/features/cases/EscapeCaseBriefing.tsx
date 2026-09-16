@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { BreakerButton, OperationalLabel, ScreenShell } from '@/src/components';
+import { CaseArtwork } from '@/src/components/CaseArtwork';
 import {
   compileEscapeCase,
   escapeCaseSeedFromCode,
@@ -19,12 +19,6 @@ import {
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
-
-const CASE_ART: Readonly<Record<EscapeCaseId, number>> = {
-  'dead-air': require('@/assets/art/dead-air-case.png'),
-  'night-glass': require('@/assets/art/night-glass-case.png'),
-  'long-table': require('@/assets/art/long-table-case.png'),
-};
 
 const CASE_COPY = {
   'dead-air': {
@@ -184,7 +178,7 @@ export function EscapeCaseBriefing({ missionId }: { missionId: EscapeCaseId }) {
         </View>
 
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(500)} style={[styles.hero, { borderColor: copy.accent }]}>
-          <Image contentFit="cover" source={CASE_ART[missionId]} style={styles.heroImage} />
+          <CaseArtwork caseId={missionId} />
           <View style={styles.heroShade} />
           <View style={styles.heroCopy}>
             <Text style={[styles.eyebrow, { color: copy.accent, fontFamily: theme.typography.families.monoMedium }]}>{copy.eyebrow}</Text>
@@ -326,7 +320,6 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 8, letterSpacing: 1.3, lineHeight: 13 },
   hero: { borderBottomWidth: 3, height: 300, justifyContent: 'flex-end', marginHorizontal: -20, overflow: 'hidden' },
   heroCopy: { gap: 7, padding: 20 },
-  heroImage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   heroShade: { backgroundColor: 'rgba(2,5,5,0.38)', position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   packet: { borderWidth: 1, minHeight: 146, overflow: 'hidden' },
   packetClosed: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 14, padding: 18 },

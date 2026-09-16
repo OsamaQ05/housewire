@@ -6,15 +6,18 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
 import { ScreenShell } from '@/src/components/ScreenShell';
+import { CaseArtwork } from '@/src/components/CaseArtwork';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useCircuitRaceStore } from '@/src/store/use-circuit-race-store';
 import { useFamilyFrequencyStore } from '@/src/store/use-family-frequency-store';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
+import { ClubLink } from '../family-club/ClubLink';
+import { useDefusalResume } from '../defusal/use-defusal-runtime';
 
-type Route = '/home' | '/join' | '/onboarding' | '/race-join' | '/race-play' | '/race-setup' | '/settings' | '/trivia-play' | '/trivia-results' | '/trivia-setup' | '/tutorial' | '/mission';
-type GameKind = 'escape' | 'frequency' | 'race';
+type Route = '/defusal' | '/home' | '/join' | '/onboarding' | '/race-join' | '/race-play' | '/race-setup' | '/settings' | '/trivia-play' | '/trivia-results' | '/trivia-setup' | '/tutorial' | '/mission';
+type GameKind = 'escape' | 'frequency' | 'race' | 'defusal';
 
 const NIGHT = '#15223A';
 const PAPER = '#FFF6E5';
@@ -37,6 +40,11 @@ interface GameDefinition {
 }
 
 const GAMES: readonly GameDefinition[] = [
+  {
+    kind: 'defusal', color: '#E8BD75', shadow: '#80643A', title: 'Last Light',
+    description: 'One device. A secret manual. Someone knows the missing riddles. Talk it through before time runs out.',
+    meta: ['2–4 people', '12–18 min', 'solo practice too'], action: 'Defuse together', route: '/defusal',
+  },
   {
     kind: 'escape', color: CORAL, shadow: '#9C3F35', title: 'Escape Cases',
     description: 'Split into rooms, combine private clues, and escape one story together.',
@@ -64,6 +72,7 @@ export function HousewireHub() {
   const missionInProgressId = useHousewireStore((state) => state.missionInProgressId);
   const triviaSession = useFamilyFrequencyStore((state) => state.session);
   const raceState = useCircuitRaceStore((state) => state.raceState);
+  const defusalInProgress = useDefusalResume();
 
   const open = (route: Route, sound: 'relay' | 'switch' = 'switch') => {
     if (haptics) void Haptics.selectionAsync().catch(() => undefined);
@@ -72,6 +81,7 @@ export function HousewireHub() {
   };
 
   const resumeItems: { color: string; detail: string; label: string; route: Route }[] = [];
+  if (defusalInProgress) resumeItems.push({ color: '#E8BD75', detail: 'Defusal case in progress', label: 'Continue Last Light', route: '/defusal' });
   if (missionStartedAt && missionInProgressId) {
     resumeItems.push({ color: CORAL, detail: 'Escape case in progress', label: 'Continue your case', route: '/mission' });
   }
@@ -113,6 +123,8 @@ export function HousewireHub() {
           <HousePartyMark />
         </Animated.View>
 
+        <ClubLink detail="The leaderboard, your people & every game night" />
+
         {resumeItems.length ? (
           <View style={styles.resumeSection}>
             <Text style={[styles.sectionLabel, { fontFamily: theme.typography.families.bodyMedium }]}>Jump back in</Text>
@@ -146,7 +158,7 @@ export function HousewireHub() {
 
         <View style={styles.reassurance}>
           <Ionicons color={MINT} name="shield-checkmark" size={19} />
-          <Text style={[styles.reassuranceText, { fontFamily: theme.typography.families.body }]}>No accounts. One phone is enough to try every game. AI quietly creates variety and hints—not conversation.</Text>
+          <Text style={[styles.reassuranceText, { fontFamily: theme.typography.families.body }]}>No in-game accounts. Try every game on one phone. Need a hand? Ask the guide a question—it helps without spoiling the solution.</Text>
         </View>
       </ScrollView>
     </ScreenShell>
@@ -158,6 +170,11 @@ function GameCard({ game, onJoin, onOpen }: { game: GameDefinition; onJoin?: () 
   return (
     <View style={[styles.gameCardShadow, { backgroundColor: game.shadow }]}>
       <View style={[styles.gameCard, { backgroundColor: game.color }]}>
+        {game.kind === 'escape' || game.kind === 'defusal' ? (
+          <View style={styles.coverFrame}>
+            <CaseArtwork caseId={game.kind === 'defusal' ? 'last-light' : 'line-13'} label={`${game.title} cover artwork`} />
+          </View>
+        ) : null}
         <View style={styles.gameTopline}>
           <GameMark kind={game.kind} />
           <View style={styles.metaWrap}>
@@ -187,6 +204,7 @@ function GameMark({ kind }: { kind: GameKind }) {
   return (
     <View {...decorativeAccessibilityProps} style={styles.gameMark}>
       {kind === 'escape' ? <Ionicons color={INK} name="key" size={30} /> : null}
+      {kind === 'defusal' ? <Ionicons color={INK} name="timer-outline" size={34} /> : null}
       {kind === 'frequency' ? <Svg height="38" viewBox="0 0 48 38" width="48"><Path d="M2 21 C8 4 14 4 20 21 S32 38 38 21 S44 4 47 15" fill="none" stroke={INK} strokeLinecap="round" strokeWidth="4" /><Circle cx="24" cy="21" fill={INK} r="5" /></Svg> : null}
       {kind === 'race' ? <Svg height="40" viewBox="0 0 48 40" width="48"><Path d="M4 8 H23 C35 8 35 32 44 32" fill="none" stroke={INK} strokeLinecap="round" strokeWidth="4" /><Path d="M4 32 H23 C35 32 35 8 44 8" fill="none" stroke={INK} strokeLinecap="round" strokeWidth="4" /><Circle cx="4" cy="8" fill={INK} r="4" /><Circle cx="4" cy="32" fill={INK} r="4" /></Svg> : null}
     </View>
@@ -213,8 +231,9 @@ function RoundIcon({ accessibilityLabel, icon, onPress }: { accessibilityLabel: 
 }
 
 const styles = StyleSheet.create({
+  coverFrame: { height: 164, marginHorizontal: -18, marginTop: -18, overflow: 'hidden' },
   ambientBlob: { borderRadius: 999, opacity: 0.11, position: 'absolute' }, ambientCoral: { backgroundColor: CORAL, height: 260, right: -130, top: 70, width: 260 }, ambientMint: { backgroundColor: MINT, bottom: 120, height: 230, left: -150, width: 230 },
-  buttonPressed: { opacity: 0.84, transform: [{ translateY: 1 }] }, gameActions: { alignItems: 'center', flexDirection: 'row', gap: 10, marginTop: 5 }, gameCard: { borderRadius: 24, gap: 10, minHeight: 236, padding: 18, transform: [{ translateY: -5 }] }, gameCardShadow: { borderRadius: 24, marginBottom: 4 }, gameDescription: { color: INK, fontSize: 16, lineHeight: 22, maxWidth: 480 }, gameMark: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.48)', borderRadius: 18, height: 62, justifyContent: 'center', width: 68 }, gameSection: { gap: 16 }, gameTitle: { color: INK, fontSize: 38, letterSpacing: 0.1, lineHeight: 39 }, gameTopline: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
+  buttonPressed: { opacity: 0.84, transform: [{ translateY: 1 }] }, gameActions: { alignItems: 'center', flexDirection: 'row', gap: 10, marginTop: 5 }, gameCard: { borderRadius: 24, gap: 10, minHeight: 236, overflow: 'hidden', padding: 18, transform: [{ translateY: -5 }] }, gameCardShadow: { borderRadius: 24, marginBottom: 4 }, gameDescription: { color: INK, fontSize: 16, lineHeight: 22, maxWidth: 480 }, gameMark: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.48)', borderRadius: 18, height: 62, justifyContent: 'center', width: 68 }, gameSection: { gap: 16 }, gameTitle: { color: INK, fontSize: 38, letterSpacing: 0.1, lineHeight: 39 }, gameTopline: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   hero: { alignItems: 'center', flexDirection: 'row', minHeight: 156 }, heroBody: { color: '#D9DEEB', fontSize: 16, lineHeight: 22, maxWidth: 310 }, heroCopy: { flex: 1, gap: 7 }, heroMark: { alignItems: 'center', height: 124, justifyContent: 'center', marginRight: -14, width: 140 }, heroTitle: { color: PAPER, fontSize: 42, lineHeight: 43 }, houseMark: { alignItems: 'center', backgroundColor: SUN, borderRadius: 12, height: 36, justifyContent: 'center', transform: [{ rotate: '-3deg' }], width: 36 },
   joinButton: { alignItems: 'center', borderColor: 'rgba(24,32,51,0.28)', borderRadius: 14, borderWidth: 2, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 52, paddingHorizontal: 16 }, joinButtonText: { color: INK, fontSize: 15 }, metaPill: { backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }, metaText: { color: INK, fontSize: 11 }, metaWrap: { alignItems: 'flex-end', flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end', maxWidth: 210 }, onePhonePill: { alignItems: 'center', flexDirection: 'row', gap: 5, paddingHorizontal: 6 }, onePhoneText: { color: INK, fontSize: 12 },
   page: { gap: 26, paddingBottom: 44, paddingHorizontal: 18, paddingTop: 10 }, playButton: { alignItems: 'center', backgroundColor: INK, borderRadius: 14, flex: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 54, paddingHorizontal: 16 }, playButtonText: { color: PAPER, fontSize: 17 }, practiceLink: { alignItems: 'center', backgroundColor: 'rgba(255,209,102,0.12)', borderRadius: 999, flexDirection: 'row', gap: 6, minHeight: 38, paddingHorizontal: 12 }, practiceText: { color: SUN, fontSize: 13 }, pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] }, reassurance: { alignItems: 'flex-start', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, flexDirection: 'row', gap: 10, padding: 14 }, reassuranceText: { color: '#C8CFDC', flex: 1, fontSize: 13, lineHeight: 19 },

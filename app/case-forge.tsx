@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 
@@ -53,6 +53,8 @@ export default function CaseForgeScreen() {
   }));
   const [step, setStep] = useState(1);
   const [working, setWorking] = useState(false);
+  const workingRef = useRef(false);
+  const [offlineBuild, setOfflineBuild] = useState(false);
   const [caseFile, setCaseFile] = useState<ForgeCase | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,20 +76,23 @@ export default function CaseForgeScreen() {
     }
   };
 
-  const generate = async (existing?: ForgeCase) => {
+  const generate = async (existing?: ForgeCase, offline = false) => {
+    if (workingRef.current) return;
+    workingRef.current = true;
+    setOfflineBuild(offline);
     setWorking(true);
     setError(null);
     play('relay', 0.45);
     try {
       const result = existing
         ? await Promise.all([
-            caseForgeClient.regenerate(existing.id, {}, caseForgeGenerationOptions),
+            caseForgeClient.regenerate(existing.id, {}, offline ? {} : caseForgeGenerationOptions),
             wait(reducedMotion ? 80 : 720),
           ]).then(([game]) => game)
         : await Promise.all([
             caseForgeClient.generate(
               makeRequest(draft, crew, householdName),
-              caseForgeGenerationOptions,
+              offline ? {} : caseForgeGenerationOptions,
             ),
             wait(reducedMotion ? 80 : 920),
           ]).then(([game]) => game);
@@ -97,6 +102,7 @@ export default function CaseForgeScreen() {
       setError(cause instanceof Error ? cause.message : 'The case could not be cut.');
       play('warning', 0.65);
     } finally {
+      workingRef.current = false;
       setWorking(false);
     }
   };
@@ -120,7 +126,7 @@ export default function CaseForgeScreen() {
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={styles.workingPage}>
           <ForgeDiagram accent={caseFile?.accent ?? forgeColors.ink} playerCount={draft.playerCount} reducedMotion={reducedMotion} working />
           <View style={styles.workingCopy}>
-            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>AI is building your case</Text>
+            <Text accessibilityRole="header" style={[styles.workingTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{offlineBuild ? 'Building an offline case' : 'Writing your case'}</Text>
             <Text accessibilityLiveRegion="polite" style={[styles.workingLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>{workingLabel}</Text>
           </View>
           <View style={styles.checks}>
@@ -148,13 +154,18 @@ export default function CaseForgeScreen() {
             onOpen={() => router.push({ pathname: '/forged-case', params: { id: caseFile.id } } as never)}
             onReforge={() => void generate(caseFile)}
           />
+          {error ? <View accessibilityLiveRegion="assertive" style={styles.retryBox}>
+            <Text style={{ color: theme.colors.warning, fontFamily: theme.typography.families.body }}>{error}</Text>
+            <ForgeButton icon="refresh-outline" label="Retry AI version" onPress={() => void generate(caseFile)} />
+            <ForgeButton icon="phone-portrait-outline" label="Make an offline version" onPress={() => void generate(caseFile, true)} secondary />
+          </View> : null}
         </Animated.View>
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={[styles.aiBrief, { borderColor: forgeColors.ink }]}>
               <Ionicons color={forgeColors.ink} name="git-branch-outline" size={18} />
-              <Text style={[styles.aiBriefText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}><Text style={{ color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }}>You choose three things.</Text> AI writes five connected scenes, splits the clues between players, and verifies every answer.</Text>
+              <Text style={[styles.aiBriefText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}><Text style={{ color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }}>Your world. Your crew.</Text> AI writes a connected story around five tested puzzles. The app checks every solution.</Text>
             </View>
             <ForgeProgress current={step} />
             <ForgeDiagram playerCount={draft.playerCount} reducedMotion={reducedMotion} working={false} />
@@ -164,9 +175,14 @@ export default function CaseForgeScreen() {
               {step === 3 ? <MechanismPlate draft={draft} onChange={setDraft} /> : null}
             </Animated.View>
             {error ? (
+              <View style={styles.retryBox}>
               <View accessibilityLiveRegion="assertive" style={[styles.error, { borderColor: theme.colors.fault }]}>
                 <Ionicons color={theme.colors.fault} name="warning-outline" size={19} />
                 <Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text>
+              </View>
+              <ForgeButton icon="refresh-outline" label="Try AI again" onPress={() => void generate()} />
+              <ForgeButton icon="phone-portrait-outline" label="Play an offline version instead" onPress={() => void generate(undefined, true)} secondary />
+              <Text style={{ color: theme.colors.muted, fontFamily: theme.typography.families.body, fontSize: 12 }}>Offline uses built-in story templates, not a custom AI story.</Text>
               </View>
             ) : null}
           </ScrollView>
@@ -248,6 +264,7 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: 'center', borderRadius: 14, borderWidth: 1, height: 40, justifyContent: 'center', width: 40 },
   pressed: { opacity: 0.68, transform: [{ scale: 0.98 }] },
   resultPage: { flex: 1, paddingHorizontal: 20, paddingTop: 9 },
+  retryBox: { gap: 10, paddingVertical: 10 },
   topline: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
   workingCopy: { alignItems: 'center', gap: 5 },
   workingLabel: { fontSize: 14, textAlign: 'center' },

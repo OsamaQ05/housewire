@@ -224,7 +224,7 @@ export interface ForgeRecipe {
 export interface ForgeCase {
   id: string;
   schemaVersion: 1;
-  generatorVersion: 'housewire-local-forge-v1' | 'housewire-local-forge-v2';
+  generatorVersion: 'housewire-local-forge-v1' | 'housewire-local-forge-v2' | 'housewire-local-forge-v3';
   providerId: string;
   seed: string | number;
   effectiveSeed: number;

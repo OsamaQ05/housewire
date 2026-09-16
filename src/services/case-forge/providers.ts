@@ -2,6 +2,7 @@ import {
   assertPlayableForgeCase,
   forgeSeedFromValue,
   generateOfflineForgeCase,
+  normalizeForgeThemePrompt,
   type ForgeCase,
   type ForgeGenerationRequest,
 } from '../../domain/case-forge';
@@ -102,7 +103,7 @@ export class HttpNarrativeCaseForgeProvider implements ForgeCaseProvider {
     this.baseUrl = normalizedBaseUrl(options.baseUrl);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.healthTimeoutMs = Math.max(250, Math.min(options.healthTimeoutMs ?? 900, 3_000));
-    this.timeoutMs = Math.max(2_000, Math.min(options.timeoutMs ?? 15_000, 45_000));
+    this.timeoutMs = Math.max(2_000, Math.min(options.timeoutMs ?? 68_000, 75_000));
   }
 
   async isAvailable(): Promise<boolean> {
@@ -124,6 +125,7 @@ export class HttpNarrativeCaseForgeProvider implements ForgeCaseProvider {
   }
 
   async generate(request: ForgeGenerationRequest): Promise<ForgeCase> {
+    request = { ...request, customThemePrompt: normalizeForgeThemePrompt(request.customThemePrompt) };
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -136,7 +138,12 @@ export class HttpNarrativeCaseForgeProvider implements ForgeCaseProvider {
         body: JSON.stringify({ protocolVersion: 1, request }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`Narrative provider returned HTTP ${response.status}.`);
+      if (!response.ok) {
+        if (response.status === 429) throw new Error('The shared AI generation limit has been reached. Try again later, or choose an offline case.');
+        if (response.status === 503) throw new Error('AI is not configured on the relay. Your idea is saved here; try again after the relay is ready, or play offline.');
+        if (response.status === 400) throw new Error('The case request was not accepted. Check your description and try again.');
+        throw new Error('AI could not finish a valid case this time. Your idea is still here. Try again, or choose an offline case.');
+      }
       const contentLength = Number(response.headers.get('content-length') ?? 0);
       if (Number.isFinite(contentLength) && contentLength > 512 * 1_024) throw new Error('Narrative response is too large.');
       const serialized = await response.text();
@@ -152,6 +159,9 @@ export class HttpNarrativeCaseForgeProvider implements ForgeCaseProvider {
         throw new Error('Narrative provider returned mechanics outside the validated candidate set.');
       }
       return { ...candidate, providerId: this.id };
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error('The AI story took too long. Your idea is still here. Try again, or choose an offline case.');
+      throw error;
     } finally {
       clearTimeout(timeout);
     }

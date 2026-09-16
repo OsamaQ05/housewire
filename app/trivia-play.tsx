@@ -23,7 +23,6 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 
 import { ScreenShell } from '@/src/components/ScreenShell';
 import {
@@ -35,13 +34,18 @@ import {
   type FamilyTriviaSessionState,
 } from '@/src/domain/family-trivia';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
+import { FREQUENCY_COLORS as COLORS, FrequencyMark } from '@/src/features/trivia/FrequencyIdentity';
+import { FrequencyRoundBoard } from '@/src/features/trivia/FrequencyRoundBoard';
+import { FrequencyAvatar } from '@/src/features/trivia/FrequencyAvatar';
+import { FrequencyCheer } from '@/src/features/trivia/FrequencyCheer';
+import { FREQUENCY_SCORE_COLORS, FREQUENCY_TEAM_COLORS } from '@/src/features/trivia/frequency-scoreboard';
 import { useFamilyFrequencyStore } from '@/src/store/use-family-frequency-store';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
-const GOLD = '#FFD166';
-const CYAN = '#6ED8C7';
-const CORAL = '#FF7657';
+const GOLD = COLORS.sun;
+const CYAN = COLORS.teal;
+const CORAL = COLORS.tangerine;
 
 export default function TriviaPlayScreen() {
   const router = useRouter();
@@ -58,14 +62,16 @@ export default function TriviaPlayScreen() {
   const clearGame = useFamilyFrequencyStore((state) => state.clearGame);
   const reducedMotion = useHousewireStore((state) => state.settings.reducedMotion);
   const haptics = useHousewireStore((state) => state.settings.haptics);
-  const [privateReady, setPrivateReady] = useState(false);
+  const [readyTurn, setReadyTurn] = useState<string>();
   const [choiceId, setChoiceId] = useState<string>();
   const [orderIds, setOrderIds] = useState<string[]>([]);
   const [spectrumValue, setSpectrumValue] = useState<number>();
   const [textValue, setTextValue] = useState('');
+  const [revealStage, setRevealStage] = useState<{ questionId: string; step: 'answer' | 'scores' }>();
   const revealPulse = useSharedValue(0);
 
   const question = session ? currentFamilyTriviaQuestion(session) : undefined;
+  const revealStep = revealStage?.questionId === question?.id ? revealStage?.step ?? 'gather' : 'gather';
   const questionGuesses = question && session ? session.guesses[question.id] ?? {} : {};
   const waitingIds = question
     ? question.respondentPlayerIds.filter((playerId) => questionGuesses[playerId] === undefined)
@@ -78,9 +84,11 @@ export default function TriviaPlayScreen() {
   const actor = session?.setup.players.find((player) => player.id === actorId);
   const owner = session?.setup.players.find((player) => player.id === question?.authorityPlayerId);
   const isReference = session?.phase === 'reference';
+  // Readiness belongs to one person and one turn, never the following handoff.
+  const turnKey = `${session?.id}:${question?.id}:${session?.phase}:${actorId}`;
+  const privateReady = readyTurn === turnKey;
 
   useEffect(() => {
-    setPrivateReady(false);
     setChoiceId(undefined);
     setOrderIds([]);
     setSpectrumValue(undefined);
@@ -91,10 +99,10 @@ export default function TriviaPlayScreen() {
   const sessionQuestionIndex = session?.questionIndex;
 
   useEffect(() => {
-    if (sessionPhase !== 'revealed') return;
+    if (sessionPhase !== 'revealed' || revealStep !== 'answer') return;
     revealPulse.value = 0;
     revealPulse.value = reducedMotion ? 1 : withSpring(1, { damping: 10, stiffness: 95 });
-  }, [reducedMotion, revealPulse, sessionPhase, sessionQuestionIndex]);
+  }, [reducedMotion, revealPulse, sessionPhase, sessionQuestionIndex, revealStep]);
 
   const requestExit = useCallback(() => {
     if (!session) {
@@ -106,7 +114,7 @@ export default function TriviaPlayScreen() {
       return;
     }
     Alert.alert(
-      'Leave this signal?',
+      'Pause your game?',
       'This round is saved on this phone. You can resume it from Family Frequency.',
       [
         { text: 'Keep playing', style: 'cancel' },
@@ -140,14 +148,16 @@ export default function TriviaPlayScreen() {
     if (!session) return [];
     if (session.setup.teams.length) {
       return session.teamScores.map((score, index) => ({
-        color: index === 0 ? CORAL : CYAN,
+        id: score.teamId,
+        color: FREQUENCY_TEAM_COLORS[index % FREQUENCY_TEAM_COLORS.length],
         percentage: true,
         label: session.setup.teams.find((team) => team.id === score.teamId)?.name ?? score.teamId,
         points: familyTriviaTeamRateBasisPoints(score),
       }));
     }
     return session.playerScores.map((score, index) => ({
-      color: [GOLD, CYAN, CORAL, '#B8A5F2'][index] ?? GOLD,
+      id: score.playerId,
+      color: FREQUENCY_SCORE_COLORS[index % FREQUENCY_SCORE_COLORS.length],
       percentage: false,
       label: session.setup.players.find((player) => player.id === score.playerId)?.name ?? score.playerId,
       points: score.points,
@@ -209,10 +219,14 @@ export default function TriviaPlayScreen() {
       const latestGuesses = latest && latestQuestion ? latest.guesses[latestQuestion.id] ?? {} : {};
       if (latestQuestion?.respondentPlayerIds.every((playerId) => latestGuesses[playerId] !== undefined)) {
         reveal();
-        play('accept', 0.54);
-        if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       }
     }
+  };
+
+  const showReveal = () => {
+    setRevealStage({ questionId: question.id, step: 'answer' });
+    play('accept', 0.45);
+    if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
   };
 
   const next = () => {
@@ -238,7 +252,6 @@ export default function TriviaPlayScreen() {
   const closeReads = latestResult?.playerPoints.filter((result) => !result.exact && result.points > 0).map((result) =>
     session.setup.players.find((player) => player.id === result.playerId)?.name ?? result.playerId,
   ) ?? [];
-  const revealColor = matches.length ? CYAN : closeReads.length ? GOLD : CORAL;
   const canLock = Boolean(draftFamilyTriviaAnswer(question, { choiceId, orderIds, spectrumValue, textValue }));
 
   return (
@@ -249,8 +262,10 @@ export default function TriviaPlayScreen() {
           <Text style={[styles.round, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Round {session.questionIndex + 1}<Text style={{ color: theme.colors.faint }}> / {session.pack.questions.length}</Text></Text>
         </View>
         <View style={styles.scoreRail}>
-          {scores.map((score) => (
-            <View key={score.label} style={styles.scoreItem}>
+          {session.phase === 'revealed' ? (
+            <Text style={[styles.gatherHeader, { color: CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{revealStep === 'scores' ? 'Round results' : 'Everyone look!'}</Text>
+          ) : scores.map((score) => (
+            <View key={score.id} style={styles.scoreItem}>
               <View style={[styles.scoreLamp, { backgroundColor: score.color }]} />
               <Text numberOfLines={1} style={[styles.scoreName, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{score.label}</Text>
               <Text style={[styles.scorePoints, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{score.percentage ? formatTeamRate(score.points) : score.points}</Text>
@@ -261,14 +276,53 @@ export default function TriviaPlayScreen() {
           <Ionicons color={theme.colors.faint} name="close" size={21} />
         </Pressable>
       </View>
+      <View accessible accessibilityLabel={`Round ${session.questionIndex + 1} of ${session.pack.questions.length}`} style={styles.roundTrack}>
+        {session.pack.questions.map((round, index) => (
+          <View key={round.id} style={[styles.roundSegment, { backgroundColor: index < session.questionIndex ? CYAN : index === session.questionIndex ? GOLD : theme.colors.draft }]} />
+        ))}
+      </View>
 
       {session.phase === 'revealed' ? (
-        <ScrollView contentContainerStyle={styles.playPage} showsVerticalScrollIndicator={false}>
-          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={[styles.revealHero, revealStyle]}>
-            <WaveLine color={revealColor} />
-            <Text style={[styles.revealKicker, { color: revealColor, fontFamily: theme.typography.families.bodyMedium }]}>{matches.length ? 'Right on' : closeReads.length ? 'Almost there' : 'Different answers'}</Text>
-            <Text style={[styles.revealTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{answerLabel(question, reference)}</Text>
-            <Text style={[styles.revealOwner, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{`${owner?.name ?? 'Player'}'s sealed answer`}</Text>
+        revealStep === 'gather' ? (
+          <ScrollView contentContainerStyle={styles.gatherPage} showsVerticalScrollIndicator={false}>
+            <FrequencyMark size={146} />
+            <View style={styles.sealedTicket}>
+              <View style={styles.ticketStamp}><Ionicons color={COLORS.ink} name="checkmark-done" size={24} /></View>
+              <Text style={[styles.ticketKicker, { fontFamily: theme.typography.families.bodyMedium }]}>ALL GUESSES IN</Text>
+              <Text style={[styles.gatherTitle, { fontFamily: theme.typography.families.displayHeavy }]}>On the same wavelength?</Text>
+              <View style={styles.playerTokens}>
+                {session.setup.players.filter((player) => player.id === question.authorityPlayerId || question.respondentPlayerIds.includes(player.id)).map((player) => (
+                  <View key={player.id} style={[styles.playerToken, { backgroundColor: session.setup.teams.length ? FREQUENCY_TEAM_COLORS[session.setup.teams.findIndex((team) => team.memberPlayerIds.includes(player.id))] : FREQUENCY_SCORE_COLORS[session.setup.players.findIndex((candidate) => candidate.id === player.id)] }]}>
+                    <FrequencyAvatar name={player.name} size={48} />
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.ticketHint, { fontFamily: theme.typography.families.body }]}>Put the phone where everyone can see.</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={showReveal} style={({ pressed }) => [styles.revealTogether, pressed && styles.pressed]}>
+              <Text style={[styles.nextButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>Reveal together</Text>
+              <Ionicons color={COLORS.ink} name="radio-outline" size={24} />
+            </Pressable>
+            <Text style={[styles.gatherFootnote, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>No timer. Enjoy the reveal.</Text>
+          </ScrollView>
+        ) : revealStep === 'scores' ? (
+          <ScrollView key={`scores-${question.id}`} style={{ backgroundColor: COLORS.paper }} contentContainerStyle={styles.playPage} showsVerticalScrollIndicator={false}>
+            <Pressable accessibilityRole="button" onPress={() => setRevealStage({ questionId: question.id, step: 'answer' })} style={styles.backToAnswers}>
+              <Ionicons color={COLORS.ink} name="arrow-back" size={18} />
+              <Text style={[styles.backToAnswersText, { color: COLORS.ink, fontFamily: theme.typography.families.bodyMedium }]}>Back to answers</Text>
+            </Pressable>
+            <FrequencyRoundBoard session={session} reducedMotion={reducedMotion} onNext={next} nextLabel={session.questionIndex === session.pack.questions.length - 1 ? 'See final scores' : 'Next round'} />
+          </ScrollView>
+        ) : (
+        <ScrollView key={`answer-${question.id}`} contentContainerStyle={styles.playPage} showsVerticalScrollIndicator={false}>
+          <Animated.View style={[styles.revealHero, revealStyle]}>
+            <View style={styles.ticketAnswerMeta}>
+              <FrequencyAvatar name={owner?.name ?? 'Player'} size={52} mood="happy" />
+              <Text style={[styles.revealKicker, { color: COLORS.muted, fontFamily: theme.typography.families.bodyMedium }]}>{`${owner?.name ?? 'Player'}'s answer`}</Text>
+            </View>
+            <Text style={[styles.revealTitle, question.answerKind === 'ordering' && styles.revealOrder, { color: COLORS.ink, fontFamily: theme.typography.families.displayHeavy }]}>{answerLabel(question, reference)}</Text>
+            <View style={styles.ticketPerforation} />
+            <Text style={[styles.revealOwner, { color: COLORS.ink, fontFamily: theme.typography.families.bodyMedium }]}>{matches.length === question.respondentPlayerIds.length ? 'Everyone got it!' : matches.length ? 'You know them well.' : closeReads.length ? 'So close!' : 'Well, now you know!'}</Text>
           </Animated.View>
 
           <View style={[styles.matchStrip, { borderColor: theme.colors.draft }]}>
@@ -290,32 +344,25 @@ export default function TriviaPlayScreen() {
             />
           ) : null}
 
-          <Text style={[styles.afterReveal, { color: theme.colors.muted, fontFamily: theme.typography.families.story }]}>{question.afterRevealPrompt}</Text>
-
-          <Pressable accessibilityRole="button" onPress={next} style={({ pressed }) => [styles.nextButton, { backgroundColor: GOLD }, pressed && styles.pressed]}>
-            <Text style={[styles.nextButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>{session.questionIndex === session.pack.questions.length - 1 ? 'See final scores' : 'Next round'}</Text>
-            <Ionicons color="#171309" name="arrow-forward" size={22} />
+          <Pressable accessibilityRole="button" onPress={() => { setRevealStage({ questionId: question.id, step: 'scores' }); play('relay', 0.35); }} style={({ pressed }) => [styles.nextButton, { backgroundColor: GOLD }, pressed && styles.pressed]}>
+            <Text style={[styles.nextButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>See round scores</Text>
+            <Ionicons color="#171309" name="podium-outline" size={22} />
           </Pressable>
         </ScrollView>
+        )
       ) : !privateReady ? (
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(220)} exiting={reducedMotion ? undefined : FadeOut.duration(160)} style={styles.handoff}>
-          <View style={[styles.handoffPhone, { borderColor: isReference ? GOLD : CYAN }]}>
-            <View style={[styles.handoffSpeaker, { backgroundColor: theme.colors.draft }]} />
-            <Ionicons color={isReference ? GOLD : CYAN} name={isReference ? 'ear-outline' : 'finger-print-outline'} size={56} />
-            <View style={styles.handoffDots}>
-              {[0, 1, 2].map((dot) => <View key={dot} style={[styles.handoffDot, { backgroundColor: dot === 1 ? (isReference ? GOLD : CYAN) : theme.colors.draft }]} />)}
-            </View>
-          </View>
-          <Text style={[styles.handoffKicker, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'Your answer stays private' : `Guessing ${owner?.name ?? 'the answer owner'}`}</Text>
+          <View style={styles.handoffRadio}><FrequencyCheer key={turnKey} name={actor?.name ?? 'Player'} size={140} reducedMotion={reducedMotion} /></View>
+          <Text style={[styles.handoffKicker, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'A secret for now' : `Your turn to guess ${owner?.name ?? 'their answer'}`}</Text>
           <Text style={[styles.handoffTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Pass the phone to {actor?.name}</Text>
           <Text style={[styles.handoffBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{isReference
             ? session.setup.teams.length
-              ? 'Answer honestly. Bluffing can only hurt your own team.'
+              ? 'Answer honestly. Your teammate will try to match you.'
               : 'Answer honestly before anyone guesses. A correct guess gives both of you points.'
             : 'Keep the screen hidden until they have the phone.'}</Text>
-          <Pressable accessibilityRole="button" onPress={() => setPrivateReady(true)} style={({ pressed }) => [styles.readyButton, { borderColor: isReference ? GOLD : CYAN }, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" onPress={() => setReadyTurn(turnKey)} style={({ pressed }) => [styles.readyButton, { borderColor: isReference ? GOLD : CYAN }, pressed && styles.pressed]}>
             <Ionicons color={isReference ? GOLD : CYAN} name="checkmark-circle-outline" size={22} />
-            <Text style={[styles.readyText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>I&apos;m {actor?.name}</Text>
+            <Text style={[styles.readyText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>I&apos;m {actor?.name} — ready!</Text>
           </Pressable>
         </Animated.View>
       ) : (
@@ -331,17 +378,17 @@ export default function TriviaPlayScreen() {
         >
           <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(320)} style={styles.questionBlock}>
             <View style={styles.questionMeta}>
-              <Text style={[styles.questionRole, { color: isReference ? GOLD : CYAN, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'Your honest answer' : `What would ${owner?.name ?? 'they'} answer?`}</Text>
-              <Text style={[styles.questionKind, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{roundKindLabel(question)}</Text>
+              <Text style={[styles.questionRole, { color: COLORS.ink, fontFamily: theme.typography.families.bodyMedium }]}>{isReference ? 'Your honest answer' : `What would ${owner?.name ?? 'they'} answer?`}</Text>
+              <Text style={[styles.questionKind, { color: COLORS.muted, fontFamily: theme.typography.families.body }]}>{roundKindLabel(question)}</Text>
             </View>
-            <Text style={[styles.question, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{question.prompt}</Text>
+            <Text style={[styles.question, { color: COLORS.ink, fontFamily: theme.typography.families.displayHeavy }]}>{question.prompt}</Text>
           </Animated.View>
 
           {question.answerKind === 'choice' ? (
             <View accessibilityRole="radiogroup" style={styles.optionList}>
               {question.options.map((option, index) => {
                 const selected = choiceId === option.id;
-                const optionColor = [CORAL, GOLD, CYAN, '#B8A5F2'][index] ?? GOLD;
+                const optionColor = [CORAL, GOLD, CYAN, COLORS.sky][index] ?? GOLD;
                 return (
                   <Pressable
                     accessibilityRole="radio"
@@ -355,7 +402,7 @@ export default function TriviaPlayScreen() {
                   >
                     <Text style={[styles.optionIndex, { color: selected ? '#171309' : theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{String.fromCharCode(65 + index)}</Text>
                     <Text style={[styles.optionText, { color: selected ? '#171309' : theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{option.label}</Text>
-                    <View style={[styles.optionSocket, { borderColor: selected ? '#171309' : optionColor }, selected && { backgroundColor: '#171309' }]} />
+                    <View style={[styles.optionSocket, { borderColor: selected ? '#171309' : optionColor }, selected && { backgroundColor: '#171309' }]}>{selected ? <Ionicons color={optionColor} name="checkmark" size={15} /> : null}</View>
                   </Pressable>
                 );
               })}
@@ -371,9 +418,9 @@ export default function TriviaPlayScreen() {
                 <TextInput
                   accessibilityLabel={question.inputHint}
                   autoCapitalize="words"
-                   autoCorrect
-                   maxLength={question.maxLength}
-                   onChangeText={setTextValue}
+                  autoCorrect
+                  maxLength={question.maxLength}
+                  onChangeText={setTextValue}
                   onSubmitEditing={submit}
                   placeholder={question.inputHint}
                   placeholderTextColor={theme.colors.faint}
@@ -516,9 +563,9 @@ function RevealReadouts({ question, session }: { question: FamilyTriviaQuestion;
           <View key={entry.playerId} style={[styles.readoutRow, { borderColor: theme.colors.draft }]}>
             <View style={styles.readoutCopy}>
               <Text style={[styles.readoutName, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>{player?.name?.toUpperCase()}</Text>
-              <Text numberOfLines={2} style={[styles.readoutAnswer, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{answerLabel(question, guess)}</Text>
+              <Text style={[styles.readoutAnswer, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{answerLabel(question, guess)}</Text>
             </View>
-            <Text style={[styles.readoutPoints, { color: entry.exact ? CYAN : entry.points ? GOLD : CORAL, fontFamily: theme.typography.families.displayHeavy }]}>{entry.exact ? 'Exact' : entry.points ? 'Close' : 'Miss'} · +{entry.points}</Text>
+            <Text style={[styles.readoutPoints, { color: entry.exact ? CYAN : entry.points ? GOLD : CORAL, fontFamily: theme.typography.families.displayHeavy }]}>{entry.exact ? 'Exact' : entry.points ? 'Close' : 'Different'}{session.setup.teams.length ? '' : ` · +${entry.points}`}</Text>
           </View>
         );
       })}
@@ -555,7 +602,7 @@ function OwnerReviewPanel({
           <Text style={[styles.ownerReviewTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{owner?.name ?? 'Answer owner'}, check the guesses</Text>
         </View>
       </View>
-      <Text style={[styles.ownerReviewHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You gave the answer. Mark what each person meant: Exact, Close, or Miss. Be fair—the score changes immediately.</Text>
+      <Text style={[styles.ownerReviewHelp, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Same meaning, different words? You have the final say. Scores update straight away.</Text>
       {result.playerPoints.map((entry) => {
         const player = session.setup.players.find((candidate) => candidate.id === entry.playerId);
         const selected: FamilyTriviaOwnerVerdict | undefined = entry.authorityReviewed
@@ -637,21 +684,13 @@ function OrderingBoard({ onChange, question, selectedIds }: { onChange(ids: stri
   );
 }
 
-function WaveLine({ color }: { color: string }) {
-  return (
-    <Svg height="62" viewBox="0 0 320 62" width="100%">
-      <Path d="M0 31 L64 31 L78 12 L92 50 L108 22 L123 39 L141 31 L186 31 L202 9 L218 53 L235 20 L252 42 L270 31 L320 31" fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-    </Svg>
-  );
-}
-
 function answerLabel(question: FamilyTriviaQuestion, answer?: FamilyTriviaAnswer): string {
   if (!answer) return 'NO ANSWER';
   if (answer.kind === 'choice') return question.options.find((option) => option.id === answer.optionId)?.label.toUpperCase() ?? 'UNKNOWN';
   if (answer.kind === 'ordering') {
     return answer.optionIds
       .map((id, index) => `${index + 1}. ${question.options.find((option) => option.id === id)?.label ?? ''}`)
-      .join('  ')
+      .join('\n')
       .toUpperCase();
   }
   if (answer.kind === 'spectrum') return `${answer.value} / 100`;
@@ -675,7 +714,6 @@ function roundKindLabel(question: FamilyTriviaQuestion): string {
 }
 
 const styles = StyleSheet.create({
-  afterReveal: { fontSize: 22, lineHeight: 27, paddingHorizontal: 18, textAlign: 'center' },
   disabled: { opacity: 0.32 },
   dialAnchor: { flex: 1, fontSize: 13, lineHeight: 17 },
   dialAnchorRight: { textAlign: 'right' },
@@ -690,14 +728,11 @@ const styles = StyleSheet.create({
   dialTouch: { height: 54, justifyContent: 'center', marginHorizontal: 4 },
   dialUnit: { fontSize: 12, letterSpacing: 0.8, marginLeft: 6 },
   dialValue: { fontSize: 62, lineHeight: 64 },
-  exitButton: { alignItems: 'center', height: 38, justifyContent: 'center', width: 32 },
+  exitButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   handoff: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingBottom: 44, paddingHorizontal: 28 },
   handoffBody: { fontSize: 15, lineHeight: 21, maxWidth: 320, textAlign: 'center' },
-  handoffDot: { borderRadius: 3, height: 5, width: 5 },
-  handoffDots: { flexDirection: 'row', gap: 6 },
   handoffKicker: { fontSize: 13, lineHeight: 18, marginTop: 23 },
-  handoffPhone: { alignItems: 'center', borderRadius: 28, borderWidth: 2, gap: 22, height: 204, justifyContent: 'center', width: 118 },
-  handoffSpeaker: { borderRadius: 2, height: 4, width: 34 },
+  handoffRadio: { alignItems: 'center', backgroundColor: COLORS.paper, borderRadius: 85, height: 170, justifyContent: 'center', width: 170, transform: [{ rotate: '-5deg' }] },
   handoffTitle: { fontSize: 40, lineHeight: 42, marginTop: 7, textAlign: 'center' },
   keyboardLayer: { flex: 1 },
   lockArea: { gap: 8, paddingTop: 4 },
@@ -710,10 +745,10 @@ const styles = StyleSheet.create({
   missingTitle: { fontSize: 36 },
   nextButton: { alignItems: 'center', borderRadius: 17, flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, minHeight: 66, paddingHorizontal: 17 },
   nextButtonText: { color: '#171309', fontSize: 21 },
-  option: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 14, paddingVertical: 12 },
+  option: { alignItems: 'center', borderRadius: 16, borderWidth: 2, borderBottomWidth: 5, flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 14, paddingVertical: 12 },
   optionIndex: { fontSize: 26, width: 23 },
   optionList: { gap: 8 },
-  optionSocket: { borderRadius: 10, borderWidth: 2, height: 18, width: 18 },
+  optionSocket: { alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 2, height: 24, width: 24 },
   optionText: { flex: 1, fontSize: 15, lineHeight: 20 },
   ownerReview: { borderRadius: 18, borderWidth: 1, gap: 12, padding: 14 },
   ownerReviewAnswer: { flex: 1, fontSize: 15, lineHeight: 19 },
@@ -740,9 +775,9 @@ const styles = StyleSheet.create({
   playPage: { flexGrow: 1, gap: 18, paddingBottom: 32, paddingHorizontal: 20, paddingTop: 21 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.993 }] },
   question: { fontSize: 28, lineHeight: 32 },
-  questionBlock: { gap: 10 },
+  questionBlock: { backgroundColor: COLORS.paper, borderRadius: 22, borderBottomWidth: 5, borderColor: COLORS.line, gap: 16, padding: 20 },
   questionKind: { fontSize: 12 },
-  questionMeta: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  questionMeta: { gap: 4 },
   questionRole: { fontSize: 13, lineHeight: 18 },
   readyButton: { alignItems: 'center', borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', marginTop: 22, minHeight: 58, paddingHorizontal: 24 },
   readyText: { fontSize: 16 },
@@ -755,10 +790,11 @@ const styles = StyleSheet.create({
   remainingGrid: { gap: 7 },
   remainingOption: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 9, minHeight: 51, paddingHorizontal: 11 },
   remainingText: { flex: 1, fontSize: 13, lineHeight: 18 },
-  revealHero: { alignItems: 'center', gap: 2, paddingTop: 16 },
+  revealHero: { backgroundColor: COLORS.paper, borderRadius: 24, borderBottomWidth: 6, borderColor: COLORS.line, alignItems: 'center', gap: 10, padding: 22 },
   revealKicker: { fontSize: 14, lineHeight: 19, marginTop: 7 },
   revealOwner: { fontSize: 14, marginTop: 4 },
   revealTitle: { fontSize: 40, lineHeight: 41, maxWidth: 360, textAlign: 'center' },
+  revealOrder: { alignSelf: 'stretch', fontSize: 25, lineHeight: 31, textAlign: 'left' },
   round: { fontSize: 23, lineHeight: 23 },
   scoreItem: { alignItems: 'center', flexDirection: 'row', gap: 4, maxWidth: 92 },
   scoreLamp: { borderRadius: 4, height: 7, width: 7 },
@@ -766,7 +802,7 @@ const styles = StyleSheet.create({
   scorePoints: { fontSize: 17 },
   scoreRail: { alignItems: 'center', flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 7, justifyContent: 'flex-end' },
   spectrumBoard: { gap: 8, paddingHorizontal: 5, paddingVertical: 6 },
-  skipButton: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 42 },
+  skipButton: { alignItems: 'center', borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 44 },
   skipText: { fontSize: 12 },
   smallButton: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 18, paddingVertical: 12 },
   smallButtonText: { fontSize: 15 },
@@ -778,4 +814,21 @@ const styles = StyleSheet.create({
   wordPrivacy: { fontSize: 11, lineHeight: 15, textAlign: 'center' },
   voidArea: { gap: 3 },
   voidNote: { fontSize: 11, lineHeight: 15, textAlign: 'center' },
+  backToAnswers: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: 8, minHeight: 44 },
+  backToAnswersText: { fontSize: 14 },
+  gatherHeader: { fontSize: 13 },
+  gatherPage: { alignItems: 'center', flexGrow: 1, justifyContent: 'center', padding: 24, gap: 16 },
+  gatherTitle: { color: COLORS.ink, fontSize: 42, lineHeight: 44, textAlign: 'center' },
+  gatherFootnote: { fontSize: 12 },
+  sealedTicket: { alignItems: 'center', backgroundColor: COLORS.paper, borderRadius: 24, borderBottomWidth: 6, borderColor: COLORS.line, gap: 18, padding: 24, width: '100%', maxWidth: 430 },
+  ticketStamp: { backgroundColor: CYAN, borderRadius: 18, padding: 8 },
+  ticketKicker: { color: COLORS.muted, fontSize: 11, letterSpacing: 2 },
+  ticketHint: { color: COLORS.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  ticketAnswerMeta: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  ticketPerforation: { alignSelf: 'stretch', borderTopWidth: 1, borderStyle: 'dashed', borderColor: COLORS.line, marginTop: 10 },
+  playerTokens: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  playerToken: { alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderWidth: 2, borderBottomWidth: 5, borderColor: COLORS.ink, borderRadius: 19 },
+  revealTogether: { alignItems: 'center', backgroundColor: GOLD, flexDirection: 'row', justifyContent: 'center', gap: 12, borderRadius: 18, borderBottomWidth: 5, borderColor: '#BC8A22', minHeight: 66, width: '100%', maxWidth: 430 },
+  roundTrack: { flexDirection: 'row', gap: 5, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+  roundSegment: { flex: 1, borderRadius: 4, height: 6 },
 });

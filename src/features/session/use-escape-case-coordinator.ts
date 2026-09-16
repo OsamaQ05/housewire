@@ -5,6 +5,8 @@ import { line13SeedFromCode } from '@/src/domain/line-13-game';
 
 import {
   createEscapeAbortEvent,
+  expireEscapeMission,
+  reduceEscapeMistake,
   createEscapeMissionRuntime,
   escapeProofToken,
   escapeSnapshotFromRuntime,
@@ -128,6 +130,12 @@ export function useEscapeCaseCoordinator(missionId: EscapeCaseId) {
         continue;
       }
 
+      if (event.kind === 'escape.mistake' && event.missionId === missionId && session.isHost && stateRef.current) {
+        const next = reduceEscapeMistake(stateRef.current, event, item.senderId, item.serverTime);
+        if (next !== stateRef.current) { commit(next); void publishSnapshot(next); }
+        continue;
+      }
+
       if (
         event.kind === 'escape.snapshot.request' &&
         event.missionId === missionId &&
@@ -221,12 +229,33 @@ export function useEscapeCaseCoordinator(missionId: EscapeCaseId) {
     }, [commit, missionId, publishSnapshot, session],
   );
 
+  useEffect(() => {
+    if (!session.isHost || !state) return;
+    const timer = setInterval(() => {
+      const current = stateRef.current;
+      if (!current) return;
+      const next = expireEscapeMission(current, Date.now() + (session.clockEstimate?.offsetMs ?? 0));
+      if (next !== current) { commit(next); void publishSnapshot(next); }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [commit, publishSnapshot, session.clockEstimate?.offsetMs, session.isHost, state]);
+
+  const reportMistake = useCallback(async () => {
+    const current = stateRef.current;
+    if (!current || current.failedAt !== undefined || current.finishedAt !== undefined || current.abortedAt !== undefined || session.connectionState !== 'connected') return false;
+    const event = housewireSessionEventSchema.parse({ kind: 'escape.mistake', missionId, operationId: current.operationId, nodeId: session.localNodeId, attemptId: createRelayId('mistake'), stageIndex: current.stageIndex, observedAt: toSessionTimestamp(Date.now() + (session.clockEstimate?.offsetMs ?? 0)) });
+    if (event.kind !== 'escape.mistake') return false;
+    if (session.isHost) { const next = reduceEscapeMistake(current, event, session.localNodeId, event.observedAt); commit(next); void publishSnapshot(next); }
+    try { await session.publishReliable(event, { eventId: event.attemptId }); return true; } catch { return false; }
+  }, [commit, missionId, publishSnapshot, session]);
+
   const submitProof = useCallback(
     async (proofKey: string): Promise<boolean> => {
       const current = stateRef.current;
       if (
         !current ||
         current.finishedAt !== undefined ||
+        current.failedAt !== undefined ||
         current.abortedAt !== undefined ||
         session.connectionState !== 'connected'
       ) return false;
@@ -363,6 +392,7 @@ export function useEscapeCaseCoordinator(missionId: EscapeCaseId) {
     publishSignal,
     signals,
     submitProof,
+    reportMistake,
     requiredNodeIds,
   };
 }

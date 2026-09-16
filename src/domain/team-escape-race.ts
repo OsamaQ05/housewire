@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const TEAM_ESCAPE_RACE_PROTOCOL_VERSION = 1 as const;
 export const TEAM_ESCAPE_RACE_DEFAULT_TIE_WINDOW_MS = 750;
 export const TEAM_ESCAPE_RACE_MAX_CLOCK_SKEW_MS = 30_000;
+export const CIRCUIT_RACE_MAX_MISTAKES = 4;
+export const CIRCUIT_RACE_TIME_LIMIT_MS = 15 * 60_000;
 
 const MAXIMUM_PARTICIPANTS = 12;
 const MAXIMUM_TEAMS = 4;
@@ -134,6 +136,11 @@ export interface TeamEscapeRaceTeamState extends TeamEscapeRaceAssignment {
   stageIndex: number;
   stageStartedAt: number;
   finishedAt?: number;
+  failedAt?: number;
+  failureReason?: 'attempts' | 'time';
+  mistakes?: number;
+  missedStageIds?: readonly string[];
+  rejectedRequestIds?: readonly string[];
 }
 
 export interface TeamEscapeRaceState {
@@ -198,6 +205,8 @@ export interface TeamEscapeRaceStanding {
   acceptedProofCount: number;
   completedStageCount: number;
   finishedAt?: number;
+  failedAt?: number;
+  failureReason?: 'attempts' | 'time';
   provisional: boolean;
   rank?: number;
   teamId: string;
@@ -210,6 +219,7 @@ export interface TeamEscapeRaceTeamProjection {
   connectedNodeIds: readonly string[];
   connectionStatus: TeamEscapeRaceConnectionStatus;
   finishedAt?: number;
+  failedAt?: number;
   offlineNodeIds: readonly string[];
   stageId?: string;
   stageIndex: number;
@@ -350,7 +360,7 @@ export function createTeamEscapeRaceProofEvent(
   submissionId = `race-proof-${shortHash(`${state.operationId}:${nodeId}:${proofId}:${observedAt}`)}`,
 ): TeamEscapeRaceProofEvent | undefined {
   const team = state.teams.find((candidate) => candidate.memberNodeIds.includes(nodeId));
-  if (!team || team.finishedAt !== undefined) return undefined;
+  if (!team || team.finishedAt !== undefined || team.failedAt !== undefined) return undefined;
   const stage = state.stages[team.stageIndex];
   if (!stage?.proofIds.includes(proofId)) return undefined;
   const parsed = teamEscapeRaceProofEventSchema.safeParse({
@@ -402,7 +412,7 @@ export function reduceTeamEscapeRaceProof(
   const ownedTeam = state.teams.find((team) => team.memberNodeIds.includes(frame.senderId));
   if (!ownedTeam) return reject('UNTRUSTED_SENDER');
   if (ownedTeam.teamId !== event.teamId) return reject('TEAM_MISMATCH');
-  if (ownedTeam.finishedAt !== undefined) return reject('TEAM_FINISHED');
+  if (ownedTeam.finishedAt !== undefined || ownedTeam.failedAt !== undefined) return reject('TEAM_FINISHED');
   const stage = state.stages[ownedTeam.stageIndex];
   if (!stage || event.stageIndex !== ownedTeam.stageIndex || event.stageId !== stage.id) {
     return reject('WRONG_STAGE');
@@ -464,7 +474,24 @@ export function teamEscapeRacePhaseAt(
   serverNow: number,
 ): TeamEscapeRacePhase {
   if (serverNow < state.startsAt) return 'countdown';
-  return state.teams.every((team) => team.finishedAt !== undefined) ? 'complete' : 'running';
+  return state.teams.every(isTeamEscapeRaceTerminal) ? 'complete' : 'running';
+}
+
+export function isTeamEscapeRaceTerminal(team: { finishedAt?: number; failedAt?: number }): boolean {
+  return team.finishedAt !== undefined || team.failedAt !== undefined;
+}
+
+/** Only the coordinator/host calls this using its trusted clock. */
+export function expireCircuitRace(state: TeamEscapeRaceState, serverNow: number): TeamEscapeRaceState {
+  const deadline = state.startsAt + CIRCUIT_RACE_TIME_LIMIT_MS;
+  if (!isSafeTimestamp(serverNow) || serverNow < deadline || state.teams.every(isTeamEscapeRaceTerminal)) return state;
+  return {
+    ...state,
+    revision: state.revision + 1,
+    teams: state.teams.map((team) => isTeamEscapeRaceTerminal(team) ? team : {
+      ...team, failedAt: deadline, failureReason: 'time',
+    }),
+  };
 }
 
 export function rankTeamEscapeRace(
@@ -499,11 +526,13 @@ export function rankTeamEscapeRace(
 
   const standings = state.teams.map<TeamEscapeRaceStanding>((team) => {
     const ranked = rankByTeam.get(team.teamId);
-    const unfinishedCompetitor = state.teams.some((candidate) => candidate.finishedAt === undefined);
+    const unfinishedCompetitor = state.teams.some((candidate) => !isTeamEscapeRaceTerminal(candidate));
     return {
       acceptedProofCount: team.acceptedProofs.length,
       completedStageCount: team.finishedAt === undefined ? team.stageIndex : state.stages.length,
       finishedAt: team.finishedAt,
+      failedAt: team.failedAt,
+      failureReason: team.failureReason,
       provisional: team.finishedAt !== undefined && unfinishedCompetitor && serverNow <= team.finishedAt + state.tieWindowMs,
       rank: ranked?.rank,
       teamId: team.teamId,
@@ -547,10 +576,11 @@ export function projectTeamEscapeRace(
           : 'online';
       return {
         acceptedProofCount: team.acceptedProofs.length,
-        canSubmit: phase === 'running' && team.finishedAt === undefined && online.length > 0,
+        canSubmit: phase === 'running' && !isTeamEscapeRaceTerminal(team) && online.length > 0,
         connectedNodeIds: online,
         connectionStatus,
         finishedAt: team.finishedAt,
+        failedAt: team.failedAt,
         offlineNodeIds: offline,
         stageId: team.finishedAt === undefined ? state.stages[team.stageIndex]?.id : undefined,
         stageIndex: team.stageIndex,
@@ -641,7 +671,7 @@ export function simulatePracticeTeamEscapeRace(
     safety -= 1;
     let nextCandidate: { actorId: string; dueAt: number; proofId: string; teamId: string } | undefined;
     for (const team of state.teams) {
-      if (team.finishedAt !== undefined) continue;
+      if (isTeamEscapeRaceTerminal(team)) continue;
       if (!options.includeLocalTeamBots && team.teamId === localTeamId) continue;
       const actorId = team.memberNodeIds.find((nodeId) => participantMap.get(nodeId)?.simulated);
       const stage = state.stages[team.stageIndex];

@@ -1,4 +1,4 @@
-import type { ForgeCase, ForgeGenerationRequest } from '../../domain/case-forge';
+import { normalizeForgeThemePrompt, type ForgeCase, type ForgeGenerationRequest } from '../../domain/case-forge';
 import { exportForgeCaseBackup, exportForgeCasePreview, importForgeCaseBackup } from './serialization';
 import { OfflineCaseForgeProvider } from './providers';
 import type {
@@ -29,15 +29,17 @@ class DefaultCaseForgeService implements CaseForgeService {
   }
 
   async generate(request: ForgeGenerationRequest, options: ForgeGenerateOptions = {}): Promise<ForgeCase> {
+    request = { ...request, customThemePrompt: normalizeForgeThemePrompt(request.customThemePrompt) };
     const providerId = options.providerId ?? this.offline.id;
     const provider = this.providers.get(providerId);
     if (!provider) throw new Error(`Unknown Case Forge provider: ${providerId}.`);
     let game: ForgeCase;
     try {
-      if (!(await provider.isAvailable())) throw new Error(`Case Forge provider ${providerId} is unavailable.`);
+      if (!(await provider.isAvailable())) throw new Error('The AI story service is unavailable. Check that the computer’s relay is running and every phone is on the same Wi-Fi. Your idea is still here.');
       game = await provider.generate(request);
     } catch (error) {
-      if (provider.mode === 'offline' || options.allowOfflineFallback === false) throw error;
+      const allowFallback = options.allowOfflineFallback ?? !request.customThemePrompt;
+      if (provider.mode === 'offline' || !allowFallback) throw error;
       game = await this.offline.generate(request);
     }
     await this.options.repository.save(game);

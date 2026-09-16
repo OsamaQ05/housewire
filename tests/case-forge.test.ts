@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FORGE_THEME_IDS,
   generateOfflineForgeCase,
+  normalizeForgeThemePrompt,
   projectForgeCaseForPlayer,
   validateForgeCase,
   validateForgeSubmission,
@@ -12,6 +13,7 @@ import {
   type ForgeStageSubmission,
 } from '../src/domain/case-forge';
 import type { Capability } from '../src/domain/types';
+import { withLegacySyncFinale } from './legacy-forge-fixture';
 
 const CAPABILITIES = [
   'manual',
@@ -103,7 +105,7 @@ describe('offline Case Forge generation', () => {
           });
           const mechanicKinds = game.stages.map((stage) => stage.mechanic.kind);
           expect(mechanicKinds).toHaveLength(5);
-          expect(mechanicKinds.at(-1)).toBe('motion-sync');
+          expect(mechanicKinds.at(-1)).toBe('distributed-order');
           expect(mechanicKinds).toContain('split-riddle');
           expect(new Set(mechanicKinds).size).toBe(5);
           expect(game.stages.reduce((sum, stage) => sum + stage.durationMinutes, 0)).toBe(game.durationMinutes);
@@ -145,8 +147,49 @@ describe('offline Case Forge generation', () => {
     expect(
       generateOfflineForgeCase(request(3, { customThemePrompt: 'an underwater spaceship rescue' })).effectiveSeed,
     ).not.toBe(generateOfflineForgeCase(request(3)).effectiveSeed);
-    expect(() => generateOfflineForgeCase(request(2, { customThemePrompt: `bad\ncontrol` }))).toThrow(/custom theme/i);
+    expect(() => generateOfflineForgeCase(request(2, { customThemePrompt: 'bad\u0000control' }))).toThrow(/custom theme/i);
     expect(() => generateOfflineForgeCase(request(2, { customThemePrompt: 'x'.repeat(181) }))).toThrow(/custom theme/i);
+  });
+
+  it('normalizes multiline pasted descriptions before seeding and saving a case', () => {
+    const multiline = '  A desert\r\nhotel\t\tloses power.\nFind the hidden well.  ';
+    const normalized = 'A desert hotel loses power. Find the hidden well.';
+    const input = request(3, { customThemePrompt: multiline });
+    expect(normalizeForgeThemePrompt(multiline)).toBe(normalized);
+    const game = generateOfflineForgeCase(input);
+    expect(game).toEqual(generateOfflineForgeCase(request(3, { customThemePrompt: normalized })));
+    expect(game.recipe.customThemePrompt).toBe(normalized);
+    expect(input.customThemePrompt).toBe(multiline);
+    expect(validateForgeCase(game).playable).toBe(true);
+  });
+
+  it('treats blank descriptions as absent instead of failing generation', () => {
+    expect(normalizeForgeThemePrompt(undefined)).toBeUndefined();
+    for (const blank of ['', '  ', '\r\n\t ', '\u00a0']) {
+      expect(normalizeForgeThemePrompt(blank)).toBeUndefined();
+      expect(generateOfflineForgeCase(request(2, { customThemePrompt: blank })))
+        .toEqual(generateOfflineForgeCase(request(2)));
+    }
+  });
+
+  it('preserves Unicode descriptions and gives their local cases a recognizable title', () => {
+    for (const prompt of ['فندق قديم في الصحراء', 'مَتْحَف الأسرار', '古い砂漠のホテル', 'Café oublié 🔑']) {
+      expect(normalizeForgeThemePrompt(prompt)).toBe(prompt);
+      const game = generateOfflineForgeCase(request(3, { customThemePrompt: prompt }));
+      expect(game.recipe.customThemePrompt).toBe(prompt);
+      expect(game.title).not.toContain('Unfiled World');
+      expect(game.title).toContain(prompt.split(' ')[0]);
+      expect(validateForgeCase(game).playable).toBe(true);
+    }
+  });
+
+  it('rejects non-whitespace controls and enforces the normalized description limit', () => {
+    for (const control of ['\u0000', '\u0007', '\u000b', '\u000c', '\u001b', '\u007f', '\u0085']) {
+      expect(() => normalizeForgeThemePrompt(`hotel${control}secret`)).toThrow(/custom theme/i);
+    }
+    expect(normalizeForgeThemePrompt(`  ${'x'.repeat(180)}\r\n`)).toHaveLength(180);
+    expect(() => normalizeForgeThemePrompt('x'.repeat(181))).toThrow(/180/);
+    expect(() => normalizeForgeThemePrompt(42 as unknown as string)).toThrow(/custom theme/i);
   });
 
   it('compiles disabled camera, voice, and movement choices into real manual mechanics', () => {
@@ -162,12 +205,12 @@ describe('offline Case Forge generation', () => {
     const game = gameContaining(3, ['symbol-lock', 'private-relay'], input);
     const symbol = stageWithMechanic(game, 'symbol-lock');
     const relay = stageWithMechanic(game, 'private-relay');
-    const finale = stageWithMechanic(game, 'motion-sync');
+    const finale = stageWithMechanic(game, 'distributed-order');
     expect(symbol.mechanic).toMatchObject({ kind: 'symbol-lock', revealMode: 'manual' });
     expect(symbol.clues.some((clue) => clue.payload.kind === 'camera-marker')).toBe(false);
     expect(relay.mechanic).toMatchObject({ kind: 'private-relay', deliveryMode: 'text' });
     expect(relay.clues.some((clue) => clue.payload.kind === 'audio-token')).toBe(false);
-    expect(finale.mechanic).toMatchObject({ kind: 'motion-sync', inputMode: 'touch' });
+    expect(finale.mechanic).toMatchObject({ kind: 'distributed-order' });
     expect(finale.clues.some((clue) => clue.payload.kind === 'pose' || clue.payload.kind === 'audio-token')).toBe(false);
     expect(validateForgeCase(game).playable).toBe(true);
   });
@@ -219,9 +262,9 @@ describe('offline Case Forge generation', () => {
     const game = gameContaining(3, ['symbol-lock', 'private-relay'], options);
     expect(stageWithMechanic(game, 'symbol-lock').fallback.reason).toMatch(/no camera/i);
     expect(stageWithMechanic(game, 'private-relay').fallback.reason).toMatch(/not suitable/i);
-    const finale = stageWithMechanic(game, 'motion-sync');
-    expect(finale.fallback.reason).toMatch(/unavailable/i);
-    expect(finale.mechanic.assignments.every((assignment) => assignment.vocalCue === 'NONE')).toBe(true);
+    const finale = stageWithMechanic(game, 'distributed-order');
+    expect(finale.fallback.reason).toMatch(/no sensor/i);
+    expect(finale.mechanic.tokens.length).toBeGreaterThanOrEqual(5);
     expect(validateForgeCase(game).playable).toBe(true);
   });
 });
@@ -265,21 +308,17 @@ describe('Case Forge proofs and private projections', () => {
     expect(validateForgeCase(tampered)).toMatchObject({ playable: false });
   });
 
-  it('changes both mechanic selection and scene order across valid replay cuts', () => {
+  it('changes scene order and actual solutions across valid replay cuts', () => {
     const cuts = Array.from({ length: 12 }, (_, replayIndex) =>
       generateOfflineForgeCase(request(3, { replayIndex })),
     );
     const signatures = cuts.map((game) => game.stages.map((stage) => stage.mechanic.kind).join('>'));
     expect(new Set(signatures).size).toBeGreaterThan(3);
-    const omittedLegacyKinds = cuts.map((game) =>
-      ['distributed-order', 'symbol-lock', 'private-relay', 'route-grid']
-        .find((kind) => !game.stages.some((stage) => stage.mechanic.kind === kind)),
-    );
-    expect(new Set(omittedLegacyKinds).size).toBeGreaterThan(1);
+    expect(new Set(cuts.map((game) => JSON.stringify(game.stages.map((stage) => stage.solution)))).size).toBeGreaterThan(3);
     expect(cuts.every((game) => validateForgeCase(game).playable)).toBe(true);
   });
 
-  it('reports incomplete prefixes without exposing the missing suffix', () => {
+  it('does not expose correct prefixes as a trial-and-error answer oracle', () => {
     const game = gameContaining(3, ['distributed-order', 'route-grid']);
     const orderStage = stageWithMechanic(game, 'distributed-order');
     const routeStage = stageWithMechanic(game, 'route-grid');
@@ -291,17 +330,17 @@ describe('Case Forge proofs and private projections', () => {
     expect(validateForgeSubmission(game, orderStage.index, { kind: 'sequence', value: order.answer.slice(0, 2) })).toMatchObject({
       accepted: false,
       code: 'INCOMPLETE',
-      acceptedPrefixLength: 2,
     });
     expect(validateForgeSubmission(game, routeStage.index, { kind: 'route', value: [route.answer[0], 99] })).toMatchObject({
       accepted: false,
-      code: 'WRONG_VALUE',
-      acceptedPrefixLength: 1,
+      code: 'INCOMPLETE',
     });
+    expect(validateForgeSubmission(game, orderStage.index, { kind: 'sequence', value: order.answer.slice(0, 2) })).not.toHaveProperty('acceptedPrefixLength');
+    expect(validateForgeSubmission(game, routeStage.index, { kind: 'route', value: [route.answer[0], 99] })).not.toHaveProperty('acceptedPrefixLength');
   });
 
   it('rejects wrong relay recipients and slow or altered synchronized proofs', () => {
-    const game = gameContaining(3, ['private-relay']);
+    const game = withLegacySyncFinale(gameContaining(3, ['private-relay']));
     const relayStage = stageWithMechanic(game, 'private-relay');
     const syncStage = stageWithMechanic(game, 'motion-sync');
     const relay = relayStage.solution;

@@ -10,6 +10,7 @@ import type {
   EscapeSnapshotEvent,
   EscapeStartEvent,
 } from './protocol';
+import { escapeAttemptLimit, escapeDurationMs } from '../../domain/attempt-rules';
 
 export interface EscapeMissionRuntimeState {
   missionId: EscapeCaseId;
@@ -24,6 +25,23 @@ export interface EscapeMissionRuntimeState {
   completions: readonly EscapeSnapshotEvent['completions'][number][];
   finishedAt?: number;
   abortedAt?: number;
+  mistakes?: number;
+  mistakeIds?: readonly string[];
+  failedAt?: number;
+  failureReason?: 'attempts' | 'time';
+}
+
+export function expireEscapeMission(state: EscapeMissionRuntimeState, now: number): EscapeMissionRuntimeState {
+  const deadline = state.startedAt + escapeDurationMs(state.missionId);
+  if (state.finishedAt !== undefined || state.abortedAt !== undefined || state.failedAt !== undefined || now < deadline) return state;
+  return { ...state, failedAt: deadline, failureReason: 'time', revision: state.revision + 1 };
+}
+
+export function reduceEscapeMistake(original: EscapeMissionRuntimeState, event: { missionId: string; operationId: string; nodeId: string; attemptId: string; stageIndex: number }, sender: string, now: number): EscapeMissionRuntimeState {
+  const state = expireEscapeMission(original, now);
+  if (state.finishedAt !== undefined || state.failedAt !== undefined || state.abortedAt !== undefined || event.nodeId !== sender || !state.liveNodeIds.includes(sender) || event.missionId !== state.missionId || event.operationId !== state.operationId || event.stageIndex !== state.stageIndex || state.mistakeIds?.includes(event.attemptId)) return state;
+  const mistakes = (state.mistakes ?? 0) + 1;
+  return { ...state, mistakes, mistakeIds: [...(state.mistakeIds ?? []), event.attemptId], revision: state.revision + 1, ...(mistakes >= escapeAttemptLimit(state.missionId) ? { failedAt: now, failureReason: 'attempts' as const } : {}) };
 }
 
 export interface EscapeProofReduction {
@@ -90,6 +108,7 @@ export function createEscapeAbortEvent(
 ): EscapeAbortEvent | undefined {
   if (
     state.finishedAt !== undefined ||
+    state.failedAt !== undefined ||
     state.abortedAt !== undefined ||
     hostNodeId !== state.hostNodeId ||
     !state.liveNodeIds.includes(hostNodeId)
@@ -113,6 +132,7 @@ export function reduceEscapeAbort(
 ): EscapeAbortReduction {
   if (
     state.finishedAt !== undefined ||
+    state.failedAt !== undefined ||
     state.abortedAt !== undefined ||
     senderId !== state.hostNodeId ||
     senderId !== event.hostNodeId ||
@@ -141,7 +161,7 @@ export function missingRequiredEscapeNodeIds(
   state: EscapeMissionRuntimeState,
   currentLiveNodeIds: readonly string[],
 ): string[] {
-  if (state.finishedAt !== undefined || state.abortedAt !== undefined) return [];
+  if (state.finishedAt !== undefined || state.abortedAt !== undefined || state.failedAt !== undefined) return [];
   const stage = compiledCaseForRuntime(state).stages[state.stageIndex];
   if (!stage) return [];
   const currentlyLive = new Set(currentLiveNodeIds);
@@ -215,12 +235,14 @@ function synchronizedWindowMs(game: CompiledEscapeCase, stageIndex: number): num
 }
 
 export function reduceEscapeProof(
-  state: EscapeMissionRuntimeState,
+  original: EscapeMissionRuntimeState,
   event: EscapeProofEvent,
   senderId: string,
   acceptedAt: number,
 ): EscapeProofReduction {
+  const state = expireEscapeMission(original, acceptedAt);
   if (
+    state.failedAt !== undefined ||
     state.finishedAt !== undefined ||
     state.abortedAt !== undefined ||
     senderId !== event.nodeId ||
@@ -324,6 +346,8 @@ export function escapeSnapshotFromRuntime(state: EscapeMissionRuntimeState): Esc
     completions: [...state.completions],
     finishedAt: state.finishedAt,
     abortedAt: state.abortedAt,
+    mistakes: state.mistakes, mistakeIds: state.mistakeIds ? [...state.mistakeIds] : undefined,
+    failedAt: state.failedAt, failureReason: state.failureReason,
   };
 }
 
@@ -341,5 +365,7 @@ export function runtimeFromEscapeSnapshot(snapshot: EscapeSnapshotEvent): Escape
     completions: snapshot.completions,
     finishedAt: snapshot.finishedAt,
     abortedAt: snapshot.abortedAt,
+    mistakes: snapshot.mistakes, mistakeIds: snapshot.mistakeIds,
+    failedAt: snapshot.failedAt, failureReason: snapshot.failureReason,
   };
 }

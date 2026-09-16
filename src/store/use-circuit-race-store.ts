@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { useFamilyClubStore } from './use-family-club-store';
+import { raceRecord } from '../features/family-club/records';
+import { isTeamEscapeRaceTerminal } from '../domain/team-escape-race';
 
 import type {
   TeamEscapeRaceProofEvent,
@@ -63,7 +66,7 @@ export const useCircuitRaceStore = create<CircuitRaceStore>()((set, get) => ({
     const current = get();
     if (current.history.some((result) => result.id === state.operationId)) return;
     const finished = state.teams.filter((team) => team.finishedAt !== undefined);
-    if (finished.length !== state.teams.length) return;
+    if (!state.teams.every(isTeamEscapeRaceTerminal)) return;
     const first = Math.min(...finished.map((team) => team.finishedAt!));
     const winners = finished
       .filter((team) => team.finishedAt! - first <= state.tieWindowMs)
@@ -75,9 +78,11 @@ export const useCircuitRaceStore = create<CircuitRaceStore>()((set, get) => ({
       winningTeamIds: winners,
       standings: state.teams.map((team) => ({
         teamId: team.teamId,
-        elapsedMs: Math.max(0, team.finishedAt! - state.startsAt),
+        elapsedMs: Math.max(0, (team.finishedAt ?? team.failedAt!) - state.startsAt),
+        ...(team.failedAt !== undefined ? { failed: true, failureReason: team.failureReason } : {}),
       })),
     };
+    useFamilyClubStore.getState().record(raceRecord(result, state.participants.map((p) => ({ ...p, teamId: state.teams.find((t) => t.memberNodeIds.includes(p.nodeId))?.teamId ?? '' }))));
     set({ raceState: state, history: [result, ...current.history].slice(0, 20) });
   },
   recordResult: (result) => set((current) => current.history.some((item) => item.id === result.id)

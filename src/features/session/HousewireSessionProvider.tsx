@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useRef, type PropsWithChildren } from 'react';
 
 import { useHousewireStore } from '@/src/store/use-housewire-store';
+import { useConnectionSettingsStore } from '@/src/store/use-connection-settings-store';
 
 import type { SessionNode } from './protocol';
 import { deriveLanRelayUrl, useHousewireSession } from './use-housewire-session';
@@ -21,6 +22,7 @@ export function HousewireSessionProvider({ children }: PropsWithChildren) {
   const sessionMode = useHousewireStore((state) => state.sessionMode);
   const sessionCode = useHousewireStore((state) => state.sessionCode);
   const relayUrl = useHousewireStore((state) => state.relayUrl);
+  const relayOverride = useConnectionSettingsStore((state) => state.relayUrl);
   const localNodeId = useHousewireStore((state) => state.localNodeId);
   const crew = useHousewireStore((state) => state.crew);
   const localCrewNode = crew.find((node) => node.id === localNodeId);
@@ -43,7 +45,7 @@ export function HousewireSessionProvider({ children }: PropsWithChildren) {
   const session = useHousewireSession({
     enabled,
     node,
-    relayUrl: relayUrl ?? deriveLanRelayUrl(),
+    relayUrl: relayUrl ?? (relayOverride || deriveLanRelayUrl()),
     sessionId: sessionCode ?? 'inactive',
   });
   const isHost = localNodeId === 'local';

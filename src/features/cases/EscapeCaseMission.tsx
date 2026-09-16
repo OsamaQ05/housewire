@@ -14,8 +14,11 @@ import {
   escapeCaseSeedFromCode,
   type EscapeCaseId,
 } from '@/src/domain/escape-case-compiler';
-import { assessStagePressure } from '@/src/domain/director';
-import { AdaptiveGuideButton, AdaptiveGuidePanel } from '@/src/features/director';
+import { GuideChat, guideMechanicFor, escapeGuideContext } from '@/src/features/director';
+import { AnswerReview } from '@/src/components/AnswerReview';
+import { escapeAttemptLimit } from '@/src/domain/attempt-rules';
+import { escapeAnswerReview } from '@/src/domain/escape-answer-review';
+import { PuzzleAttemptProvider } from './RiddleSeal';
 import { HouseLineDock, useHouseLine } from '@/src/features/comms';
 import {
   escapeStageRequiresEveryNode,
@@ -26,6 +29,7 @@ import { useAcousticMeter, type WhisperPayload } from '@/src/hooks/use-acoustic-
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useTerminalMotion } from '@/src/hooks/use-terminal-motion';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
+import { useFamilyClubStore } from '@/src/store/use-family-club-store';
 import { useHousewireTheme } from '@/src/theme';
 import { formatClock } from '@/src/utils/format';
 
@@ -52,29 +56,6 @@ const CASE_META = {
   },
 } as const;
 
-const HINTS = {
-  'dead-air': [
-    ['Your tone belongs in somebody else’s table.', 'Say LOW, MID, HIGH in order.', 'Build the phone order from Duct I upward.'],
-    ['The plate, scanner, and corrosion rule are separate jobs.', 'Scan only after both owners are ready.', 'The corrosion keeper names the live glyph.'],
-    ['The tuner opens the gate but never receives content.', 'Caller sends exactly one short word.', 'Receiver locks the word; nobody else can.'],
-    ['One phone owns order; others own pressure mappings.', 'REST is a real beat, not an empty slot.', 'Enter four pressure states in resonator order.'],
-    ['Use relative loudness, not pitch.', 'The tuner holds orientation while voices perform.', 'Touch pressure reproduces the same proof if mic is denied.'],
-  ],
-  'night-glass': [
-    ['Each phone is one segment of the red edge.', 'Hold your private contact.', 'All panes must lock inside one window.'],
-    ['Frame shows, Keeper holds, Watcher sees.', 'The watcher scans the frame after the contact locks.', 'Only the camera reveals the final bearing.'],
-    ['Room names, doors, rotation, and endpoints are on different phones.', 'Undo the glass turn before describing the doorways.', 'Touch named neighboring rooms from START to EXIT.'],
-    ['Move with the screen dimmed; scan only after stopping.', 'The anchor phone displays the next seal.', 'A manual seal preserves the same ordered handoff.'],
-    ['First lock your private contact.', 'Then hold the red edge.', 'Every required pane must close together.'],
-  ],
-  'long-table': [
-    ['Each object belongs to a different decade.', 'Describe the clue instead of showing your screen.', 'The service ledger reads oldest to newest; then every phone lies flat.'],
-    ['Every torn corner describes one hidden object.', 'The rule keeper owns the compass order.', 'Place the four solved objects into the photo in that order.'],
-    ['The seeker finds; a different person witnesses.', 'The camera is only a live frame and saves nothing.', 'Walk over and inspect the real object before confirming.'],
-    ['Courier and destination change after every pass.', 'Hold the courier contact before walking.', 'Stop beside the named person, then scan their place seal.'],
-    ['Position first, sound second, rim last.', 'REST is a real sound assignment.', 'Every phone must hold the rim inside eight seconds.'],
-  ],
-} as const;
 
 interface WhisperDirectPayload {
   kind: 'housewire.whisper.v1';
@@ -106,11 +87,10 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   const crew = useHousewireStore((state) => state.crew);
   const rooms = useHousewireStore((state) => state.rooms);
   const settings = useHousewireStore((state) => state.settings);
+  const relayUrl = useHousewireStore((state) => state.relayUrl);
   const missionStartedAt = useHousewireStore((state) => state.missionStartedAt);
   const persistedStageIndex = useHousewireStore((state) => state.missionStageIndex);
   const persistedRetries = useHousewireStore((state) => state.missionRetries);
-  const calibration = useHousewireStore((state) => state.calibration);
-  const results = useHousewireStore((state) => state.results);
   const updateMissionProgress = useHousewireStore((state) => state.updateMissionProgress);
   const completeMission = useHousewireStore((state) => state.completeMission);
   const prepareSession = useHousewireStore((state) => state.prepareSession);
@@ -132,17 +112,23 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   }, [coordinator.game, missionId, nodeIds, sessionCode]);
   const [previewStage, setPreviewStage] = useState(Math.max(0, Math.min(4, persistedStageIndex)));
   const [previewProofs, setPreviewProofs] = useState<string[]>([]);
+  const previewProofsRef = useRef<string[]>([]);
+  const pendingAdvanceRef = useRef(false);
   const stageIndex = shared ? coordinator.stageIndex ?? 0 : previewStage;
   const [activeNodeId, setActiveNodeId] = useState(localNodeId);
   const [secondsLeft, setSecondsLeft] = useState(meta.minutes * 60);
   const [paused, setPaused] = useState(false);
-  const [overtimeAccepted, setOvertimeAccepted] = useState(false);
-  const [hintLevel, setHintLevel] = useState(0);
+  const overtimeAccepted = false;
+  const [guideOpen, setGuideOpen] = useState(false);
   const [lineOpen, setLineOpen] = useState(false);
   const [privateDeliveries, setPrivateDeliveries] = useState<PrivateWordDelivery[]>([]);
   const [retries, setRetries] = useState(persistedRetries);
-  const [stageAttempts, setStageAttempts] = useState(0);
-  const [directorTick, setDirectorTick] = useState(Date.now());
+  const retriesRef = useRef(persistedRetries);
+  const limit = escapeAttemptLimit(missionId);
+  const attemptsUsed = shared ? coordinator.mistakes ?? 0 : retries;
+  const failed = shared ? coordinator.failedAt !== undefined : retries >= limit || secondsLeft === 0;
+  const failureRef = useRef(failed);
+  failureRef.current = failed;
   const [error, setError] = useState<string>();
   const [endingRun, setEndingRun] = useState(false);
   const completedRef = useRef(false);
@@ -151,7 +137,6 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   const eventLogRef = useRef<string[]>([]);
   const previewDeadlineRef = useRef(startedAtRef.current + meta.minutes * 60_000);
   const stageEnteredAtRef = useRef(Date.now());
-  const autoHintedStageRef = useRef<string | undefined>(undefined);
   const pausedAtRef = useRef<number | undefined>(undefined);
   const houseLinePeers = useMemo(() => session.peers.map((peer) => ({
     id: peer.id,
@@ -162,7 +147,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     acoustic,
     channelId: coordinator.operationId,
     clockOffsetMs: coordinator.clockOffsetMs,
-    enabled: shared,
+    enabled: shared && !failed && coordinator.finishedAt === undefined && coordinator.abortedAt === undefined,
     hapticsEnabled: settings.haptics,
     localNodeId,
     peers: houseLinePeers,
@@ -199,10 +184,9 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   }, [coordinator.clockOffsetMs, meta.minutes, paused, shared]);
 
   useEffect(() => {
-    setHintLevel(0);
-    setStageAttempts(0);
+    setGuideOpen(false);
     setError(undefined);
-    if (!shared) setPreviewProofs([]);
+    if (!shared) { setPreviewProofs([]); previewProofsRef.current = []; pendingAdvanceRef.current = false; }
     stageEnteredAtRef.current = Date.now();
     // Browsers reject effect-driven audio before the first direct gesture.
     // Native devices do not have that restriction; web still plays every
@@ -210,38 +194,28 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     if (Platform.OS !== 'web') play('relay', 0.36);
   }, [play, shared, stageIndex]);
 
-  useEffect(() => {
-    const interval = setInterval(() => setDirectorTick(Date.now()), 2_000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const pressure = useMemo(() => assessStagePressure({
-    attempts: stageAttempts,
-    history: results
-      .filter((result) => result.missionId === missionId)
-      .map((result) => ({ durationSeconds: result.durationSeconds, retries: result.retries })),
-    secondsSinceProgress: Math.max(0, (directorTick - stageEnteredAtRef.current) / 1_000),
-    sensorAvailable: !calibration.fallbackMode && motion.available !== false && !motion.denied,
-    stageIndex,
-  }), [calibration.fallbackMode, directorTick, missionId, motion.available, motion.denied, results, stageAttempts, stageIndex]);
 
   useEffect(() => {
-    const stageKey = `${missionId}:${stageIndex}`;
-    if (paused || !pressure.offerHint || autoHintedStageRef.current === stageKey) return;
-    autoHintedStageRef.current = stageKey;
-    setHintLevel((current) => Math.max(1, current));
-    play('warning', 0.18);
-    if (settings.haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    eventLogRef.current.push(`The local director inferred a stall at ${meta.stageNames[stageIndex]} and exposed hint one.`);
-  }, [meta.stageNames, missionId, paused, play, pressure.offerHint, settings.haptics, stageIndex]);
+    if (!failed) return;
+    const ended = coordinator.failedAt ?? Date.now();
+    useFamilyClubStore.getState().record({
+      id: `escape-failed:${missionId}:${coordinator.operationId ?? startedAtRef.current}`, mode: 'escape', title: `${caseName(missionId)} · Not escaped`,
+      playedAt: new Date(ended).toISOString(), durationSeconds: Math.max(0, (ended - startedAtRef.current) / 1000),
+      retries: attemptsUsed, caseId: missionId, practice: !shared, source: 'authored',
+      participants: crew.filter(p => !p.simulated).map(p => ({ name: p.name, won: false })),
+    });
+  }, [attemptsUsed, coordinator.failedAt, coordinator.operationId, crew, failed, missionId, shared]);
 
   const onMiss = useCallback(() => {
-    setRetries((current) => current + 1);
-    setStageAttempts((current) => current + 1);
-  }, []);
+    if (failureRef.current) return;
+    if (shared) void coordinator.reportMistake();
+    else { const next = Math.min(limit, retriesRef.current + 1); retriesRef.current = next; if (next >= limit) failureRef.current = true; setRetries(next); updateMissionProgress(stageIndex, next); }
+  }, [coordinator, limit, shared, stageIndex, updateMissionProgress]);
 
   const finish = useCallback(() => {
-    if (completedRef.current) return;
+    if (!shared && Date.now() >= previewDeadlineRef.current) { failureRef.current = true; setSecondsLeft(0); return; }
+    if (completedRef.current || failureRef.current) return;
     completedRef.current = true;
     play('complete', 0.88);
     if (settings.haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
@@ -250,11 +224,11 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
       durationSeconds: Math.max(1, Math.round(((shared ? Date.now() + coordinator.clockOffsetMs : Date.now()) - startedAtRef.current) / 1_000)),
       events: [...eventLogRef.current, closingEvent(missionId)],
       missionId,
-      retries,
+      retries: attemptsUsed,
       routeSeed: game.effectiveSeed,
     });
     router.replace('/debrief');
-  }, [completeMission, coordinator.clockOffsetMs, game.effectiveSeed, missionId, play, retries, router, settings.haptics, shared]);
+  }, [attemptsUsed, completeMission, coordinator.clockOffsetMs, game.effectiveSeed, missionId, play, router, settings.haptics, shared]);
 
   useEffect(() => {
     if (shared && coordinator.finishedAt !== undefined) finish();
@@ -269,6 +243,8 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
   }, [coordinator.completions, previewProofs, shared]);
 
   const onProof = useCallback(async (proofKey: string) => {
+    if (!shared && Date.now() >= previewDeadlineRef.current) { failureRef.current = true; setSecondsLeft(0); return false; }
+    if (failureRef.current || pendingAdvanceRef.current) return false;
     setError(undefined);
     if (shared) {
       const accepted = await coordinator.submitProof(proofKey);
@@ -284,7 +260,9 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     const stage = game.stages[stageIndex];
     const synchronized = escapeStageRequiresEveryNode(game, stageIndex);
     const storedProofKey = synchronized ? `${proofKey}:${activeNodeId}` : proofKey;
-    const next = [...new Set([...previewProofs, storedProofKey])];
+    if (previewProofsRef.current.includes(storedProofKey)) return true;
+    const next = [...previewProofsRef.current, storedProofKey];
+    previewProofsRef.current = next;
     setPreviewProofs(next);
     eventLogRef.current.push(`${meta.stageNames[stageIndex]} accepted ${proofKey}.`);
     play('accept', 0.48);
@@ -292,11 +270,12 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
       ? stage.requiredNodeIds.every((nodeId) => next.includes(`${proofKey}:${nodeId}`))
       : stage.expectedProofKeys.every((key) => next.includes(key));
     if (complete) {
+      pendingAdvanceRef.current = true;
       if (stageIndex >= game.stages.length - 1) finish();
-      else setTimeout(() => setPreviewStage((current) => Math.min(4, current + 1)), 320);
+      else setTimeout(() => { if (!failureRef.current) setPreviewStage((current) => current === stageIndex ? Math.min(4, stageIndex + 1) : current); }, 320);
     }
     return true;
-  }, [activeNodeId, coordinator, finish, game, meta.stageNames, play, previewProofs, shared, stageIndex]);
+  }, [activeNodeId, coordinator, finish, game, meta.stageNames, play, shared, stageIndex]);
 
   const onSignal = useCallback(async (input: Parameters<typeof coordinator.publishSignal>[0]) => coordinator.publishSignal(input), [coordinator]);
 
@@ -345,7 +324,8 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
           setTimeout(() => playback.replace(null), Math.max(4_000, payload.durationMs + 1_500));
           return;
         }
-        const uri = `${FileSystem.cacheDirectory}housewire-${item.messageId}.m4a`;
+        const extension = payload.mimeType === 'audio/mp4' ? 'm4a' : payload.mimeType === 'audio/webm' ? 'webm' : 'ogg';
+        const uri = `${FileSystem.cacheDirectory}housewire-${item.messageId}.${extension}`;
         await FileSystem.writeAsStringAsync(uri, payload.base64, { encoding: FileSystem.EncodingType.Base64 });
         playback.replace({ uri });
         playback.play();
@@ -361,12 +341,13 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     if (!coordinator.operationId || session.connectionState !== 'connected') return false;
     let audio: WhisperPayload | undefined;
     if (recorded) {
-      const armed = await acoustic.start(1.8);
+      const armed = await acoustic.start(6);
       if (!armed) return false;
-      await new Promise<void>((resolve) => setTimeout(resolve, 1_850));
+      await new Promise<void>((resolve) => setTimeout(resolve, 6_050));
       audio = await acoustic.finishWhisper();
       if (!audio) return false;
     }
+    if (failureRef.current) return false;
     const payload: WhisperDirectPayload = {
       kind: 'housewire.whisper.v1',
       missionId: 'dead-air',
@@ -448,7 +429,10 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
     );
   }
 
+  if (failed) return <ScreenShell edgeWire="none"><ScrollView contentContainerStyle={{ gap: 22, paddingBottom: 40 }}><TechnicalLabel color={theme.colors.fault}>{attemptsUsed >= limit ? 'No tries left' : 'Time is up'}</TechnicalLabel><Text style={[styles.pauseTitle, { color: theme.colors.text }]}>{caseName(missionId)} ended</Text><Text style={{ color: theme.colors.muted }}>{Math.max(0, limit - attemptsUsed)} tries remaining · This run is not counted as an escape.</Text><AnswerReview items={escapeAnswerReview(game, stageIndex)} /><ActionButton accent={meta.accent} icon="home-outline" label="Back to games" onPress={leaveLocally} /></ScrollView></ScreenShell>;
+
   return (
+    <PuzzleAttemptProvider onMistake={onMiss}>
     <ScreenShell edgeWire="none" padded={false} texture={false}>
       <View style={styles.screen}>
         <View style={[styles.header, { borderColor: theme.colors.draft }]}>
@@ -464,8 +448,8 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
           </View>
           <View style={styles.progressRail}>{meta.stageNames.map((name, index) => <View key={name} style={[styles.progressSegment, { backgroundColor: index < stageIndex ? theme.colors.ready : index === stageIndex ? meta.accent : theme.colors.draft }]} />)}</View>
           <View style={styles.stageMeta}>
-            <TechnicalLabel color={meta.accent}>Part {stageIndex + 1} of 5 · {meta.stageNames[stageIndex]}</TechnicalLabel>
-            <AdaptiveGuideButton accent={meta.accent} assessment={pressure} hintLevel={hintLevel} onPress={() => setHintLevel((current) => Math.min(3, current + 1))} />
+            <TechnicalLabel color={meta.accent}>Part {stageIndex + 1} of 5 · {Math.max(0, limit - attemptsUsed)} tries left</TechnicalLabel>
+            <Pressable accessibilityRole="button" onPress={() => setGuideOpen((current) => !current)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: meta.accent, fontFamily: theme.typography.families.bodyMedium }}>Ask the guide</Text></Pressable>
           </View>
         </View>
 
@@ -487,7 +471,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
               ) : null}
             </StagePanel>
           ) : null}
-          {missionId === 'dead-air' && game.id === 'dead-air' ? (
+          {(!shared || session.connectionState === 'connected') && missionId === 'dead-air' && game.id === 'dead-air' ? (
             <DeadAirStageView
               acoustic={acoustic}
               activeNodeId={activeNodeId}
@@ -509,7 +493,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
               stageIndex={stageIndex}
             />
           ) : null}
-          {missionId === 'night-glass' && game.id === 'night-glass' ? (
+          {(!shared || session.connectionState === 'connected') && missionId === 'night-glass' && game.id === 'night-glass' ? (
             <NightGlassStageView
               activeNodeId={activeNodeId}
               completedProofKeys={completedProofKeys}
@@ -527,7 +511,7 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
               stageIndex={stageIndex}
             />
           ) : null}
-          {missionId === 'long-table' && game.id === 'long-table' ? (
+          {(!shared || session.connectionState === 'connected') && missionId === 'long-table' && game.id === 'long-table' ? (
             <LongTableStageView
               acoustic={acoustic}
               activeNodeId={activeNodeId}
@@ -547,16 +531,16 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
             />
           ) : null}
 
-          {hintLevel > 0 ? (
-            <AdaptiveGuidePanel
+            <GuideChat
+              context={escapeGuideContext(game, stageIndex, activeNodeId, completedProofKeys)}
+              hideLauncher open={guideOpen} onOpenChange={setGuideOpen}
               accent={meta.accent}
-              assessment={pressure}
-              hint={HINTS[missionId][stageIndex][hintLevel - 1]}
-              level={hintLevel}
-              onClose={() => setHintLevel(0)}
-              onNext={() => setHintLevel((current) => Math.min(3, current + 1))}
+              runId={`${missionId}:${coordinator.operationId ?? startedAtRef.current}`}
+              stageId={String(stageIndex)}
+              roleLabel={activeNodeId}
+              mechanic={guideMechanicFor(stageIndex === 0 && missionId === 'night-glass' ? 'split-riddle' : game.stages[stageIndex]?.proofKind ?? 'deduction')}
+              relayUrl={relayUrl ?? undefined}
             />
-          ) : null}
           {error ? <View style={[styles.error, { borderColor: theme.colors.fault }]}><TechnicalLabel color={theme.colors.fault}>Something went wrong</TechnicalLabel><Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text></View> : null}
           {shared ? <View style={styles.liveStatus}><View style={[styles.connectionDot, { backgroundColor: session.connectionState === 'connected' ? theme.colors.ready : theme.colors.fault }]} /><Text style={[styles.liveStatusText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{session.connectionState === 'connected' ? `${coordinator.liveNodeIds?.length ?? nodeIds.length} phones connected` : 'Trying to reconnect'}</Text></View> : <TechnicalLabel color={theme.colors.warning}>One-phone preview · switch players above each puzzle</TechnicalLabel>}
         </ScrollView>
@@ -566,9 +550,9 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
             accent={meta.accent}
             controller={houseLine}
             expanded={lineOpen}
-            guideState={pressure.offerHint || hintLevel > 0 ? 'ready' : pressure.pressure >= 0.36 ? 'watching' : 'clear'}
+            guideState={guideOpen ? 'ready' : 'clear'}
             onExpandedChange={setLineOpen}
-            onGuidePress={() => setHintLevel((current) => Math.max(1, current))}
+            onGuidePress={() => setGuideOpen(true)}
           />
         ) : null}
 
@@ -588,18 +572,16 @@ export function EscapeCaseMission({ missionId }: { missionId: EscapeCaseId }) {
           <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={styles.pauseBackdrop}>
             <StagePanel tone={theme.colors.fault}>
               <TechnicalLabel color={theme.colors.fault}>Time is up</TechnicalLabel>
-              <Text style={[styles.pauseTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>The house is still open.</Text>
-              <Text style={[styles.pauseCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep solving in overtime, or end the run safely. Overtime never changes a solved clue or fabricates a completion.</Text>
-              <ActionButton accent={meta.accent} icon="time-outline" label="Continue in overtime" onPress={() => {
-                setOvertimeAccepted(true);
-                eventLogRef.current.push('The crew continued after the case clock expired.');
-              }} />
+              <Text style={[styles.pauseTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>The case has ended.</Text>
+              <Text style={[styles.pauseCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Answers open after the host confirms the result.</Text>
+              <Text style={[styles.pauseCopy, { color: theme.colors.muted }]}>Waiting for the host to confirm the end of the case…</Text>
               <ActionButton accent={meta.accent} disabled={endingRun} icon="exit-outline" label={shared && coordinator.isHost ? endingRun ? 'Ending for everyone…' : 'End this run' : shared ? 'Leave this phone' : 'End this run'} onPress={() => void endRunForHouse()} secondary />
             </StagePanel>
           </Animated.View>
         ) : null}
       </View>
     </ScreenShell>
+    </PuzzleAttemptProvider>
   );
 }
 

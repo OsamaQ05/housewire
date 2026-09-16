@@ -1,4 +1,5 @@
 import { generateLine13Game, line13RouteProof } from '../../domain/line-13-game';
+import { escapeAttemptLimit, escapeDurationMs } from '../../domain/attempt-rules';
 import type { EvidenceKind } from '../../domain/types';
 
 import {
@@ -46,6 +47,9 @@ export interface SharedMissionCoordinatorState {
   finishedAt?: number;
   abortedAt?: number;
   abortedByNodeId?: string;
+  mistakeIds: readonly string[];
+  failedAt?: number;
+  failureReason?: 'attempts' | 'time';
 }
 
 export interface SharedMissionCoordinatorContext {
@@ -93,6 +97,7 @@ export function createSharedMissionCoordinatorState(): SharedMissionCoordinatorS
     completions: [],
     revision: 0,
     acceptedThroughSequence: 0,
+    mistakeIds: [],
   };
 }
 
@@ -133,6 +138,7 @@ export function createMissionAbortEvent(
     !state.operationId ||
     state.startedAt === undefined ||
     state.finishedAt !== undefined ||
+    state.failedAt !== undefined ||
     state.abortedAt !== undefined ||
     !state.liveNodeIds.includes(nodeId)
   ) {
@@ -159,6 +165,7 @@ export function createLocalCompletionEvent(
     state.seed === undefined ||
     state.startedAt === undefined ||
     state.finishedAt !== undefined ||
+    state.failedAt !== undefined ||
     state.abortedAt !== undefined ||
     !state.requiredNodeIds.includes(nodeId)
   ) {
@@ -212,7 +219,14 @@ export function reduceSharedMissionFrame(
   if (!parsed.success) return unchanged(current);
   const event = parsed.data;
 
+  if (event.kind !== 'mission.start' && context.isHost && current.hostNodeId === context.localNodeId) {
+    const expired = expireSharedMission(current, item.serverTime);
+    if (expired !== current) return { state: expired, outbound: [snapshotOutbound(expired, item.eventId)] };
+  }
+
   switch (event.kind) {
+    case 'mission.mistake':
+      return acceptMistake(current, item, event, context);
     case 'mission.start':
       return acceptStart(current, item, event, context);
     case 'mission.stage':
@@ -253,6 +267,7 @@ function acceptStart(
     completions: [],
     revision: 0,
     acceptedThroughSequence: item.sequence,
+    mistakeIds: [],
   };
   if (!context.isHost || context.localNodeId !== event.hostNodeId) return { state: next, outbound: [] };
   return {
@@ -267,7 +282,7 @@ function acceptStage(
   event: MissionStageEvent,
   context: SharedMissionCoordinatorContext,
 ): CoordinatorReduction {
-  if (current.abortedAt !== undefined) return unchanged(current);
+  if (current.abortedAt !== undefined || current.failedAt !== undefined) return unchanged(current);
   if (!matchesActiveHost(current, item.senderId, event.hostNodeId, event.operationId, context)) {
     return unchanged(current);
   }
@@ -304,7 +319,7 @@ function acceptEvidence(
   event: MissionEvidenceEvent,
   context: SharedMissionCoordinatorContext,
 ): CoordinatorReduction {
-  if (current.abortedAt !== undefined) return unchanged(current);
+  if (current.abortedAt !== undefined || current.failedAt !== undefined) return unchanged(current);
   if (!context.isHost || current.hostNodeId !== context.localNodeId) return unchanged(current);
   if (
     event.nodeId !== item.senderId ||
@@ -418,6 +433,19 @@ function acceptEvidence(
   };
 }
 
+export function expireSharedMission(state: SharedMissionCoordinatorState, now: number): SharedMissionCoordinatorState {
+  if (state.startedAt === undefined || state.failedAt !== undefined || state.finishedAt !== undefined || state.abortedAt !== undefined || now < state.startedAt + escapeDurationMs('line-13')) return state;
+  return { ...state, failedAt: state.startedAt + escapeDurationMs('line-13'), failureReason: 'time', revision: state.revision + 1 };
+}
+
+function acceptMistake(current: SharedMissionCoordinatorState, item: SessionFeedItem, event: Extract<HousewireSessionEvent, { kind: 'mission.mistake' }>, context: SharedMissionCoordinatorContext): CoordinatorReduction {
+  if (!context.isHost || current.hostNodeId !== context.localNodeId || current.failedAt !== undefined || current.finishedAt !== undefined || current.abortedAt !== undefined || event.operationId !== current.operationId || event.nodeId !== item.senderId || !current.requiredNodeIds.includes(event.nodeId) || event.stageIndex !== current.stageIndex || current.stageStartedAt === undefined || event.observedAt < current.stageStartedAt || Math.abs(event.observedAt - item.serverTime) > MAXIMUM_EVIDENCE_CLOCK_SKEW_MS || current.mistakeIds.includes(event.attemptId)) return unchanged(current);
+  const mistakeIds = [...current.mistakeIds, event.attemptId];
+  const failed = mistakeIds.length >= escapeAttemptLimit('line-13');
+  const next: SharedMissionCoordinatorState = { ...current, mistakeIds, failedAt: failed ? item.serverTime : undefined, failureReason: failed ? 'attempts' : undefined, revision: current.revision + 1, acceptedThroughSequence: Math.max(current.acceptedThroughSequence, item.sequence) };
+  return { state: next, outbound: [snapshotOutbound(next, item.eventId)] };
+}
+
 function acceptAbort(
   current: SharedMissionCoordinatorState,
   item: SessionFeedItem,
@@ -429,6 +457,7 @@ function acceptAbort(
     event.operationId !== current.operationId ||
     current.startedAt === undefined ||
     current.finishedAt !== undefined ||
+    current.failedAt !== undefined ||
     current.abortedAt !== undefined ||
     !current.liveNodeIds.includes(event.nodeId) ||
     Math.abs(event.abortedAt - item.serverTime) > MAXIMUM_EVIDENCE_CLOCK_SKEW_MS
@@ -459,6 +488,8 @@ function acceptSnapshot(
   if (!isTrustedHost(item.senderId, event.hostNodeId, context, current)) return unchanged(current);
   if (!isNewerOrCurrentOperation(current, event.startedAt, event.operationId)) return unchanged(current);
   if (event.operationId === current.operationId) {
+    if (current.failedAt !== undefined && event.failedAt === undefined) return unchanged(current);
+    if (event.mistakeIds.length < current.mistakeIds.length) return unchanged(current);
     if (event.revision < current.revision) return unchanged(current);
     if (event.revision === current.revision && event.acceptedThroughSequence < current.acceptedThroughSequence) {
       return unchanged(current);
@@ -482,6 +513,9 @@ function acceptSnapshot(
       finishedAt: event.finishedAt,
       abortedAt: event.abortedAt,
       abortedByNodeId: event.abortedByNodeId,
+      mistakeIds: event.mistakeIds,
+      failedAt: event.failedAt,
+      failureReason: event.failureReason,
     },
     outbound: [],
   };
@@ -543,6 +577,9 @@ function snapshotOutbound(state: SharedMissionCoordinatorState, causeEventId: st
     finishedAt: state.finishedAt,
     abortedAt: state.abortedAt,
     abortedByNodeId: state.abortedByNodeId,
+    mistakeIds: state.mistakeIds,
+    failedAt: state.failedAt,
+    failureReason: state.failureReason,
   });
   return {
     event,
@@ -574,6 +611,12 @@ function evidenceIsSemanticallyValid(event: MissionEvidenceEvent): boolean {
 }
 
 function snapshotIsSemanticallyValid(event: MissionSnapshotEvent): boolean {
+  if (new Set(event.mistakeIds).size !== event.mistakeIds.length) return false;
+  if ((event.failedAt === undefined) !== (event.failureReason === undefined)) return false;
+  if (event.failedAt !== undefined && (event.finishedAt !== undefined || event.abortedAt !== undefined || event.failedAt < event.startedAt)) return false;
+  if (event.failureReason === 'attempts' && event.mistakeIds.length !== escapeAttemptLimit('line-13')) return false;
+  if (event.mistakeIds.length >= escapeAttemptLimit('line-13') && event.failureReason !== 'attempts') return false;
+  if (event.failureReason === 'time' && event.failedAt !== event.startedAt + escapeDurationMs('line-13')) return false;
   const expectedStageId = line13StageIds[event.stageIndex];
   if (expectedStageId !== event.stageId) return false;
   const expectedRequired = requiredNodesForStage(

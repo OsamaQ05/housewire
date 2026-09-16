@@ -17,12 +17,16 @@ import type { ForgeCase, ForgePlayerCase, ForgeRole } from '@/src/domain/case-fo
 import { caseForgeClient } from '@/src/features/forge/case-forge-client';
 import { ForgeButton, ForgeGrid, forgeColors } from '@/src/features/forge/ForgePrimitives';
 import { ForgeStageRunner } from '@/src/features/forge/ForgeStageRunner';
+import { ForgeAnswerReview, ForgeTries } from '@/src/features/forge/ForgeAnswerReview';
 import { makeForgeJoinTicket } from '@/src/features/forge/live-protocol';
 import { useLiveForgeCoordinator } from '@/src/features/forge/use-live-forge-coordinator';
 import { deriveLanRelayUrl } from '@/src/features/session';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
+import { useFamilyClubStore } from '@/src/store/use-family-club-store';
+import { ClubLink } from '@/src/features/family-club/ClubLink';
+import { GuideChat, guideMechanicFor, forgeGuideContext } from '@/src/features/director';
 
 export default function ForgeLiveScreen() {
   const params = useLocalSearchParams<{ guest?: string | string[]; id?: string | string[] }>();
@@ -60,6 +64,18 @@ export default function ForgeLiveScreen() {
 
   const live = useLiveForgeCoordinator({ caseId, game, localName });
   const state = live.state;
+  useEffect(() => {
+    if (!state || (state.status !== 'finished' && state.status !== 'failed') || !state.startedAt) return;
+    const endedAt = state.finishedAt ?? state.failedAt;
+    if (!endedAt) return;
+    useFamilyClubStore.getState().record({
+      id: `forge-live:${state.operationId}`, mode: 'forge', title: state.title, caseId: state.caseId,
+      playedAt: new Date(endedAt).toISOString(), durationSeconds: Math.max(0, (endedAt - state.startedAt) / 1000),
+      practice: false, rounds: state.stageIndex,
+      hints: Object.values(state.hintsByStage).reduce((sum, value) => sum + value, 0),
+      participants: state.assignments.map((p) => ({ name: p.name, won: state.status === 'finished' })),
+    });
+  }, [state]);
   const projection = live.projection;
   const relayUrl = storedRelayUrl ?? deriveLanRelayUrl();
   const joinUrl = useMemo(() => {
@@ -212,6 +228,17 @@ export default function ForgeLiveScreen() {
     );
   }
 
+  if (state.status === 'failed') return <ScreenShell edgeWire="none" padded={false} texture={false}>
+    <ScrollView contentContainerStyle={styles.completedContent}>
+      <Ionicons color={theme.colors.warning} name="lock-closed-outline" size={44} />
+      <Text style={[styles.stateTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Out of tries</Text>
+      <Text style={[styles.stateBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>The crew used all five tries. {state.stageIndex} of 5 scenes solved. The remaining answers are now open to everyone.</Text>
+      <ForgeAnswerReview entries={state.failureReview} />
+      <ForgeButton icon="albums-outline" label={live.isHost ? 'Choose a new case' : 'Leave the room'} onPress={leave} />
+      <ClubLink label="See game history" />
+    </ScrollView>
+  </ScreenShell>;
+
   if (state.status === 'finished') {
     const elapsed = Math.max(1, Math.floor(((state.finishedAt ?? now) - (state.startedAt ?? now)) / 1_000));
     return (
@@ -227,6 +254,7 @@ export default function ForgeLiveScreen() {
             <Metric label="SCENES" value="5" />
           </View>
           <ForgeButton icon="albums-outline" label={live.isHost ? 'Return to casebook' : 'Leave the room'} onPress={leave} />
+          <ClubLink label="See your family standings" />
         </ScrollView>
       </ScreenShell>
     );
@@ -277,6 +305,7 @@ export default function ForgeLiveScreen() {
       </View>
       <View style={styles.sceneRail}>{projection.stages.map((item, index) => <View key={item.id} style={[styles.sceneSegment, { backgroundColor: index <= state.stageIndex ? state.accent : theme.colors.draft, flex: index === state.stageIndex ? 2 : 1 }]} />)}</View>
       <ScrollView contentContainerStyle={styles.runContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ForgeTries used={state.attemptsUsed} />
         {live.connectionState !== 'connected' || live.missingNodeIds.length ? (
           <ConnectionFault
             message={live.connectionState !== 'connected' ? 'Your phone lost the relay. Reconnect to recover the host-authoritative stage.' : `${live.missingNodeIds.length} assigned phone${live.missingNodeIds.length === 1 ? ' is' : 's are'} offline. This scene pauses until the role returns.`}
@@ -291,19 +320,13 @@ export default function ForgeLiveScreen() {
         ) : null}
         <ForgeStageRunner
           activePlayerId={projection.role.playerId}
-          hintsRevealed={state.hintsByStage[stage.id] ?? 0}
           liveMode
           onChangePlayer={() => undefined}
-          onRevealHint={() => {
-            void live.revealHint().then((revealed) => {
-              if (revealed) play('relay', 0.3);
-              else play('warning', 0.3);
-            });
-          }}
           onSubmit={live.submit}
           roles={uiRoles}
           stage={stage}
         />
+        <GuideChat context={forgeGuideContext(stage, projection.role.playerId)} runId={`forge-live:${state.operationId}`} stageId={stage.id} mechanic={guideMechanicFor(stage.mechanic.kind === 'motion-sync' ? 'split-riddle' : stage.mechanic.kind)} relayUrl={storedRelayUrl} roleLabel={projection.role.playerId} accent={state.accent} />
       </ScrollView>
 
       <Modal animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => setLeaveOpen(false)} transparent visible={leaveOpen}>

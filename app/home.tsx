@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,30 +15,25 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 
 import { ScreenShell } from '@/src/components/ScreenShell';
+import { CaseArtwork } from '@/src/components/CaseArtwork';
 import { missions } from '@/src/data/campaigns';
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore, type MissionId } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
-
-const CASE_ART: Readonly<Record<MissionId, number>> = {
-  'line-13': require('@/assets/art/line13-house-v2.png'),
-  'dead-air': require('@/assets/art/dead-air-case.png'),
-  'night-glass': require('@/assets/art/night-glass-case.png'),
-  'long-table': require('@/assets/art/long-table-case.png'),
-};
+import { beginRailGesture, observeRailScroll, selectRailCase } from '@/src/features/story-rooms/case-rail-selection';
 
 const CASE_NUMBER: Readonly<Record<MissionId, string>> = {
   'line-13': '01',
-  'dead-air': '02',
-  'night-glass': '03',
-  'long-table': '04',
+  'dead-air': '—',
+  'night-glass': '02',
+  'long-table': '03',
 };
 
 const CASE_PROMISE: Readonly<Record<MissionId, string>> = {
-  'line-13': 'A CALL FROM 13 MINUTES AHEAD',
+  'line-13': 'THE TOY-MAKER’S LAST DELIVERY',
   'dead-air': 'A PRIVATE CHANNEL INSIDE THE WALLS',
-  'night-glass': 'A SECOND HOUSE INSIDE THE CAMERA',
-  'long-table': 'ONE TABLE STRETCHED ACROSS GENERATIONS',
+  'night-glass': 'ONE COURTYARD. TWO MOMENTS IN TIME.',
+  'long-table': 'A TREASURE HUNT AT THE DINNER TABLE',
 };
 
 export default function HomeScreen() {
@@ -54,7 +49,8 @@ export default function HomeScreen() {
   const missionInProgressId = useHousewireStore((state) => state.missionInProgressId);
   const tutorialComplete = useHousewireStore((state) => state.tutorialComplete);
   const reducedMotion = useHousewireStore((state) => state.settings.reducedMotion);
-  const [activeId, setActiveId] = useState<MissionId>(selectedMission);
+  const [activeId, setActiveId] = useState<MissionId>(() => missions.some(mission => mission.id === selectedMission) ? selectedMission : missions[0].id);
+  const railSelection = useRef(selectRailCase(missions.findIndex(mission => mission.id === activeId), missions.length));
   const scroller = useRef<ScrollView>(null);
   const cardWidth = Math.min(420, width - 42);
   const stride = cardWidth + 12;
@@ -62,26 +58,32 @@ export default function HomeScreen() {
   const completed = useMemo(() => new Set(results.map((result) => result.missionId)), [results]);
 
   useEffect(() => {
-    const index = missions.findIndex((mission) => mission.id === activeId);
-    const timeout = setTimeout(() => scroller.current?.scrollTo({ animated: false, x: Math.max(0, index) * stride }), 0);
-    return () => clearTimeout(timeout);
-  }, [activeId, stride]);
+    // Initial positioning and resizes only. Card taps own their one animation;
+    // scrolling must never feed a second scroll back through activeId.
+    railSelection.current = selectRailCase(railSelection.current.index, missions.length);
+    const frame = requestAnimationFrame(() => scroller.current?.scrollTo({ animated: false, x: railSelection.current.index * stride }));
+    return () => cancelAnimationFrame(frame);
+  }, [stride]);
 
   const launch = (mode: 'lan' | 'preview') => {
-    selectMission(activeId);
+    // A second tap may arrive before a state render or an animated scroll ends.
+    selectMission(missions[railSelection.current.index].id);
     prepareSession(mode);
     play(mode === 'lan' ? 'relay' : 'switch', 0.58);
-    router.push('/setup');
+    router.push(mode === 'preview' ? '/briefing' : '/setup');
   };
 
-  const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.max(
-      0,
-      Math.min(missions.length - 1, Math.round(event.nativeEvent.contentOffset.x / stride)),
-    );
-    const next = missions[nextIndex];
-    if (next && next.id !== activeId) {
-      setActiveId(next.id);
+  const chooseCase = (index: number) => {
+    railSelection.current = selectRailCase(index, missions.length);
+    setActiveId(missions[railSelection.current.index].id);
+    scroller.current?.scrollTo({ animated: !reducedMotion, x: railSelection.current.index * stride });
+  };
+  const beginSwipe = () => { railSelection.current = beginRailGesture(railSelection.current); };
+  const observeScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = observeRailScroll(railSelection.current, event.nativeEvent.contentOffset.x, stride, missions.length);
+    if (next !== railSelection.current) {
+      railSelection.current = next;
+      setActiveId(missions[next.index].id);
       play('switch', 0.2);
     }
   };
@@ -101,7 +103,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {missionStartedAt ? (
+        {missionStartedAt && missions.some(mission => mission.id === missionInProgressId) ? (
           <Pressable
             accessibilityHint="Returns to the case in progress"
             accessibilityRole="button"
@@ -132,7 +134,7 @@ export default function HomeScreen() {
           <View style={styles.tutorialCopy}>
             <Text style={[styles.tutorialOverline, { color: tutorialComplete ? theme.colors.ready : '#FFD166', fontFamily: theme.typography.families.bodyMedium }]}>{tutorialComplete ? 'Practice ready to replay' : 'New to Escape Cases?'}</Text>
             <Text style={[styles.tutorialTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>First Light · 2 min</Text>
-            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn the basics through four quick actions.</Text>
+            <Text style={[styles.tutorialBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Learn private clues and shared controls in one short puzzle.</Text>
           </View>
           <Ionicons color={tutorialComplete ? theme.colors.ready : '#FFD166'} name="arrow-forward" size={23} />
         </Pressable>
@@ -162,7 +164,11 @@ export default function HomeScreen() {
             contentContainerStyle={styles.caseRail}
             decelerationRate="fast"
             horizontal
-            onMomentumScrollEnd={settle}
+            onScrollBeginDrag={beginSwipe}
+            onTouchMove={beginSwipe}
+            onScroll={observeScroll}
+            scrollEventThrottle={32}
+            {...(Platform.OS === 'web' ? { onWheel: beginSwipe } : {})}
             ref={scroller}
             showsHorizontalScrollIndicator={false}
             snapToInterval={stride}
@@ -174,23 +180,20 @@ export default function HomeScreen() {
                   accessibilityHint="Selects this escape case"
                   accessibilityRole="button"
                   accessibilityState={{ selected: mission.id === activeId }}
-                  onPress={() => {
-                    setActiveId(mission.id);
-                    scroller.current?.scrollTo({ animated: true, x: index * stride });
-                  }}
+                  onPress={() => chooseCase(index)}
                   style={({ pressed }) => [
                     styles.caseCard,
                     { borderColor: mission.id === activeId ? mission.accent : theme.colors.draft, width: cardWidth },
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Image accessibilityLabel={`${mission.title} case artwork`} contentFit="cover" source={CASE_ART[mission.id]} style={styles.caseImage} transition={250} />
+                  <CaseArtwork caseId={mission.id} label={`${mission.title} case artwork`} />
                   <View style={styles.caseShade} />
                   <View style={[styles.caseEdge, { backgroundColor: mission.accent }]} />
                   <View style={styles.caseTopline}>
                     <Text style={[styles.caseNumber, { color: mission.accent, fontFamily: theme.typography.families.displayHeavy }]}>{CASE_NUMBER[mission.id]}</Text>
                     <View style={[styles.caseStatus, { borderColor: completed.has(mission.id) ? theme.colors.ready : 'rgba(255,255,255,0.36)' }]}>
-                      <Text style={[styles.caseStatusText, { color: completed.has(mission.id) ? theme.colors.ready : '#F4E8CF', fontFamily: theme.typography.families.monoMedium }]}>{completed.has(mission.id) ? 'CLOSED' : 'OPEN'}</Text>
+                      <Text style={[styles.caseStatusText, { color: completed.has(mission.id) ? theme.colors.ready : '#F4E8CF', fontFamily: theme.typography.families.monoMedium }]}>{completed.has(mission.id) ? 'PLAYED' : 'READY'}</Text>
                     </View>
                   </View>
                   <View style={styles.caseCopy}>
@@ -210,18 +213,18 @@ export default function HomeScreen() {
             ))}
           </ScrollView>
 
-          <View style={styles.caseDots} accessibilityLabel={`Case ${CASE_NUMBER[activeId]} of 04`}>
+          <View style={styles.caseDots} accessibilityLabel={`Case ${CASE_NUMBER[activeId]} of ${missions.length}`}>
             {missions.map((mission, index) => (
               <Pressable
                 accessibilityLabel={`Select ${mission.title}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: mission.id === activeId }}
                 key={mission.id}
-                onPress={() => {
-                  setActiveId(mission.id);
-                  scroller.current?.scrollTo({ animated: true, x: index * stride });
-                }}
-                style={[styles.caseDot, { backgroundColor: mission.id === activeId ? activeMission.accent : theme.colors.draft, width: mission.id === activeId ? 34 : 10 }]}
-              />
+                onPress={() => chooseCase(index)}
+                style={styles.caseDotTarget}
+              >
+                <View style={[styles.caseDot, { backgroundColor: mission.id === activeId ? activeMission.accent : theme.colors.draft, width: mission.id === activeId ? 34 : 10 }]} />
+              </Pressable>
             ))}
             <View style={styles.caseMeta}>
               <Text style={[styles.caseMetaText, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{activeMission.duration} · {activeMission.playerRange}</Text>
@@ -231,7 +234,7 @@ export default function HomeScreen() {
 
         <View style={[styles.promiseBand, { borderColor: theme.colors.draft }]}>
           <Text style={[styles.promiseIndex, { color: activeMission.accent, fontFamily: theme.typography.families.displayHeavy }]}>Everyone holds a different piece.</Text>
-          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>You have to talk, combine private clues, and put the story together as a family.</Text>
+          <Text style={[styles.promiseText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Build, explore and figure things out together. Everyone has a part to play.</Text>
         </View>
       </ScrollView>
 
@@ -245,7 +248,7 @@ export default function HomeScreen() {
           onPress={() => launch('lan')}
           style={({ pressed }) => [styles.primary, { backgroundColor: activeMission.accent }, pressed && styles.pressed]}
         >
-          <Text numberOfLines={1} style={[styles.primaryText, { color: '#182033', fontFamily: theme.typography.families.bodyMedium }]}>Host story</Text>
+          <Text numberOfLines={1} style={[styles.primaryText, { color: '#182033', fontFamily: theme.typography.families.bodyMedium }]}>Host</Text>
           <Ionicons color="#07100D" name="people" size={23} />
         </Pressable>
         <Pressable accessibilityHint="Runs every role on this phone for rehearsal" accessibilityRole="button" onPress={() => launch('preview')} style={({ pressed }) => [styles.quickAction, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>
@@ -273,19 +276,19 @@ function IconButton({ label, name, onPress }: { label: string; name: keyof typeo
 const styles = StyleSheet.create({
   brand: { fontSize: 31, letterSpacing: 0.5, lineHeight: 32 },
   caseCard: { borderRadius: 24, borderWidth: 1, height: 474, justifyContent: 'space-between', overflow: 'hidden' },
-  caseCopy: { gap: 8, paddingBottom: 22, paddingHorizontal: 19 },
+  caseCopy: { backgroundColor: 'rgba(3,7,12,0.82)', gap: 8, paddingBottom: 22, paddingHorizontal: 19, paddingTop: 16 },
   caseDescription: { fontSize: 15, lineHeight: 21, maxWidth: 350 },
   caseDot: { borderRadius: 6, height: 6 },
-  caseDots: { alignItems: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 20 },
+  caseDotTarget: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+  caseDots: { alignItems: 'center', flexDirection: 'row', gap: 2, paddingHorizontal: 20 },
   caseEdge: { bottom: 0, height: 4, left: 0, position: 'absolute', right: 0 },
-  caseImage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   caseMeta: { flex: 1 },
   caseMetaText: { fontSize: 9, letterSpacing: 0.7, textAlign: 'right' },
   caseNumber: { fontSize: 48, lineHeight: 48 },
   casePromise: { fontSize: 9, letterSpacing: 1.35, lineHeight: 14 },
   caseRail: { gap: 12, paddingHorizontal: 20 },
   caseRailBlock: { gap: 13 },
-  caseShade: { backgroundColor: 'rgba(3,7,7,0.36)', position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  caseShade: { backgroundColor: 'rgba(3,7,7,0.12)', position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   caseStatus: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 5 },
   caseStatusText: { fontSize: 9, letterSpacing: 1.3 },
   caseTitle: { fontSize: 57, letterSpacing: 0.3, lineHeight: 55 },

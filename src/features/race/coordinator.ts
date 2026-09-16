@@ -1,11 +1,15 @@
 import {
   CIRCUIT_RACE_STAGE_IDS,
+  circuitRaceAnswerReview,
   validateCircuitRaceStage,
   type CircuitRaceSubmission,
   type CompiledCircuitRace,
 } from '../../domain/circuit-race';
 import {
   acceptTeamEscapeRaceStart,
+  CIRCUIT_RACE_MAX_MISTAKES,
+  expireCircuitRace,
+  isTeamEscapeRaceTerminal,
   createTeamEscapeRaceProofEvent,
   reduceTeamEscapeRaceProof,
   teamEscapeRacePhaseAt,
@@ -90,6 +94,9 @@ export interface CircuitRaceTeamView {
   connectedNodeIds: readonly string[];
   connectionStatus: 'online' | 'degraded' | 'offline';
   finishedAt?: number;
+  failedAt?: number;
+  failureReason?: 'attempts' | 'time';
+  mistakes?: number;
   isLocalTeam: boolean;
   memberNodeIds: readonly string[];
   offlineNodeIds: readonly string[];
@@ -154,6 +161,9 @@ export function createCircuitRacePlayerSnapshot(
       stageIndex: ownTeam.stageIndex,
       stageStartedAt: ownTeam.stageStartedAt,
       finishedAt: ownTeam.finishedAt,
+      failedAt: ownTeam.failedAt,
+      failureReason: ownTeam.failureReason,
+      mistakes: ownTeam.mistakes ?? 0,
       acceptedProofs: ownTeam.acceptedProofs.map((proof) => ({ ...proof })),
     },
     opponents: state.teams
@@ -163,7 +173,15 @@ export function createCircuitRacePlayerSnapshot(
         stageIndex: team.stageIndex,
         acceptedProofCount: team.acceptedProofs.length,
         finishedAt: team.finishedAt,
+        failedAt: team.failedAt,
+        failureReason: team.failureReason,
       })),
+    ...('seed' in course && state.teams.every(isTeamEscapeRaceTerminal) ? {
+      answerReview: circuitRaceAnswerReview(course, [...new Set([
+        ...(ownTeam.missedStageIds ?? []),
+        ...(ownTeam.failedAt !== undefined ? state.stages.slice(ownTeam.stageIndex).map((stage) => stage.id) : []),
+      ])]),
+    } : {}),
   });
 }
 
@@ -279,6 +297,9 @@ function isMonotonicSameOperationSnapshot(
     (next.ownTeam.stageIndex === current.ownTeam.stageIndex &&
       next.ownTeam.stageStartedAt !== current.ownTeam.stageStartedAt) ||
     (current.ownTeam.finishedAt !== undefined && next.ownTeam.finishedAt !== current.ownTeam.finishedAt)
+    || (current.ownTeam.failedAt !== undefined && next.ownTeam.failedAt !== current.ownTeam.failedAt)
+    || (next.ownTeam.mistakes ?? 0) < (current.ownTeam.mistakes ?? 0)
+    || (current.answerReview !== undefined && JSON.stringify(current.answerReview) !== JSON.stringify(next.answerReview))
   ) return false;
   if (next.ownTeam.stageIndex === current.ownTeam.stageIndex) {
     const nextProofIds = new Set(next.ownTeam.acceptedProofs.map((proof) => proof.proofId));
@@ -288,6 +309,7 @@ function isMonotonicSameOperationSnapshot(
     const candidate = next.opponents[index];
     if (!candidate || candidate.stageIndex < team.stageIndex) return false;
     if (team.finishedAt !== undefined && candidate.finishedAt !== team.finishedAt) return false;
+    if (team.failedAt !== undefined && candidate.failedAt !== team.failedAt) return false;
     return candidate.stageIndex !== team.stageIndex || candidate.acceptedProofCount >= team.acceptedProofCount;
   });
 }
@@ -305,6 +327,7 @@ export function createCircuitRaceProofSubmissionFromSnapshot(input: {
   if (
     input.nodeId !== snapshot.recipientNodeId ||
     snapshot.ownTeam.finishedAt !== undefined ||
+    snapshot.ownTeam.failedAt !== undefined ||
     !snapshot.participants.some((participant) =>
       participant.nodeId === input.nodeId && participant.teamId === snapshot.ownTeam.teamId,
     )
@@ -381,6 +404,7 @@ export function reduceCircuitRaceProofFrame(
   if (!message || message.kind !== 'circuit-race.proof.submit' || message.raceId !== input.raceId) {
     return undefined;
   }
+  if (frame.recipientId !== state.hostNodeId) return undefined;
   const senderTeam = state.teams.find((team) => team.memberNodeIds.includes(frame.senderId));
   if (
     state.mode === 'live' &&
@@ -404,6 +428,14 @@ export function reduceCircuitRaceProofFrame(
     localNodeId: input.hostNodeId,
   });
   if (reduction.accepted) {
+    if (senderTeam?.rejectedRequestIds?.includes(message.requestId)) {
+      return { requestId: message.requestId, reduction: { accepted: false, changed: false, reason: 'INVALID_PROOF', state } };
+    }
+    const expired = expireCircuitRace(state, frame.serverTime);
+    if (expired !== state) {
+      return { requestId: message.requestId, reduction: { accepted: false, changed: true, reason: 'TEAM_FINISHED', state: expired } };
+    }
+    if (!reduction.changed) return { reduction, requestId: message.requestId };
     const stageId = message.event.stageId;
     if (!CIRCUIT_RACE_STAGE_IDS.includes(stageId as (typeof CIRCUIT_RACE_STAGE_IDS)[number])) {
       return {
@@ -418,9 +450,23 @@ export function reduceCircuitRaceProofFrame(
       { revealedHintCount: message.revealedHintCount },
     );
     if (!validation.valid) {
+      if (!senderTeam || validation.reason === 'wrong-input') {
+        return { requestId: message.requestId, reduction: { accepted: false, changed: false, reason: 'INVALID_PROOF', state } };
+      }
+      const mistakes = Math.min(CIRCUIT_RACE_MAX_MISTAKES, (senderTeam.mistakes ?? 0) + 1);
+      const updatedTeam = {
+        ...senderTeam,
+        mistakes,
+        missedStageIds: [...new Set([...(senderTeam.missedStageIds ?? []), message.event.stageId])],
+        rejectedRequestIds: [...(senderTeam.rejectedRequestIds ?? []), message.requestId],
+        ...(mistakes >= CIRCUIT_RACE_MAX_MISTAKES ? { failedAt: frame.serverTime, failureReason: 'attempts' as const } : {}),
+      };
       return {
         requestId: message.requestId,
-        reduction: { accepted: false, changed: false, reason: 'INVALID_PROOF', state },
+        reduction: { accepted: false, changed: true, reason: 'INVALID_PROOF', state: {
+          ...state, revision: state.revision + 1,
+          teams: state.teams.map((team) => team.teamId === updatedTeam.teamId ? updatedTeam : team),
+        } },
       };
     }
   }
@@ -432,8 +478,8 @@ export function projectCircuitRacePlayerSnapshot(
   serverNow: number,
   connectedNodeIds: readonly string[],
 ): CircuitRacePlayerView {
-  const phase = snapshot.ownTeam.finishedAt !== undefined &&
-    snapshot.opponents.every((team) => team.finishedAt !== undefined)
+  const phase = isTeamEscapeRaceTerminal(snapshot.ownTeam) &&
+    snapshot.opponents.every(isTeamEscapeRaceTerminal)
     ? 'complete'
     : serverNow < snapshot.startsAt ? 'countdown' : 'running';
   const connected = new Set(connectedNodeIds);
@@ -443,6 +489,8 @@ export function projectCircuitRacePlayerSnapshot(
       stageIndex: snapshot.ownTeam.stageIndex,
       acceptedProofCount: snapshot.ownTeam.acceptedProofs.length,
       finishedAt: snapshot.ownTeam.finishedAt,
+      failedAt: snapshot.ownTeam.failedAt,
+      failureReason: snapshot.ownTeam.failureReason,
     },
     ...snapshot.opponents,
   ];
@@ -459,11 +507,14 @@ export function projectCircuitRacePlayerSnapshot(
       ...(isLocalTeam ? {
         acceptedProofIds: snapshot.ownTeam.acceptedProofs.map((proof) => proof.proofId),
       } : {}),
-      canSubmit: isLocalTeam && phase === 'running' && team.finishedAt === undefined &&
+      canSubmit: isLocalTeam && phase === 'running' && !isTeamEscapeRaceTerminal(team) &&
         connected.has(snapshot.recipientNodeId),
       connectedNodeIds: online,
       connectionStatus: online.length === 0 ? 'offline' : offline.length > 0 ? 'degraded' : 'online',
       finishedAt: team.finishedAt,
+      failedAt: team.failedAt,
+      failureReason: team.failureReason,
+      ...(isLocalTeam ? { mistakes: snapshot.ownTeam.mistakes ?? 0 } : {}),
       isLocalTeam,
       memberNodeIds: members,
       offlineNodeIds: offline,
@@ -495,6 +546,8 @@ function rankSnapshotProgress(
   teams: readonly {
     acceptedProofCount: number;
     finishedAt?: number;
+    failedAt?: number;
+    failureReason?: 'attempts' | 'time';
     stageIndex: number;
     teamId: string;
   }[],
@@ -521,6 +574,8 @@ function rankSnapshotProgress(
       acceptedProofCount: team.acceptedProofCount,
       completedStageCount: team.finishedAt === undefined ? team.stageIndex : stageCount,
       finishedAt: team.finishedAt,
+      failedAt: team.failedAt,
+      failureReason: team.failureReason,
       provisional: team.finishedAt !== undefined && teams.some((candidate) => candidate.finishedAt === undefined) &&
         serverNow <= team.finishedAt + tieWindowMs,
       rank: finish?.rank,

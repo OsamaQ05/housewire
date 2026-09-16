@@ -94,7 +94,7 @@ function PlacesStage(props: LongTableStageProps) {
   };
 
   return (
-    <CaseStageScaffold accent={AMBER} instruction="Each phone owns pieces from a different decade. Speak the clues, order the objects oldest to newest, then hold every place contact together." stageNumber={1} title="Take your places">
+    <CaseStageScaffold accent={AMBER} instruction="Each phone has pieces from a different decade. Compare clues, order the objects oldest to newest, then solve the word seal at your place." stageNumber={1} title="Take your places">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.placeHeader}>
         <View style={[styles.plateRing, { borderColor: AMBER }]}><View style={[styles.plateCore, { borderColor: CREAM }]}><Ionicons color={AMBER} name="restaurant-outline" size={31} /></View></View>
@@ -131,8 +131,8 @@ function PlacesStage(props: LongTableStageProps) {
       ) : null}
 
       {!captain && !tableSet ? <WaitingPanel accent={AMBER} detail={`${crewName(props.game.tableCaptainNodeId, props.crew)} is arranging the service ledger. Describe your objects without showing the screen.`} title="The ledger needs your decade." /> : null}
-      {tableSet && !already ? <PoseLock accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('seat-order')} pose="FLAT" /> : null}
-      {already ? <WaitingPanel accent={AMBER} detail="Keep this place contact held. Every place must settle inside the same eight-second service window." title="Your place is set." /> : null}
+      {tableSet && !already ? <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}`} accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('seat-order')} waitForCrew pose="FLAT" /> : null}
+      {already ? <WaitingPanel accent={AMBER} detail="Your place is open. Everyone needs to unlock their solved word seal within the same eight-second window." title="Your place is set." /> : null}
     </CaseStageScaffold>
   );
 }
@@ -242,7 +242,7 @@ function KeepsakeStage(props: LongTableStageProps) {
         <Text style={[styles.promptText, { color: CREAM, fontFamily: theme.typography.families.storyBold }]}>{assignment.prompt}</Text>
       </View>
       {seeker && !framed ? <KeepsakeCamera onFramed={() => void frame()} /> : null}
-      {seeker && framed ? <WaitingPanel accent={AMBER} detail={`${crewName(assignment.witnessNodeId, props.crew)} must walk over, inspect the real object, and hold their witness seal.`} title="Object framed." /> : null}
+      {seeker && framed ? <WaitingPanel accent={AMBER} detail={`${crewName(assignment.witnessNodeId, props.crew)} must inspect the real object, then solve their witness word seal.`} title="Object framed." /> : null}
       {witness && !framed ? <WaitingPanel accent={AMBER} detail={`${crewName(assignment.seekerNodeId, props.crew)} is finding the object. Do not accept a description from across the room—inspect it beside them.`} title="You are the witness." /> : null}
       {witness && framed ? <StagePanel tone={AMBER}><TechnicalLabel color={AMBER}>IN-PERSON WITNESS · IMAGE NEVER SENT</TechnicalLabel><HoldContact accent={AMBER} durationMs={1_400} label="I inspected this object" onComplete={() => void props.onProof(`keepsake:${assignment.round}`)} /></StagePanel> : null}
       {!seeker && !witness ? <WaitingPanel accent={AMBER} detail={`${crewName(assignment.seekerNodeId, props.crew)} is searching; ${crewName(assignment.witnessNodeId, props.crew)} must verify.`} /> : null}
@@ -291,8 +291,8 @@ function ServicePassStage(props: LongTableStageProps) {
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.routeBand}><View style={[styles.routeNode, { backgroundColor: OXBLOOD }]}><Text style={[styles.routeInitials, { color: CREAM, fontFamily: theme.typography.families.displayHeavy }]}>{initials(crewName(step.courierNodeId, props.crew))}</Text></View><View style={[styles.routeLine, { backgroundColor: AMBER }]} /><Ionicons color={AMBER} name="restaurant" size={23} /><View style={[styles.routeLine, { backgroundColor: AMBER }]} /><View style={[styles.routeNode, { backgroundColor: BOTTLE }]}><Text style={[styles.routeInitials, { color: CREAM, fontFamily: theme.typography.families.displayHeavy }]}>{initials(crewName(step.stationOwnerNodeId, props.crew))}</Text></View></View>
       {station ? <QrMarker accent={AMBER} label={`PLACE SEAL ${step.step}`} token={step.markerToken} /> : null}
-      {courier && poseReadyStep !== step.step ? <PoseLock accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReadyStep(step.step)} pose={step.requiredPose} /> : null}
-      {courier && poseReadyStep === step.step && scannedStep !== step.step ? <><StagePanel tone={AMBER}><TechnicalLabel color={AMBER}>POSE LOCKED · WALK TO {crewName(step.stationOwnerNodeId, props.crew).toUpperCase()}</TechnicalLabel><Text style={[styles.passCopy, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Stop beside them before opening the lens.</Text></StagePanel><QrScanner accent={AMBER} expectedToken={step.markerToken} onScanned={() => setScannedStep(step.step)} /></> : null}
+      {courier && poseReadyStep !== step.step ? <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}:${step.step}`} accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReadyStep(step.step)} pose={step.requiredPose} /> : null}
+      {courier && poseReadyStep === step.step && scannedStep !== step.step ? <><StagePanel tone={AMBER}><TechnicalLabel color={AMBER}>WORD SEAL OPEN · WALK TO {crewName(step.stationOwnerNodeId, props.crew).toUpperCase()}</TechnicalLabel><Text style={[styles.passCopy, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Stop beside them before opening the lens.</Text></StagePanel><QrScanner accent={AMBER} expectedToken={step.markerToken} onScanned={() => setScannedStep(step.step)} /></> : null}
       {courier && scannedStep === step.step ? <ActionButton accent={AMBER} icon="checkmark" label="Serve this place" onPress={() => void props.onProof(`pass:${step.step}`)} /> : null}
       {!courier && !station ? <WaitingPanel accent={AMBER} detail={`${crewName(step.courierNodeId, props.crew)} is moving toward ${crewName(step.stationOwnerNodeId, props.crew)}.`} /> : null}
     </CaseStageScaffold>
@@ -309,7 +309,7 @@ function LastBellStage(props: LongTableStageProps) {
   const poseLocked = poseReady.includes(props.activeNodeId);
   const voiceLocked = voiceReady.includes(props.activeNodeId);
   return (
-    <CaseStageScaffold accent={AMBER} instruction="Lock your private position and sound level. On the final bell, every person holds the rim inside the same eight-second window." stageNumber={5} title="Serve as one">
+    <CaseStageScaffold accent={AMBER} instruction="Open your word seal and set your sound. Once everyone is ready, count down and ring the final bell together." stageNumber={5} title="Serve as one">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={(nodeId) => { void props.acoustic.stop(); props.onChangeNode(nodeId); }} />
       <View style={styles.finalPlate}>
         <View style={[styles.finalOuter, { borderColor: AMBER }]} />
@@ -318,9 +318,9 @@ function LastBellStage(props: LongTableStageProps) {
         <Text style={[styles.finalName, { color: CREAM, fontFamily: theme.typography.families.storyBold }]}>{crewName(props.activeNodeId, props.crew)}</Text>
       </View>
       {already ? <WaitingPanel accent={AMBER} detail="Keep your place held while the remaining settings lock." title="Your place is served." /> : null}
-      {!already && !poseLocked ? <PoseLock accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReady((current) => [...new Set([...current, props.activeNodeId])])} pose={assignment.pose} /> : null}
+      {!already && !poseLocked ? <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}`} accent={AMBER} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReady((current) => [...new Set([...current, props.activeNodeId])])} pose={assignment.pose} /> : null}
       {!already && poseLocked && !voiceLocked ? <VoiceSetting acoustic={props.acoustic} expected={assignment.voiceLevel} onComplete={() => setVoiceReady((current) => [...new Set([...current, props.activeNodeId])])} /> : null}
-      {!already && poseLocked && voiceLocked ? <StagePanel tone={AMBER}><TechnicalLabel color={AMBER}>POSITION + SOUND LOCKED · WAIT FOR THE BELL</TechnicalLabel><HoldContact accent={AMBER} durationMs={1_700} label="Hold the plate rim" onComplete={() => { props.play('ring', 0.68); void props.onProof('last-bell'); }} /><Text style={[styles.finalHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>In live play, every connected phone must hold within eight seconds.</Text></StagePanel> : null}
+      {!already && poseLocked && voiceLocked ? <StagePanel tone={AMBER}><TechnicalLabel color={AMBER}>WORD + SOUND READY · WAIT FOR THE OTHERS</TechnicalLabel><ActionButton accent={AMBER} label="Ring my place bell" onPress={() => { props.play('ring', 0.68); void props.onProof('last-bell'); }} /><Text style={[styles.finalHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>In live play, ring together within eight seconds.</Text></StagePanel> : null}
     </CaseStageScaffold>
   );
 }

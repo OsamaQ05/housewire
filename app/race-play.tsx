@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, SlideInRight } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
 import { ScreenShell } from '@/src/components/ScreenShell';
 import type { CircuitRaceSubmission } from '@/src/domain/circuit-race';
-import { assessStagePressure } from '@/src/domain/director';
+import { CIRCUIT_RACE_MAX_MISTAKES, CIRCUIT_RACE_TIME_LIMIT_MS } from '@/src/domain/team-escape-race';
+import { GuideChat, raceGuideContext } from '@/src/features/director';
 import { CircuitChallenge } from '@/src/features/race/CircuitChallenge';
 import { useCircuitRaceRuntime } from '@/src/features/race';
 import { HouseLineDock, useHouseLine } from '@/src/features/comms';
@@ -33,17 +34,13 @@ export default function RacePlayScreen() {
   const { play } = useHousewireSound();
   const mode = useCircuitRaceStore((state) => state.launchMode);
   const clearRace = useCircuitRaceStore((state) => state.clearRace);
-  const raceHistory = useCircuitRaceStore((state) => state.history);
   const settings = useHousewireStore((state) => state.settings);
   const prepareSession = useHousewireStore((state) => state.prepareSession);
   const [error, setError] = useState<string>();
-  const [attempts, setAttempts] = useState(0);
   const [hintCount, setHintCount] = useState(0);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [lineOpen, setLineOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [penaltyUntil, setPenaltyUntil] = useState(0);
-  const [penaltyLabel, setPenaltyLabel] = useState<'FALLBACK' | 'GUIDE'>('GUIDE');
   const startedPracticeRef = useRef(false);
   const resultNavigationRef = useRef(false);
   const continuingToResultsRef = useRef(false);
@@ -55,7 +52,7 @@ export default function RacePlayScreen() {
   const startPractice = runtime.startPractice;
   const localTeam = view?.teams.find((team) => team.isLocalTeam);
   const opponent = view?.teams.find((team) => !team.isLocalTeam);
-  const stage = localTeam?.finishedAt === undefined ? runtime.course.stages[localTeam?.stageIndex ?? 0] : undefined;
+  const stage = localTeam?.finishedAt === undefined && localTeam?.failedAt === undefined ? runtime.course.stages[localTeam?.stageIndex ?? 0] : undefined;
   const accent = view?.localTeamId === 'mint' ? MINT : EMBER;
   const localMembers = view?.participants.filter((participant) => participant.teamId === view.localTeamId) ?? [];
   const breakerFragments = stage?.id === 'breaker-code'
@@ -67,7 +64,7 @@ export default function RacePlayScreen() {
     acoustic,
     channelId: view?.operationId,
     clockOffsetMs: session.clockEstimate?.offsetMs,
-    enabled: mode === 'live' && view?.phase === 'running' && localTeam?.finishedAt === undefined &&
+    enabled: mode === 'live' && view?.phase === 'running' && localTeam?.finishedAt === undefined && localTeam?.failedAt === undefined &&
       Boolean(view?.operationId) && localMembers.length > 1,
     hapticsEnabled: settings.haptics,
     localNodeId: runtime.localNodeId,
@@ -100,7 +97,7 @@ export default function RacePlayScreen() {
   }, [clearRace, prepareSession]);
 
   useEffect(() => {
-    if (mode !== 'practice' || runtimeSnapshot || startedPracticeRef.current) return;
+    if (mode !== 'practice' || !runtime.checkpointReady || runtimeSnapshot || startedPracticeRef.current) return;
     // The persistent provider resets after setup changes the seed/session. Start
     // on the next task so that reset cannot erase the newly-created practice race.
     const timer = setTimeout(() => {
@@ -112,17 +109,15 @@ export default function RacePlayScreen() {
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [mode, runtimeSnapshot, startPractice]);
+  }, [mode, runtime.checkpointReady, runtimeSnapshot, startPractice]);
 
   useEffect(() => {
     if (delayedProofTimerRef.current) {
       clearTimeout(delayedProofTimerRef.current);
       delayedProofTimerRef.current = undefined;
     }
-    setAttempts(0);
     setHintCount(0);
     setPenaltyUntil(0);
-    setPenaltyLabel('GUIDE');
     setSubmitting(false);
     setError(undefined);
   }, [stage?.id]);
@@ -132,12 +127,12 @@ export default function RacePlayScreen() {
   }, [view?.operationId]);
 
   useEffect(() => {
-    if ((view?.phase !== 'running' || localTeam?.finishedAt !== undefined) && (acousticActive || teamLineRecording)) {
+    if ((view?.phase !== 'running' || localTeam?.finishedAt !== undefined || localTeam?.failedAt !== undefined) && (acousticActive || teamLineRecording)) {
       void cancelTeamLine()
         .catch(() => undefined)
         .finally(() => stopAcoustic().catch(() => undefined));
     }
-  }, [acousticActive, cancelTeamLine, localTeam?.finishedAt, stopAcoustic, teamLineRecording, view?.phase]);
+  }, [acousticActive, cancelTeamLine, localTeam?.failedAt, localTeam?.finishedAt, stopAcoustic, teamLineRecording, view?.phase]);
 
   useEffect(() => {
     if (view?.phase !== 'complete' || resultNavigationRef.current) return;
@@ -151,21 +146,7 @@ export default function RacePlayScreen() {
   }, [play, router, view?.operationId, view?.phase]);
 
   const houseLineEnabled = mode === 'live' && localMembers.length > 1 && view?.phase === 'running' &&
-    localTeam?.finishedAt === undefined;
-  const guideAssessment = useMemo(() => assessStagePressure({
-    attempts,
-    history: raceHistory.map((result) => ({
-      durationSeconds: Math.max(...result.standings.map((standing) => standing.elapsedMs ?? 0)) / 1_000,
-      retries: 0,
-    })),
-    secondsSinceProgress: stage && view
-      ? Math.max(0, view.serverNow - (localTeam?.stageStartedAt ?? view.startsAt)) / 1_000
-      : 0,
-    sensorAvailable: true,
-    stageIndex: stage?.index,
-  }), [attempts, localTeam?.stageStartedAt, raceHistory, stage, view]);
-  const guideReady = guideAssessment.offerHint;
-  const activeGuideBars = hintCount > 0 || guideReady ? 3 : guideAssessment.pressure >= 0.36 ? 2 : 1;
+    localTeam?.finishedAt === undefined && localTeam?.failedAt === undefined;
 
   const abandonRace = () => {
     const leave = () => {
@@ -185,7 +166,7 @@ export default function RacePlayScreen() {
   };
 
   const submit = (submission: CircuitRaceSubmission): boolean => {
-    if (!stage || submitting || penaltyRemaining > 0) return false;
+    if (!stage || submitting || penaltyRemaining > 0 || !localTeam?.canSubmit) return false;
     setSubmitting(true);
     setError(undefined);
     const deliverProof = () => {
@@ -196,13 +177,12 @@ export default function RacePlayScreen() {
           play('accept', 0.62);
           if (settings.haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         } else {
-          setAttempts((current) => current + 1);
           play('warning', 0.45);
           if (settings.haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
           setError(result.reason === 'OFFLINE' || result.reason === 'TIMEOUT'
             ? 'The host did not receive that proof. Reconnect and try once.'
             : result.reason === 'INVALID_PROOF'
-              ? 'That does not close this circuit.'
+              ? 'Not quite. One try used—talk through the clues before your next answer.'
               : 'The start clock rejected that proof.');
         }
       }).catch(() => {
@@ -215,7 +195,6 @@ export default function RacePlayScreen() {
       ? stage.challenge.fallback.penaltyMs
       : 0;
     if (inputPenaltyMs > 0) {
-      setPenaltyLabel('FALLBACK');
       setPenaltyUntil((view?.serverNow ?? Date.now()) + inputPenaltyMs);
       delayedProofTimerRef.current = setTimeout(deliverProof, inputPenaltyMs);
     } else {
@@ -224,14 +203,6 @@ export default function RacePlayScreen() {
     return true;
   };
 
-  const revealHint = () => {
-    if (!stage || !guideReady || hintCount >= stage.hints.length || penaltyRemaining > 0) return;
-    const hint = stage.hints[hintCount];
-    setHintCount((current) => current + 1);
-    setPenaltyLabel('GUIDE');
-    setPenaltyUntil((view?.serverNow ?? Date.now()) + hint.penaltyMs);
-    if (settings.haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
-  };
 
   if (!view || !localTeam) {
     return (
@@ -257,10 +228,22 @@ export default function RacePlayScreen() {
           <Text style={[styles.countdownKicker, { fontFamily: theme.typography.families.bodyMedium }]}>{view.localTeamId === 'mint' ? 'Mint team' : 'Coral team'} · ready</Text>
           <Text style={[styles.countdownNumber, { fontFamily: theme.typography.families.displayHeavy }]}>{count}</Text>
           <Text style={[styles.countdownText, { fontFamily: theme.typography.families.displayHeavy }]}>Same course. Same start.</Text>
-          <Text style={[styles.countdownBody, { fontFamily: theme.typography.families.body }]}>When the trace turns live, move fast—but do not run between rooms.</Text>
+          <Text style={[styles.countdownBody, { fontFamily: theme.typography.families.body }]}>Four mistakes for the whole course. Fifteen minutes. Talk first, then lock it in—and walk between rooms.</Text>
         </View>
       </ScreenShell>
     );
+  }
+
+  if (localTeam.failedAt !== undefined) {
+    return <ScreenShell texture={false}><View style={styles.finishedWait}>
+      <RaceExitButton color={theme.colors.text} onPress={abandonRace} />
+      <Ionicons name="lock-closed-outline" color={accent} size={54} />
+      <Text style={[styles.finishedKicker, { color: accent, fontFamily: theme.typography.families.bodyMedium }]}>Your crew · did not finish</Text>
+      <Text style={[styles.finishedTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{localTeam.failureReason === 'time' ? 'Time’s up' : 'No tries left'}</Text>
+      <Text style={[styles.finishedBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{view.phase === 'complete' ? 'Opening your answer review…' : 'The other crew is still playing. Your missed answers open after the race ends, so nobody gets an unfair clue.'}</Text>
+      <Text style={[styles.finishedBody, { color: accent, fontFamily: theme.typography.families.bodyMedium }]}>{Math.ceil(Math.max(0, view.startsAt + CIRCUIT_RACE_TIME_LIMIT_MS - view.serverNow) / 60_000)} min left in the race</Text>
+      {mode === 'live' ? <Pressable onPress={() => void runtime.requestSnapshot()} style={[styles.reconnectButton, { borderColor: accent }]}><Text style={{ color: accent }}>Refresh race</Text></Pressable> : null}
+    </View></ScreenShell>;
   }
 
   if (localTeam.finishedAt !== undefined) {
@@ -298,6 +281,11 @@ export default function RacePlayScreen() {
       <ScrollView contentContainerStyle={[styles.page, houseLineEnabled && styles.pageWithDock]} showsVerticalScrollIndicator={false}>
         {stage ? (
           <Animated.View entering={settings.reducedMotion ? undefined : SlideInRight.duration(320)} key={stage.id} style={styles.stage}>
+            <View accessibilityLiveRegion="polite" style={[styles.instructionBand, { borderColor: accent }]}>
+              <Ionicons color={accent} name="shield-checkmark-outline" size={21} />
+              <Text style={[styles.instruction, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{CIRCUIT_RACE_MAX_MISTAKES - (localTeam.mistakes ?? 0)} tries left · whole course</Text>
+              <Text style={{ color: accent, fontFamily: theme.typography.families.monoMedium }}>{Math.ceil(Math.max(0, view.startsAt + CIRCUIT_RACE_TIME_LIMIT_MS - view.serverNow) / 60_000)}m</Text>
+            </View>
             <View style={styles.stageHeader}>
               <View>
                 <Text style={[styles.stageKicker, { color: accent, fontFamily: theme.typography.families.bodyMedium }]}>Challenge {stage.index + 1}</Text>
@@ -317,37 +305,18 @@ export default function RacePlayScreen() {
             {penaltyRemaining > 0 ? (
               <Animated.View entering={FadeIn.duration(180)} style={[styles.penalty, { backgroundColor: GOLD }]}>
                 <Ionicons color="#171309" name="hourglass-outline" size={20} />
-                <Text style={[styles.penaltyText, { fontFamily: theme.typography.families.displayHeavy }]}>{penaltyLabel === 'GUIDE' ? 'Hint time' : 'Fallback time'} · {Math.ceil(penaltyRemaining / 1_000)}s</Text>
+                <Text style={[styles.penaltyText, { fontFamily: theme.typography.families.displayHeavy }]}>Fallback time · {Math.ceil(penaltyRemaining / 1_000)}s</Text>
               </Animated.View>
             ) : null}
             {submitting ? <Text style={[styles.accepting, { color: accent, fontFamily: theme.typography.families.bodyMedium }]}>Checking your move…</Text> : null}
             {error ? <Animated.View entering={FadeInDown.duration(180)} style={[styles.errorBand, { borderColor: theme.colors.fault }]}><Ionicons color={theme.colors.fault} name="warning-outline" size={18} /><Text style={[styles.errorText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{error}</Text></Animated.View> : null}
 
-            <Pressable accessibilityRole="button" onPress={() => setGuideOpen(true)} style={[styles.guideButton, { borderColor: guideReady ? GOLD : theme.colors.draft }]}>
-              <View style={styles.guideBars}>{[9, 16, 23].map((height, index) => <View key={height} style={[styles.guideBar, { backgroundColor: index < activeGuideBars ? GOLD : theme.colors.draft, height }]} />)}</View>
-              <View style={styles.guideCopy}>
-                <Text style={[styles.guideLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Smart hint guide</Text>
-                <Text style={[styles.guideValue, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{guideReady ? 'A hint is ready' : hintCount ? `${hintCount} hint${hintCount === 1 ? '' : 's'} used` : 'Available when you need it'}</Text>
-              </View>
-              <Ionicons color={guideReady ? GOLD : theme.colors.faint} name="chevron-up" size={19} />
-            </Pressable>
+            <GuideChat context={raceGuideContext(stage)} runId={view.operationId} stageId={stage.id} mechanic={stage.mechanic === 'flat-phone' ? 'riddle' : stage.mechanic === 'knock-pattern' ? 'audio' : 'deduction'} relayUrl={useHousewireStore.getState().relayUrl ?? undefined} onQuestion={() => setHintCount((count) => count + 1)} />
           </Animated.View>
         ) : null}
       </ScrollView>
 
-      {houseLineEnabled ? <HouseLineDock accent={accent} controller={teamLine} expanded={lineOpen} guideState={guideReady ? 'ready' : attempts ? 'watching' : 'clear'} onExpandedChange={setLineOpen} onGuidePress={() => setGuideOpen(true)} /> : null}
-
-      <Modal animationType="slide" onRequestClose={() => setGuideOpen(false)} transparent visible={guideOpen}>
-        <View style={styles.modalBackdrop}>
-          <Pressable accessibilityLabel="Close AI Guide" onPress={() => setGuideOpen(false)} style={StyleSheet.absoluteFill} />
-          <View style={[styles.guideSheet, { backgroundColor: theme.colors.background, borderColor: GOLD }]}>
-            <View style={styles.sheetHeader}><View><Text style={[styles.guideLabel, { color: GOLD, fontFamily: theme.typography.families.bodyMedium }]}>AI hint guide</Text><Text style={[styles.sheetTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Need a nudge?</Text></View><Pressable accessibilityLabel="Close hint guide" onPress={() => setGuideOpen(false)}><Ionicons color={theme.colors.faint} name="close" size={24} /></Pressable></View>
-            <Text style={[styles.sheetBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{guideAssessment.summary} The guide uses time, attempts, and sensor status only. It never listens to your microphone or reveals the answer.</Text>
-            {stage?.hints.slice(0, hintCount).map((hint, index) => <View key={hint.id} style={[styles.hint, { borderColor: GOLD }]}><Text style={[styles.hintIndex, { color: GOLD, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text><Text style={[styles.hintText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{hint.text}</Text></View>)}
-            {stage && hintCount < stage.hints.length ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: !guideReady || penaltyRemaining > 0 }} disabled={!guideReady || penaltyRemaining > 0} onPress={revealHint} style={[styles.hintButton, { backgroundColor: GOLD }, (!guideReady || penaltyRemaining > 0) && styles.disabled]}><Text style={[styles.hintButtonText, { fontFamily: theme.typography.families.displayHeavy }]}>{guideReady ? `Show hint · adds ${Math.round(stage.hints[hintCount].penaltyMs / 1_000)} seconds` : 'A hint will unlock if you get stuck'}</Text></Pressable> : <Text style={[styles.noHints, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>You have seen every available hint.</Text>}
-          </View>
-        </View>
-      </Modal>
+      {houseLineEnabled ? <HouseLineDock accent={accent} controller={teamLine} expanded={lineOpen} onExpandedChange={setLineOpen} /> : null}
     </ScreenShell>
   );
 }

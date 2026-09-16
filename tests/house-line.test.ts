@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   HOUSE_LINE_MAX_INBOX_ITEMS,
+  HOUSE_LINE_MAX_CLIP_BYTES,
   HOUSE_LINE_TTL_MS,
   appendHouseLineInbox,
   fanOutHouseLineMessage,
   houseLineMessageSchema,
+  houseLineTimestamp,
   parseHouseLineMessage,
   selectHouseLineRecipients,
   validateIncomingHouseLineMessage,
@@ -13,7 +15,7 @@ import {
   type HouseLineMessage,
 } from '../src/features/comms/house-line-protocol';
 
-const NOW = 50_000;
+const NOW = 150_000;
 
 function signal(overrides: Partial<HouseLineMessage> = {}): HouseLineMessage {
   return houseLineMessageSchema.parse({
@@ -42,6 +44,29 @@ function inboxItem(index: number): HouseLineInboxItem {
 }
 
 describe('House Line protocol', () => {
+  it.each([0.5, -0.5, 17.25, -17.75])('rounds fractional relay offset %s for every outbound envelope without weakening validation', offset => {
+    const sentAt = houseLineTimestamp(NOW, offset);
+    expect(sentAt).toBe(Math.round(NOW + offset));
+    const common = { protocolVersion: 1, channelId: 'operation-one', transmissionId: 'fractional-test', ttlMs: HOUSE_LINE_TTL_MS, sentAt };
+    const messages = [
+      { ...common, kind: 'housewire.line.signal.v1', signal: 'READY' },
+      { ...common, kind: 'housewire.line.clip.v1', clip: { base64: 'YWJj', byteSize: 3, durationMs: 750, mimeType: 'audio/mp4' } },
+      { ...common, kind: 'housewire.line.receipt.v1', sourceTransmissionId: 'original-message', status: 'played' },
+    ];
+    for (const message of messages) {
+      expect(parseHouseLineMessage(message)).toBeDefined();
+      expect(validateIncomingHouseLineMessage(message, { channelId: 'operation-one', now: NOW + 200, senderId: 'node-two', trustedPeerIds: ['node-two'] })).toMatchObject({ accepted: true });
+      expect(parseHouseLineMessage({ ...message, sentAt: NOW + offset })).toBeUndefined();
+    }
+  });
+  it('clamps locally constructed timestamps to safe integer bounds', () => {
+    expect(houseLineTimestamp(1, -50.5)).toBe(0);
+    expect(houseLineTimestamp(Number.MAX_SAFE_INTEGER, 20.5)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(houseLineTimestamp(Number.MAX_VALUE, Number.MAX_VALUE)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(houseLineTimestamp(NOW, Number.NaN)).toBe(NOW);
+    expect(houseLineTimestamp(Number.NaN)).toBe(0);
+    expect(houseLineTimestamp(Number.POSITIVE_INFINITY)).toBe(0);
+  });
   it('parses strict signal, clip, and receipt envelopes', () => {
     expect(parseHouseLineMessage(signal())).toMatchObject({ signal: 'READY' });
 
@@ -88,6 +113,19 @@ describe('House Line protocol', () => {
       ttlMs: HOUSE_LINE_TTL_MS,
       clip: { base64, byteSize: 999, durationMs: 2_500, mimeType: 'audio/mp4' },
     })).toBeUndefined();
+  });
+
+  it('accepts full 30-second notes and rejects over-limit duration or bytes independently', () => {
+    const content = Buffer.alloc(HOUSE_LINE_MAX_CLIP_BYTES, 42);
+    const clip = { base64: content.toString('base64'), byteSize: content.byteLength, durationMs: 30_000, mimeType: 'audio/mp4' };
+    const message = { ...signal(), kind: 'housewire.line.clip.v1', clip };
+    const { signal: unused, ...envelope } = message as typeof message & { signal?: string };
+    void unused;
+    expect(parseHouseLineMessage(envelope)).toBeDefined();
+    expect(parseHouseLineMessage({ ...envelope, clip: { ...clip, durationMs: 30_001 } })).toBeUndefined();
+    expect(parseHouseLineMessage({ ...envelope, clip: { ...clip, byteSize: HOUSE_LINE_MAX_CLIP_BYTES + 1 } })).toBeUndefined();
+    expect(parseHouseLineMessage({ ...envelope, clip: { ...clip, mimeType: 'audio/webm' } })).toBeDefined();
+    expect(validateIncomingHouseLineMessage(envelope, { channelId: 'operation-one', now: NOW + 31_000, senderId: 'node-two', trustedPeerIds: ['node-two'] })).toMatchObject({ accepted: true });
   });
 
   it('accepts only fresh messages for the active channel from a trusted peer', () => {

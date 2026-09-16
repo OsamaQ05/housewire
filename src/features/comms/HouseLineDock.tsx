@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useHousewireTheme } from '@/src/theme';
 
-import { houseLineSignalLabel } from './house-line-protocol';
+import { HOUSE_LINE_MAX_CLIP_DURATION_MS, houseLineSignalLabel } from './house-line-protocol';
 import type { HouseLineController, HouseLineDeliveryState } from './use-house-line';
 
 export type HouseLineGuideState = 'clear' | 'watching' | 'ready';
@@ -14,6 +14,7 @@ export interface HouseLineDockProps {
   controller: HouseLineController;
   expanded: boolean;
   guideState?: HouseLineGuideState;
+  guideMode?: 'adaptive' | 'chat';
   onExpandedChange(expanded: boolean): void;
   onGuidePress?(): void;
 }
@@ -23,12 +24,17 @@ export function HouseLineDock({
   controller,
   expanded,
   guideState = 'clear',
+  guideMode = 'adaptive',
   onExpandedChange,
   onGuidePress,
 }: HouseLineDockProps) {
   const { theme } = useHousewireTheme();
   const insets = useSafeAreaInsets();
   const unreadCount = controller.incoming.filter((item) => !item.played).length;
+  const close = () => {
+    void controller.cancelTalking();
+    onExpandedChange(false);
+  };
 
   return (
     <>
@@ -36,27 +42,27 @@ export function HouseLineDock({
         <View style={[styles.dock, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.draft }]}>
           {onGuidePress ? (
             <Pressable
-              accessibilityHint="Opens adaptive help for the current puzzle"
-              accessibilityLabel={`On-device AI Guide: ${guideState}`}
+              accessibilityHint={guideMode === 'chat' ? 'Ask a question about this puzzle without receiving its solution' : 'Opens adaptive help for the current puzzle'}
+              accessibilityLabel={guideMode === 'chat' ? 'Ask the puzzle guide' : `On-device AI Guide: ${guideState}`}
               accessibilityRole="button"
               onPress={onGuidePress}
               style={({ pressed }) => [styles.guideButton, pressed && styles.pressed]}
             >
-              <View style={styles.guideMeter}>
+              {guideMode === 'chat' ? <Ionicons name="help-buoy-outline" size={25} color={accent} /> : <View style={styles.guideMeter}>
                 {[0, 1, 2].map((notch) => {
                   const active = guideState === 'ready' || (guideState === 'watching' && notch < 2) || notch === 0;
                   return <View key={notch} style={[styles.guideNotch, { backgroundColor: active ? accent : theme.colors.draft, height: 8 + notch * 6 }]} />;
                 })}
-              </View>
+              </View>}
               <View>
                 <Text style={[styles.dockLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>AI GUIDE</Text>
-                <Text style={[styles.dockValue, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{guideState === 'ready' ? 'Nudge ready' : guideState === 'watching' ? 'Watching pace' : 'Clear'}</Text>
+                <Text style={[styles.dockValue, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{guideMode === 'chat' ? 'Ask a question' : guideState === 'ready' ? 'Nudge ready' : guideState === 'watching' ? 'Watching pace' : 'Clear'}</Text>
               </View>
             </Pressable>
           ) : <View />}
 
           <Pressable
-            accessibilityHint="Opens voice bursts and quick signals for the other rooms"
+            accessibilityHint="Opens voice notes and quick signals for the other rooms"
             accessibilityLabel={`Open House Line${unreadCount ? `, ${unreadCount} waiting` : ''}`}
             accessibilityRole="button"
             onPress={() => onExpandedChange(true)}
@@ -75,13 +81,13 @@ export function HouseLineDock({
 
       <Modal
         animationType="slide"
-        onRequestClose={() => onExpandedChange(false)}
+        onRequestClose={close}
         statusBarTranslucent
         transparent
         visible={expanded}
       >
         <View accessibilityViewIsModal style={styles.backdrop}>
-          <Pressable accessibilityLabel="Close House Line" onPress={() => onExpandedChange(false)} style={StyleSheet.absoluteFill} />
+          <Pressable accessibilityLabel="Close House Line" onPress={close} style={StyleSheet.absoluteFill} />
           <View style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: accent, paddingBottom: Math.max(18, insets.bottom + 10) }]}>
             <View style={[styles.liveWire, { backgroundColor: accent }]} />
             <View style={styles.sheetHeader}>
@@ -92,7 +98,7 @@ export function HouseLineDock({
                   <Text style={[styles.sheetTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>HOUSE LINE</Text>
                 </View>
               </View>
-              <Pressable accessibilityLabel="Close House Line" accessibilityRole="button" hitSlop={10} onPress={() => onExpandedChange(false)}>
+              <Pressable accessibilityLabel="Close House Line" accessibilityRole="button" hitSlop={10} onPress={close}>
                 <Ionicons color={theme.colors.muted} name="close" size={24} />
               </Pressable>
             </View>
@@ -104,6 +110,7 @@ export function HouseLineDock({
                   <TargetChip
                     accent={accent}
                     active={controller.targetId === 'ALL'}
+                    disabled={controller.recording || controller.preparing || controller.sending}
                     label="Everyone"
                     meta={`${controller.peers.length} lines`}
                     onPress={() => controller.setTargetId('ALL')}
@@ -112,6 +119,7 @@ export function HouseLineDock({
                     <TargetChip
                       accent={accent}
                       active={controller.targetId === peer.id}
+                      disabled={controller.recording || controller.preparing || controller.sending}
                       key={peer.id}
                       label={peer.label}
                       meta={peer.roomLabel ?? 'Other room'}
@@ -128,16 +136,20 @@ export function HouseLineDock({
                       <View key={index} style={[styles.waveBar, { backgroundColor: controller.recording ? accent : theme.colors.draft, height }]} />
                     ))}
                   </View>
-                  <Text style={[styles.timer, { color: controller.recording ? accent : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{controller.recording ? `${(controller.recordingDurationMs / 1_000).toFixed(1)}s` : deliveryLabel(controller.delivery)}</Text>
+                  <Text style={[styles.timer, { color: controller.recording ? accent : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{controller.recording ? `${Math.min(30, controller.recordingDurationMs / 1_000).toFixed(1)} / 30s` : controller.preparing ? 'ONE MOMENT…' : deliveryLabel(controller.delivery)}</Text>
                 </View>
+                {controller.recording ? (
+                  <View accessibilityLabel="Recording progress" accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 30, now: Math.min(30, Math.round(controller.recordingDurationMs / 1000)) }} style={[styles.progressTrack, { backgroundColor: theme.colors.draft }]}>
+                    <View style={{ backgroundColor: accent, height: 4, width: `${Math.min(100, controller.recordingDurationMs / HOUSE_LINE_MAX_CLIP_DURATION_MS * 100)}%` }} />
+                  </View>
+                ) : null}
                 <Pressable
-                  accessibilityHint="Hold while speaking and release to send a short private burst"
-                  accessibilityLabel={controller.recording ? 'Release to send voice burst' : 'Hold to speak'}
+                  accessibilityHint={controller.recording ? 'Ends recording and sends only to the selected phones' : 'Tap once to record. Tap again to stop and send. Automatically sends at 30 seconds.'}
+                  accessibilityLabel={controller.recording ? 'Stop and send voice note' : 'Record voice note'}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !controller.canTalk && !controller.recording }}
                   disabled={!controller.canTalk && !controller.recording}
-                  onPressIn={() => void controller.beginTalking()}
-                  onPressOut={() => void controller.endTalking()}
+                  onPress={() => void (controller.recording ? controller.endTalking() : controller.beginTalking())}
                   style={({ pressed }) => [
                     styles.talkButton,
                     { backgroundColor: controller.recording ? accent : theme.colors.surfaceRaised, borderColor: accent },
@@ -145,10 +157,15 @@ export function HouseLineDock({
                     pressed && styles.talkPressed,
                   ]}
                 >
-                  <Ionicons color={controller.recording ? '#090B09' : accent} name="mic" size={30} />
-                  <Text style={[styles.talkText, { color: controller.recording ? '#090B09' : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{controller.recording ? 'RELEASE TO SEND' : 'HOLD TO SPEAK'}</Text>
+                  <Ionicons color={controller.recording ? '#090B09' : accent} name={controller.recording ? 'stop-circle' : 'mic'} size={30} />
+                  <Text style={[styles.talkText, { color: controller.recording ? '#090B09' : theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{controller.recording ? 'STOP & SEND' : controller.sending ? 'SENDING…' : controller.preparing ? 'ONE MOMENT…' : 'RECORD A NOTE'}</Text>
                 </Pressable>
-                <Text style={[styles.privacy, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>Short bursts go only to selected live phones and are removed after playback.</Text>
+                {controller.recording ? (
+                  <Pressable accessibilityRole="button" onPress={() => void controller.cancelTalking()} style={styles.cancelButton}>
+                    <Text style={{ color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }}>Cancel recording</Text>
+                  </Pressable>
+                ) : null}
+                <Text style={[styles.privacy, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>{controller.recording ? 'Speak freely. Sends automatically at 30 seconds.' : 'Tap to record · up to 30 seconds · selected phones only. Notes disappear after playback or 90 seconds.'}</Text>
               </View>
 
               <View style={styles.section}>
@@ -157,10 +174,10 @@ export function HouseLineDock({
                   {controller.signals.map((signal) => (
                     <Pressable
                       accessibilityRole="button"
-                      disabled={!controller.canTalk}
+                      disabled={!controller.canTalk || controller.recording}
                       key={signal}
                       onPress={() => void controller.sendSignal(signal)}
-                      style={({ pressed }) => [styles.signalKey, { borderColor: theme.colors.draft }, !controller.canTalk && styles.disabled, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.signalKey, { borderColor: theme.colors.draft }, (!controller.canTalk || controller.recording) && styles.disabled, pressed && styles.pressed]}
                     >
                       <View style={[styles.signalLamp, { backgroundColor: accent }]} />
                       <Text style={[styles.signalText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{houseLineSignalLabel(signal)}</Text>
@@ -179,7 +196,7 @@ export function HouseLineDock({
                       </View>
                       <View style={styles.incomingCopy}>
                         <Text style={[styles.incomingSender, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{item.senderLabel}</Text>
-                        <Text style={[styles.incomingDetail, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{item.message.kind === 'housewire.line.clip.v1' ? `${(item.message.clip.durationMs / 1_000).toFixed(1)} second burst` : houseLineSignalLabel(item.message.signal)}</Text>
+                        <Text style={[styles.incomingDetail, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{item.message.kind === 'housewire.line.clip.v1' ? `${(item.message.clip.durationMs / 1_000).toFixed(1)} second note` : houseLineSignalLabel(item.message.signal)}</Text>
                       </View>
                       {item.message.kind === 'housewire.line.clip.v1' ? (
                         <Pressable accessibilityLabel={`Play message from ${item.senderLabel}`} accessibilityRole="button" onPress={() => void controller.playIncoming(item.frameMessageId)} style={[styles.playButton, { backgroundColor: accent }]}>
@@ -210,12 +227,13 @@ export function HouseLineDock({
   );
 }
 
-function TargetChip({ accent, active, label, meta, onPress }: { accent: string; active: boolean; label: string; meta: string; onPress(): void }) {
+function TargetChip({ accent, active, disabled, label, meta, onPress }: { accent: string; active: boolean; disabled?: boolean; label: string; meta: string; onPress(): void }) {
   const { theme } = useHousewireTheme();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: active }}
+      accessibilityState={{ checked: active, disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [styles.targetChip, { backgroundColor: active ? accent : theme.colors.surface, borderColor: active ? accent : theme.colors.draft }, pressed && styles.pressed]}
     >
@@ -231,13 +249,14 @@ function deliveryLabel(delivery: HouseLineDeliveryState): string {
   if (delivery.status === 'partial') return `DELIVERED ${delivery.deliveredCount}/${delivery.targetCount}`;
   if (delivery.status === 'failed') return 'NOT DELIVERED';
   if (delivery.status === 'played') return `PLAYED BY ${delivery.playedBy.length}`;
-  return '1.9 SEC MAX';
+  return '30 SEC MAX';
 }
 
 const styles = StyleSheet.create({
   backdrop: { backgroundColor: 'rgba(0,0,0,0.76)', flex: 1, justifyContent: 'flex-end' },
   badge: { alignItems: 'center', borderRadius: 10, height: 19, justifyContent: 'center', position: 'absolute', right: -7, top: -7, width: 19 },
   badgeText: { fontSize: 8 },
+  cancelButton: { alignItems: 'center', justifyContent: 'center', minHeight: 40 },
   disabled: { opacity: 0.38 },
   dock: { alignItems: 'center', borderRadius: 4, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 58, padding: 7 },
   dockFrame: { left: 14, position: 'absolute', right: 14, zIndex: 30 },
@@ -259,6 +278,7 @@ const styles = StyleSheet.create({
   playButton: { alignItems: 'center', borderRadius: 3, height: 38, justifyContent: 'center', width: 38 },
   pressed: { opacity: 0.7 },
   privacy: { fontSize: 10, lineHeight: 14, textAlign: 'center' },
+  progressTrack: { height: 4, overflow: 'hidden', width: '100%' },
   section: { gap: 9 },
   sectionLabel: { fontSize: 8, letterSpacing: 1.45 },
   sheet: { borderTopLeftRadius: 8, borderTopRightRadius: 8, borderTopWidth: 1, maxHeight: '88%', minHeight: '68%', overflow: 'hidden', paddingTop: 4 },

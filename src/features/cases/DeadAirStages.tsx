@@ -284,8 +284,8 @@ function PrivateChannelStage(props: DeadAirStageProps) {
       setSoloDelivery({ codeword: round.codeword, mode: recorded ? 'recorded' : 'authored', round: round.round });
       props.play('relay', 0.5);
     } else {
-      await props.onPrivateWord({ codeword: round.codeword, recipientNodeId: props.game.privateChannel.receiverNodeId, round: round.round, recorded });
-      await props.onSignal({ round: round.round, signal: 'whisper-sent', targetNodeId: props.game.privateChannel.receiverNodeId });
+      const sent = await props.onPrivateWord({ codeword: round.codeword, recipientNodeId: props.game.privateChannel.receiverNodeId, round: round.round, recorded });
+      if (sent) await props.onSignal({ round: round.round, signal: 'whisper-sent', targetNodeId: props.game.privateChannel.receiverNodeId });
     }
     setSending(false);
   };
@@ -330,7 +330,8 @@ function PrivateChannelStage(props: DeadAirStageProps) {
           <TechnicalLabel color={gateOpen ? ACCENT : theme.colors.warning}>{gateOpen ? `DUCT ${round.gate} OPEN` : 'WAIT FOR THE TUNER'}</TechnicalLabel>
           <Text style={[styles.codeword, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{round.codeword}</Text>
           <Text style={[styles.roleCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Say exactly this one game word. It is delivered once, never transcribed, never archived, and deleted after delivery.</Text>
-          <ActionButton accent={ACCENT} disabled={!gateOpen || sending || (!props.preview && !props.directReady)} icon="mic" label={sending ? 'Recording + sending…' : 'Record a 1.8s whisper'} onPress={() => void send(true)} />
+          <Text style={[styles.roleCopy, { color: theme.colors.muted }]}>After allowing the microphone, you have six seconds to say the word clearly.</Text>
+          <ActionButton accent={ACCENT} disabled={!gateOpen || sending || (!props.preview && !props.directReady)} icon="mic" label={sending ? 'Recording + sending…' : 'Record a 6-second word'} onPress={() => void send(true)} />
           <ActionButton accent={ACCENT} disabled={!gateOpen || sending || (!props.preview && !props.directReady)} icon="volume-high-outline" label="Send authored voice instead" onPress={() => void send(false)} secondary />
           {!props.preview && !props.directReady ? <Text style={[styles.privateStatus, { color: theme.colors.warning, fontFamily: theme.typography.families.mono }]}>PRIVATE RELAY RECONNECTING</Text> : null}
         </StagePanel>
@@ -473,7 +474,7 @@ function CountertoneStage(props: DeadAirStageProps) {
   return (
     <CaseStageScaffold accent={ACCENT} instruction="Perform the four-beat pressure envelope. The app classifies only relative loudness—never words, pitch, identity, or emotion." stageNumber={5} title="Countertone">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
-      {tuner ? <PoseLock accent={ACCENT} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('countertone')} pose={props.game.countertone.tunerPose} /> : null}
+      {tuner ? <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}`} accent={ACCENT} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('countertone')} pose={props.game.countertone.tunerPose} /> : null}
       {vocalist ? (
         <StagePanel tone={done ? theme.colors.ready : ACCENT}>
           <View style={styles.meterTopline}>

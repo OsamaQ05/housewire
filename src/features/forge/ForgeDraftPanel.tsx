@@ -89,9 +89,10 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
       </View>
 
       <View style={[styles.seedBrief, { borderColor: theme.colors.draft }]}>
-        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Add a detail (optional)</Text>
+        <Text style={[styles.microLabel, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Your story idea (optional)</Text>
         <TextInput
-          accessibilityHint="Adds a place, era, or situation to the generated case"
+          accessibilityLabel="Your story idea"
+          accessibilityHint="Describe the setting and goal for your custom escape story"
           autoCapitalize="sentences"
           maxLength={180}
           multiline
@@ -102,7 +103,7 @@ export function ThemePlate({ draft, onChange }: { draft: ForgeDraft; onChange: (
           value={draft.customThemePrompt}
         />
         <Text style={[styles.seedCount, { color: theme.colors.faint, fontFamily: theme.typography.families.mono }]}>{draft.customThemePrompt.length}/180</Text>
-        <Text style={[styles.seedPrivacy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Used only to shape the story. Player names and puzzle answers are never sent.</Text>
+        <Text style={[styles.seedPrivacy, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Give it a place and a goal. Your idea takes priority over the world above. Needs the AI connection; puzzle rules stay tested.</Text>
       </View>
 
       <Text style={[styles.microLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Mood</Text>

@@ -76,7 +76,7 @@ function ThresholdStage(props: NightGlassStageProps) {
   if (!assignment) return <WaitingPanel accent={ACCENT} detail="This monitor is outside the three-pane threshold." />;
   const already = props.completedProofKeys.includes(`threshold:${props.activeNodeId}`);
   return (
-    <CaseStageScaffold accent={ACCENT} instruction="Every phone is one pane. Hold your assigned angle until the broken red threshold becomes one line." stageNumber={1} title="Draw the threshold">
+    <CaseStageScaffold accent={ACCENT} instruction="The glass opens only to a word. Each pane has a different riddle. Read yours aloud and help each other open every seal." stageNumber={1} title="Wake the glass">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.thresholdView}>
         <View style={[styles.thresholdGhost, { borderColor: theme.colors.draft }]} />
@@ -86,7 +86,7 @@ function ThresholdStage(props: NightGlassStageProps) {
           <Text style={[styles.thresholdTitle, { color: '#F5F1E8', fontFamily: theme.typography.families.storyBold }]}>The line continues off-screen.</Text>
         </View>
       </View>
-      {already ? <WaitingPanel accent={ACCENT} detail="Your pane is locked. Hold the phone while the remaining red edges align." title="Threshold held." /> : <PoseLock accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('threshold')} pose={assignment.pose} />}
+      {already ? <WaitingPanel accent={ACCENT} detail="Your pane is open. Help the others finish their word seals." title="Word seal open." /> : <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}`} accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void props.onProof('threshold')} waitForCrew pose={assignment.pose} />}
     </CaseStageScaffold>
   );
 }
@@ -149,7 +149,7 @@ function ParallaxStage(props: NightGlassStageProps) {
       {hinge ? (
         <View style={styles.hingeStack}>
           <TechnicalLabel color={RED}>YOU CONTROL A DOOR YOU CANNOT SEE</TechnicalLabel>
-          <PoseLock accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void lockHinge()} pose={round.requiredPose} />
+          <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}:${round.round}`} accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => void lockHinge()} pose={round.requiredPose} />
           {hingeLocked ? <TechnicalLabel color={ACCENT}>HINGE LOCKED · TELL THE WATCHER</TechnicalLabel> : null}
         </View>
       ) : null}
@@ -158,7 +158,7 @@ function ParallaxStage(props: NightGlassStageProps) {
           {!scanned ? <QrScanner accent={ACCENT} expectedToken={round.markerToken} onScanned={() => setScanned(true)} /> : (
             <StagePanel tone={hingeLocked ? RED : theme.colors.warning}>
               <ParallaxLens bearing={round.revealedBearing} hingeLocked={hingeLocked} />
-              <TechnicalLabel color={hingeLocked ? ACCENT : theme.colors.warning}>{hingeLocked ? 'THE CAMERA-ONLY DOOR HAS MOVED' : 'WAIT FOR THE HINGE TO TILT'}</TechnicalLabel>
+              <TechnicalLabel color={hingeLocked ? ACCENT : theme.colors.warning}>{hingeLocked ? 'THE CAMERA-ONLY DOOR HAS MOVED' : 'WAIT FOR THE WORD SEAL'}</TechnicalLabel>
               <View style={styles.bearingRow}>{(['N', 'E', 'S', 'W'] as const).map((item) => <ChoiceChip accent={RED} key={item} label={item} onPress={() => setBearing(item)} selected={bearing === item} />)}</View>
               <ActionButton accent={RED} disabled={!hingeLocked || !bearing} icon="compass-outline" label="Fix this bearing" onPress={() => void submit()} />
             </StagePanel>
@@ -383,11 +383,12 @@ function CorridorStage(props: NightGlassStageProps) {
 function FoldStage(props: NightGlassStageProps) {
   const { theme } = useHousewireTheme();
   const assignment = props.game.finale.assignments.find((item) => item.nodeId === props.activeNodeId);
-  const [poseReady, setPoseReady] = useState(false);
+  const [readyPanes, setReadyPanes] = useState<string[]>([]);
+  const poseReady = readyPanes.includes(props.activeNodeId);
   const already = props.completedProofKeys.includes(`finale:${props.activeNodeId}`);
   if (!assignment) return <WaitingPanel accent={ACCENT} detail="This monitor is outside the final three-pane fold." />;
   return (
-    <CaseStageScaffold accent={ACCENT} instruction="Hold your private contact, then press the red glass edge. Every pane must fold inside the same window." stageNumber={5} title="Fold the corridor">
+    <CaseStageScaffold accent={ACCENT} instruction="Solve your final word seal. When everyone is ready, count down and close the panes together." stageNumber={5} title="Fold the corridor">
       <RoleStepper activeNodeId={props.activeNodeId} crew={props.crew} enabled={props.preview} onChange={props.onChangeNode} />
       <View style={styles.foldVisual}>
         <View style={[styles.foldPane, styles.foldLeft, { borderColor: RED }]} />
@@ -395,10 +396,10 @@ function FoldStage(props: NightGlassStageProps) {
         <View style={[styles.foldSeam, { backgroundColor: poseReady ? '#F5F1E8' : RED }]} />
         <Text style={[styles.foldWord, { color: '#F5F1E8', fontFamily: theme.typography.families.storyBold }]}>One house. No reflection.</Text>
       </View>
-      {already ? <WaitingPanel accent={ACCENT} detail="Your glass edge is held. Do not release until the remaining panes close." title="Pane folded." /> : (
+      {already ? <WaitingPanel accent={ACCENT} detail="Your pane has folded. Wait for the remaining panes to close." title="Pane folded." /> : (
         <>
-          {!poseReady ? <PoseLock accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setPoseReady(true)} pose={assignment.pose} /> : null}
-          {poseReady ? <StagePanel tone={RED}><TechnicalLabel color={RED}>CONTACT LOCKED · HOLD THE GLASS EDGE</TechnicalLabel><HoldContact accent={RED} durationMs={1_500} label="Hold red edge" onComplete={() => void props.onProof('finale')} /><Text style={[styles.foldHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Keep the edge pressed until its progress rail closes.</Text></StagePanel> : null}
+          {!poseReady ? <PoseLock puzzleKey={`${props.game.effectiveSeed}:${props.stageIndex}:${props.activeNodeId}`} accent={RED} motion={props.motion} onArmMotion={props.onStartMotion} onComplete={() => setReadyPanes((current) => [...new Set([...current, props.activeNodeId])])} pose={assignment.pose} /> : null}
+          {poseReady ? <StagePanel tone={RED}><TechnicalLabel color={RED}>WORD SEAL OPEN · READY FOR THE OTHERS</TechnicalLabel><ActionButton accent={RED} label="Close my pane" onPress={() => void props.onProof('finale')} /><Text style={[styles.foldHint, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Wait until everyone has solved their seal, then count down together.</Text></StagePanel> : null}
         </>
       )}
     </CaseStageScaffold>

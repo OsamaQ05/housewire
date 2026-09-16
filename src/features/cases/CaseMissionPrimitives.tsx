@@ -8,6 +8,7 @@ import QRCode from 'react-native-qrcode-svg';
 import type { TerminalMotionSnapshot } from '@/src/hooks/use-terminal-motion';
 import type { CrewNode } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
+import { RiddleSeal } from './RiddleSeal';
 
 export function CaseStageScaffold({
   accent,
@@ -230,29 +231,19 @@ export function HoldContact({
 export function PoseLock({
   accent,
   onComplete,
+  pose,
+  puzzleKey = 'contact',
+  waitForCrew,
 }: {
   accent: string;
   motion: TerminalMotionSnapshot;
   onArmMotion: () => void;
   onComplete: () => void;
   pose: string;
+  puzzleKey?: string;
+  waitForCrew?: boolean;
 }) {
-  const { theme } = useHousewireTheme();
-  return (
-    <StagePanel tone={accent}>
-      <View style={styles.poseTopline}>
-        <View style={[styles.posePhone, { borderColor: accent }]}>
-          <Ionicons color={accent} name="finger-print-outline" size={30} />
-        </View>
-        <View style={styles.poseCopy}>
-          <TechnicalLabel color={accent}>SHARED CONTACT</TechnicalLabel>
-          <Text style={[styles.poseName, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Hold the seal</Text>
-          <Text style={[styles.poseTelemetry, { color: theme.colors.muted, fontFamily: theme.typography.families.mono }]}>KEEP ONE FINGER HERE</Text>
-        </View>
-      </View>
-      <HoldContact accent={accent} durationMs={1_100} label="Hold contact" onComplete={onComplete} />
-    </StagePanel>
-  );
+  return <RiddleSeal accent={accent} puzzleKey={`${puzzleKey}:${pose}`} onComplete={onComplete} waitForCrew={waitForCrew} />;
 }
 
 export function QrMarker({ accent, label, token }: { accent: string; label: string; token: string }) {

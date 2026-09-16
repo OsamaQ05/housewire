@@ -191,7 +191,7 @@ const recipe = z.object({
 export const forgeCaseSchema = z.object({
   id: z.string().min(1).max(96).regex(/^forge-[a-z0-9-]+-[A-Z0-9]{7}$/),
   schemaVersion: z.literal(1),
-  generatorVersion: z.enum(['housewire-local-forge-v1', 'housewire-local-forge-v2']),
+  generatorVersion: z.enum(['housewire-local-forge-v1', 'housewire-local-forge-v2', 'housewire-local-forge-v3']),
   providerId: safeId,
   seed: z.union([z.string().min(1).max(128), z.number().finite()]),
   effectiveSeed: z.number().int().min(0).max(0xffff_ffff),

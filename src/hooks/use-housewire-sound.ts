@@ -8,9 +8,11 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
 import { useHousewireStore } from '@/src/store/use-housewire-store';
+import { silenceMusicFor } from '@/src/features/music/music-focus';
 
 type SoundName =
   | 'switch'
@@ -72,6 +74,7 @@ const sources = {
 } as const;
 
 interface HousewireSoundValue {
+  audioReady: boolean;
   play: (name: SoundName, volume?: number) => void;
   playKnocks: (count: 1 | 2 | 3 | 4, volume?: number) => void;
 }
@@ -114,6 +117,7 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
   const circuitLongPlayer = useAudioPlayer(sources.circuitLong);
   const mountedRef = useRef(true);
   const audioReadyRef = useRef(false);
+  const [audioReady, setAudioReady] = useState(false);
   const requestGenerationRef = useRef<Partial<Record<SoundName, number>>>({});
 
   useEffect(() => {
@@ -126,7 +130,7 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
       shouldPlayInBackground: false,
     })
       .then(() => {
-        if (active) audioReadyRef.current = true;
+        if (active) { audioReadyRef.current = true; setAudioReady(true); }
       })
       .catch(() => undefined);
 
@@ -170,6 +174,7 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
   const play = useCallback(
     (name: SoundName, volume = 1) => {
       if (!enabled || !audioReadyRef.current) return;
+      if (/^(word|knock|node|circuit)/.test(name)) silenceMusicFor(name.startsWith('word') ? 4_000 : 2_000);
       const player = players[name];
       const generation = (requestGenerationRef.current[name] ?? 0) + 1;
       requestGenerationRef.current[name] = generation;
@@ -203,7 +208,7 @@ export function HousewireSoundProvider({ children }: PropsWithChildren) {
     [play],
   );
 
-  const value = useMemo(() => ({ play, playKnocks }), [play, playKnocks]);
+  const value = useMemo(() => ({ audioReady, play, playKnocks }), [audioReady, play, playKnocks]);
   return createElement(HousewireSoundContext.Provider, { value }, children);
 }
 

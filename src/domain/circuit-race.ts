@@ -244,6 +244,11 @@ export interface CircuitFlatPhoneSample {
 export type CircuitFlatPhoneSubmission =
   | {
       mechanic: 'flat-phone';
+      mode: 'decoded-signal';
+      signalSequence: readonly CircuitMotionMove[];
+    }
+  | {
+      mechanic: 'flat-phone';
       mode: 'sensor';
       samples: readonly CircuitFlatPhoneSample[];
     }
@@ -299,6 +304,42 @@ interface CircuitRaceAnswers {
   breakerCode: string;
   knockPattern: readonly CircuitKnock[];
   sequenceCode: string;
+}
+
+export interface CircuitRaceAnswerReview {
+  stageId: string;
+  title: string;
+  answer: string;
+  explanation: string;
+}
+
+/** Authority-only: send this review only after every crew has finished or failed. */
+export function circuitRaceAnswerReview(course: CompiledCircuitRace, stageIds: readonly string[]): CircuitRaceAnswerReview[] {
+  const content = deriveCircuitRaceContent(course.seed);
+  const symbols: Record<CircuitMotionMove, string> = {
+    TILT_LEFT: 'Sun', TILT_RIGHT: 'Moon', TIP_FORWARD: 'Wave', TIP_BACK: 'Spark',
+  };
+  const fuseSymbols: Record<CircuitSwipeDirection, string> = { UP: 'Flame', RIGHT: 'Drop', DOWN: 'Ring', LEFT: 'Bolt' };
+  return course.stages.filter((stage) => stageIds.includes(stage.id)).map((stage) => {
+    if (stage.mechanic === 'sequence-cipher') {
+      return { stageId: stage.id, title: stage.title,
+        answer: [...stage.challenge.panels].sort((a, b) => a.pulseOrder - b.pulseOrder).map((panel) => panel.glyph).join(' → '),
+        explanation: 'Each numbered riddle describes one object. Enter those objects in the same numbered order.' };
+    }
+    if (stage.mechanic === 'knock-pattern') {
+      return { stageId: stage.id, title: stage.title,
+        answer: content.answers.knockPattern.map((beat) => beat === 'SHORT' ? 'Tap' : 'Hold').join(' → '),
+        explanation: 'Copy all five sounds from left to right. Short sounds are taps; long sounds are holds.' };
+    }
+    if (stage.mechanic === 'flat-phone') {
+      return { stageId: stage.id, title: stage.title,
+        answer: stage.challenge.tiltSequence.map((move) => symbols[move]).join(' → '),
+        explanation: 'Solve the three keeper verses, then put their symbols in verse order.' };
+    }
+    return { stageId: stage.id, title: stage.title,
+      answer: content.answers.breakerCode.split('').map((digit) => fuseSymbols[circuitBreakerGestureForDigit(Number(digit))]).join(' → '),
+      explanation: 'Interleave the strips: A supplies beats 1 and 3; B supplies beats 2 and 4. Translate each beat using the symbol key.' };
+  });
 }
 
 interface CircuitRaceContent {
@@ -482,6 +523,11 @@ function validateSubmission(
   }
   if (stage.mechanic === 'flat-phone') {
     if (submission.mechanic !== stage.mechanic) return 'wrong-input';
+    if (submission.mode === 'decoded-signal') {
+      return sameValues(submission.signalSequence, stage.challenge.tiltSequence)
+        ? { inputPenaltyMs: 0, valid: true }
+        : { inputPenaltyMs: 0, reason: 'wrong-answer', valid: false };
+    }
     const validator = adapters?.flatPhone ?? defaultCircuitFlatPhoneValidator;
     if (submission.mode === 'manual-hold') {
       const valid = validator.validateFallback(stage.challenge, submission);
@@ -655,7 +701,7 @@ function deriveCircuitRaceContent(seed: number): CircuitRaceContent {
     breakerFragments,
     flatChallenge: {
       fallback: {
-        instruction: 'Enter the three called symbols, then hold the copper seal without releasing.',
+        instruction: 'Solve each of the keeper’s three riddles and enter the matching symbols in order.',
         minimumHoldMs: holdMs + 800,
         penaltyMs: 5_000,
       },
@@ -902,19 +948,19 @@ const KNOCK_STAGE_COPY: readonly CircuitStageCopy[] = [
 const FLAT_STAGE_COPY: readonly CircuitFlatStageCopy[] = [
   {
     firstHint: 'The keeper should call each symbol and its position clearly.',
-    instruction: 'Your teammate owns a secret three-symbol signal. Listen, enter the symbols in order, then hold the shared seal.',
+    instruction: 'One person has three riddle verses. The other has the symbol lock. Read, solve, and enter the answers in verse order.',
     kicker: 'PRIVATE SIGNAL',
     title: 'Blind Switchboard',
   },
   {
-    firstHint: 'Repeat all three symbols aloud before touching the board.',
-    instruction: 'The keeper can see a private seal. Rebuild its three symbols on the other phone, then maintain contact to transmit it.',
+    firstHint: 'Describe what each verse means before choosing its symbol.',
+    instruction: 'The keeper has three verses; the other phone has four symbols. Solve the verses together and enter the answers in order.',
     kicker: 'SEALED LINE',
     title: "Smuggler's Seal",
   },
   {
     firstHint: 'Do not show the private screen—communication is the puzzle.',
-    instruction: 'A damaged relay split its symbol key across two phones. Call it, rebuild it, and close the contact together.',
+    instruction: 'A damaged relay speaks in riddles. One phone reads three verses; the other solves them using its symbol board.',
     kicker: 'BROKEN RELAY',
     title: 'Signal Vault',
   },

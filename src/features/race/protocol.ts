@@ -49,6 +49,11 @@ const circuitRaceKnockSubmissionSchema = z.union([
 const circuitRaceFlatSubmissionSchema = z.union([
   z.object({
     mechanic: z.literal('flat-phone'),
+    mode: z.literal('decoded-signal'),
+    signalSequence: z.array(z.enum(['TILT_LEFT', 'TILT_RIGHT', 'TIP_FORWARD', 'TIP_BACK'])).length(3),
+  }).strict(),
+  z.object({
+    mechanic: z.literal('flat-phone'),
     mode: z.literal('sensor'),
     samples: z.array(z.object({
       at: timestampSchema,
@@ -90,6 +95,9 @@ const ownTeamSchema = z.object({
   stageIndex: z.number().int().min(0).max(11),
   stageStartedAt: timestampSchema,
   finishedAt: timestampSchema.optional(),
+  failedAt: timestampSchema.optional(),
+  failureReason: z.enum(['attempts', 'time']).optional(),
+  mistakes: z.number().int().min(0).max(4).optional(),
   acceptedProofs: z.array(acceptedProofSchema).max(8),
 }).strict();
 
@@ -98,7 +106,16 @@ const opponentProgressSchema = z.object({
   stageIndex: z.number().int().min(0).max(11),
   acceptedProofCount: z.number().int().min(0).max(8),
   finishedAt: timestampSchema.optional(),
+  failedAt: timestampSchema.optional(),
+  failureReason: z.enum(['attempts', 'time']).optional(),
 }).strict();
+
+export const circuitRaceAnswerReviewSchema = z.array(z.object({
+  stageId: safeIdSchema,
+  title: z.string().min(1).max(100),
+  answer: z.string().min(1).max(500),
+  explanation: z.string().min(1).max(600),
+}).strict()).max(4);
 
 const unsignedPlayerSnapshotSchema = z.object({
   raceId: safeIdSchema,
@@ -115,6 +132,7 @@ const unsignedPlayerSnapshotSchema = z.object({
   course: circuitRaceDisplayCourseSchema,
   ownTeam: ownTeamSchema,
   opponents: z.array(opponentProgressSchema).length(1),
+  answerReview: circuitRaceAnswerReviewSchema.optional(),
 }).strict();
 
 export const circuitRacePlayerSnapshotSchema = unsignedPlayerSnapshotSchema.extend({
@@ -217,7 +235,7 @@ const proofResultMessageSchema = z.object({
   if (!message.accepted && message.reason === undefined) {
     context.addIssue({ code: 'custom', message: 'Rejected proofs require a reason.', path: ['reason'] });
   }
-  if (message.changed && !message.accepted) {
+  if (message.changed && !message.accepted && message.reason !== 'INVALID_PROOF' && message.reason !== 'TEAM_FINISHED') {
     context.addIssue({ code: 'custom', message: 'A rejected proof cannot change race state.', path: ['changed'] });
   }
 });
@@ -387,6 +405,10 @@ function validateSnapshotShape(
   snapshot: z.infer<typeof unsignedPlayerSnapshotSchema>,
   context: z.RefinementCtx,
 ): void {
+  const allTerminal = [snapshot.ownTeam, ...snapshot.opponents].every((team) => team.finishedAt !== undefined || team.failedAt !== undefined);
+  if (snapshot.answerReview !== undefined && !allTerminal) {
+    context.addIssue({ code: 'custom', message: 'Answers remain sealed until every crew has finished or failed.', path: ['answerReview'] });
+  }
   const participantIds = snapshot.participants.map((participant) => participant.nodeId);
   const teamIds = [...new Set(snapshot.participants.map((participant) => participant.teamId))];
   const stateStageIds = snapshot.stages.map((stage) => stage.id);
@@ -491,11 +513,14 @@ function privateStationForMechanic(
 }
 
 function validateTeamProgress(
-  team: { stageIndex: number; finishedAt?: number; acceptedProofCount?: number; acceptedProofs?: readonly TeamEscapeRaceAcceptedProof[] },
+  team: { stageIndex: number; finishedAt?: number; failedAt?: number; failureReason?: 'attempts' | 'time'; mistakes?: number; acceptedProofCount?: number; acceptedProofs?: readonly TeamEscapeRaceAcceptedProof[] },
   stages: readonly TeamEscapeRaceStage[],
   context: z.RefinementCtx,
   path: PropertyKey[],
 ): void {
+  if (team.finishedAt !== undefined && team.failedAt !== undefined || (team.failedAt === undefined) !== (team.failureReason === undefined) || team.failureReason === 'attempts' && team.mistakes !== undefined && team.mistakes !== 4) {
+    context.addIssue({ code: 'custom', message: 'Team failure and finish state must agree.', path });
+  }
   if (team.stageIndex >= stages.length) {
     context.addIssue({ code: 'custom', message: 'Team progress points past the final stage.', path: [...path, 'stageIndex'] });
     return;
@@ -523,7 +548,9 @@ function stableSerialize(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
+  // JSON drops optional undefined fields in transit/storage. Signing them would
+  // make an otherwise valid snapshot fail after a real relay or cold restart.
+  return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
 }
 
 export type { TeamEscapeRaceProofRejectionReason };

@@ -1,4 +1,6 @@
 import type { Capability } from '../types';
+import { routeLandmark } from './route-landmarks';
+import { normalizeForgeThemePrompt } from './theme-prompt';
 import type {
   ForgeCase,
   ForgeClue,
@@ -7,7 +9,6 @@ import type {
   ForgeGenerationRequest,
   ForgeHint,
   ForgeIntensity,
-  ForgePose,
   ForgeRole,
   ForgeStage,
   ForgeThemeId,
@@ -808,7 +809,7 @@ function createRouteStage(
   random.shuffle(openEdges).forEach((edge, index) => edgeBuckets[index % playerIds.length].push(edge));
   const clues: ForgeClue[] = edgeBuckets.map((edges, index) => ({
     id: `route-layer-${index + 1}`,
-    title: `Route layer ${index + 1}`,
+    title: 'Your doorway map',
     audiencePlayerIds: clueAudience(playerIds[index]),
     private: playerIds.length > 1,
     payload: { kind: 'grid-edges', edges },
@@ -818,7 +819,7 @@ function createRouteStage(
     title: 'Entry / exit plate',
     audiencePlayerIds: clueAudience(playerIds[(request.difficulty + 1) % playerIds.length]),
     private: playerIds.length > 1,
-    payload: { kind: 'text', text: `Enter at cell ${firstEnd}. Leave at cell ${secondEnd}.` },
+    payload: { kind: 'text', text: `Start at ${routeLandmark(firstEnd).label}. Reach ${routeLandmark(secondEnd).label}.` },
   });
 
   return {
@@ -826,7 +827,7 @@ function createRouteStage(
     index: 3,
     title: theme.stageTitles[3],
     storyBeat: theme.stageBeats[3],
-    instruction: 'Overlay the crew’s open passages, then trace the unique route from entry to exit without jumping cells.',
+    instruction: 'Everyone has different doorways on the same map. Describe which landmarks connect; together, draw one safe path from START to EXIT.',
     durationMinutes,
     mechanic: {
       kind: 'route-grid',
@@ -841,7 +842,7 @@ function createRouteStage(
     hints: standardHints(
       'Every line in a route layer is an open passage; unlisted borders are walls.',
       'Combine all layers before moving. The complete network is a tree, so it has one route.',
-      `The route starts ${answer[1] === firstEnd + 1 ? 'to the right' : answer[1] === firstEnd - 1 ? 'to the left' : answer[1] > firstEnd ? 'downward' : 'upward'} from cell ${firstEnd}.`,
+      'Begin at START and ask who has a doorway touching that landmark. Cross out dead ends together.',
       request.difficulty,
     ),
     solution: { kind: 'route', answer },
@@ -849,103 +850,30 @@ function createRouteStage(
     submitterPlayerIds: [...playerIds],
     fallback: {
       reason: 'The grid is touch-native and requires no sensor.',
-      instruction: 'Read edge pairs aloud and trace the route by tapping numbered cells.',
+      instruction: 'Describe the landmarks joined by a line, then tap those landmarks on the shared route board.',
       preservesAnswer: true,
     },
   };
 }
 
-function posePool(safeMovement: boolean): readonly ForgePose[] {
-  return safeMovement
-    ? ['PLACE_FLAT', 'HOLD_UPRIGHT', 'TILT_LEFT', 'TILT_RIGHT', 'FACE_DOWN', 'HOLD_STILL']
-    : ['PLACE_FLAT', 'HOLD_UPRIGHT', 'TILT_LEFT', 'TILT_RIGHT', 'HOLD_STILL'];
-}
 
-function createSyncStage(
-  theme: ThemeBlueprint,
-  request: ForgeGenerationRequest,
-  playerIds: readonly string[],
-  random: SeededRandom,
-  durationMinutes: number,
-): ForgeStage {
-  const motionAvailable = allHaveCapability(request, playerIds, 'motion');
-  const audioAvailable = request.noiseAllowed && allHaveCapability(request, playerIds, 'microphoneLevel');
-  const poses = motionAvailable
-    ? random.shuffle(posePool(request.safeMovement)).slice(0, playerIds.length)
-    : playerIds.map(() => 'HOLD_STILL' as const);
-  const vocalStart = random.integer(playerIds.length);
-  const assignments = playerIds.map((playerId, index) => ({
-    playerId,
-    pose: poses[index],
-    vocalCue: !audioAvailable
-      ? ('NONE' as const)
-      : index === vocalStart
-        ? ('LOW_HUM' as const)
-        : index === (vocalStart + 1) % playerIds.length && playerIds.length > 1
-          ? ('SHORT_TONE' as const)
-          : ('NONE' as const),
-  }));
-  const windowMs = Math.max(5_000, 12_000 - request.difficulty * 1_200 - (request.intensity === 'intense' ? 800 : 0));
-  const clues: ForgeClue[] = assignments.map((assignment, index) => ({
-    id: `sync-assignment-${index + 1}`,
-    title: `Final position ${index + 1}`,
-    audiencePlayerIds: clueAudience(assignment.playerId),
-    private: playerIds.length > 1,
-    payload: motionAvailable
-      ? { kind: 'pose', pose: assignment.pose, holdMs: 1_800 }
-      : { kind: 'text', text: `Touch contact ${index + 1}: hold the on-screen plate until it arms.` },
-  }));
-  assignments.forEach((assignment, index) => {
-    if (assignment.vocalCue === 'NONE') return;
-    clues.push({
-      id: `sync-vocal-${index + 1}`,
-      title: assignment.vocalCue === 'LOW_HUM' ? 'Lower register' : 'Upper register',
-      audiencePlayerIds: clueAudience(assignment.playerId),
-      private: playerIds.length > 1,
-      payload: {
-        kind: 'audio-token',
-        spokenText: assignment.vocalCue === 'LOW_HUM' ? 'Hold a low, steady hum.' : 'Sound one short clear tone.',
-        fallbackText: assignment.vocalCue === 'LOW_HUM' ? 'Hold LOW on the pressure pad.' : 'Tap TONE once on cue.',
-      },
-    });
-  });
-
+/** A final reconstruction rather than a contact that opens just by being held. */
+function createReconstructionFinale(theme: ThemeBlueprint, request: ForgeGenerationRequest, playerIds: readonly string[], random: SeededRandom, durationMinutes: number): ForgeStage {
+  const stage = createOrderStage(theme, { ...request, difficulty: Math.max(3, request.difficulty) as ForgeDifficulty }, playerIds, random, durationMinutes);
   return {
-    id: 'forge-motion-sync',
-    index: 4,
-    title: theme.stageTitles[4],
-    storyBeat: theme.stageBeats[4],
-    instruction: motionAvailable
-      ? audioAvailable
-        ? `Take your private positions, keep edge contacts held, and complete the tone formation inside ${(windowMs / 1000).toFixed(1)} seconds.`
-        : `Take your private positions, keep edge contacts held, and complete the formation inside ${(windowMs / 1000).toFixed(1)} seconds.`
-      : `Hold each private on-screen contact plate inside the same ${(windowMs / 1000).toFixed(1)}-second window. No phone movement is required.`,
-    durationMinutes,
-    mechanic: {
-      kind: 'motion-sync',
-      assignments,
-      inputMode: motionAvailable ? 'motion' : 'touch',
-      windowMs,
-      preferredCapability: 'motion',
-    },
-    clues,
-    hints: standardHints(
-      motionAvailable ? 'Assign one caller to count down, but nobody should move before zero.' : 'Assign one caller to count down before anyone holds a contact plate.',
-      motionAvailable ? 'Set silent poses first. Add the vocal cues only after every phone is stable.' : 'Open every role’s contact plate before starting the countdown.',
-      motionAvailable ? `${assignments[0].playerId} should lock ${assignments[0].pose.replaceAll('_', ' ').toLowerCase()} first.` : `${assignments[0].playerId} should arm contact 1 first.`,
-      request.difficulty,
-    ),
-    solution: { kind: 'sync', windowMs, assignments },
-    requiredPlayerIds: [...playerIds],
-    submitterPlayerIds: [...playerIds],
-    fallback: {
-      reason:
-        motionAvailable && (audioAvailable || !request.noiseAllowed)
-          ? 'Any sensor can become unavailable during play.'
-          : 'One or more required motion or audio sensors are unavailable.',
-      instruction: 'Use the matching contact plates and LOW/TONE pressure controls; all players must still hold the same formation in the same window.',
-      preservesAnswer: true,
-    },
+    ...stage,
+    id: 'forge-reconstruction',
+    title: 'The Last Missing Minute',
+    storyBeat: 'The exit recorded what happened, but not when. Each person recovered a different piece of the final minute. Rebuild it before the door can trust you.',
+    instruction: 'Each object marks one moment. Read your fragments aloud and reconstruct the exact order together. “Immediately after” means no object can go between them.',
+    clues: stage.clues.map((clue, index) => {
+      if (clue.payload.kind !== 'text' || !clue.id.startsWith('order-link-') || stage.mechanic.kind !== 'distributed-order') return clue;
+      const pair = stage.mechanic.adjacentConstraints[Number(clue.id.replace('order-link-', '')) - 1];
+      const first = stage.mechanic.tokens.find((token) => token.id === pair[0])!.label;
+      const second = stage.mechanic.tokens.find((token) => token.id === pair[1])!.label;
+      return { ...clue, title: `Witness memory ${index}`, payload: { kind: 'text' as const, text: index % 2 ? `“I remember ${second} immediately after ${first}.”` : `“${first} happened immediately before ${second}. Nothing happened between them.”` } };
+    }),
+    fallback: { reason: 'The finale is a shared deduction, so no sensor or pressure hold is required.', instruction: 'Read the memories, then arrange the object tiles. Every clue remains available to its own role.', preservesAnswer: true },
   };
 }
 
@@ -958,7 +886,7 @@ function stylePremise(base: string, tone: ForgeTone, intensity: ForgeIntensity):
 function createCustomThemeBlueprint(base: ThemeBlueprint, prompt: string): ThemeBlueprint {
   const subject = prompt.trim().replace(/\s+/g, ' ');
   const titleWords = subject
-    .match(/[a-zA-Z0-9]+(?:['’-][a-zA-Z0-9]+)*/g)
+    .match(/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*(?:['’-][\p{L}\p{N}][\p{L}\p{M}\p{N}]*)*/gu)
     ?.filter((word, index) => index > 0 || !/^(a|an|the)$/i.test(word))
     .slice(0, 6) ?? [];
   const titleSubject = (titleWords.join(' ') || 'Unfiled World').slice(0, 56);
@@ -995,6 +923,7 @@ function createCustomThemeBlueprint(base: ThemeBlueprint, prompt: string): Theme
  * state and authoritative answers; no model, account, network, or API key is involved.
  */
 export function generateOfflineForgeCase(request: ForgeGenerationRequest): ForgeCase {
+  request = { ...request, customThemePrompt: normalizeForgeThemePrompt(request.customThemePrompt) };
   assertRequest(request);
   const replayIndex = request.replayIndex ?? 0;
   const normalizedPlayerIds = request.playerIds.map((playerId) => playerId.trim());
@@ -1010,19 +939,16 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
   const durations = distributeDurations(request.targetMinutes);
   const roles = createRoles(normalizedPlayerIds, request.playerNames, random);
   const legacyKinds = random.shuffle([
-    'distributed-order',
     'symbol-lock',
     'private-relay',
     'route-grid',
   ] as const);
   const openingKinds = random.shuffle([
     'split-riddle',
-    ...legacyKinds.slice(0, 3),
+    ...legacyKinds,
   ] as const);
   const openingStages = openingKinds.map((kind, index) => {
     switch (kind) {
-      case 'distributed-order':
-        return createOrderStage(theme, request, normalizedPlayerIds, random, durations[index]);
       case 'split-riddle':
         return createSplitRiddleStage(theme, request, normalizedPlayerIds, random, durations[index]);
       case 'symbol-lock':
@@ -1035,7 +961,7 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
   });
   const stages = [
     ...openingStages,
-    createSyncStage(theme, request, normalizedPlayerIds, random, durations[4]),
+    createReconstructionFinale(theme, request, normalizedPlayerIds, random, durations[4]),
   ].map((stage, index) => ({ ...stage, index }));
   const idSuffix = mixSeed(effectiveSeed, THEME_IDS.indexOf(theme.id), request.targetMinutes, request.intensity.length)
     .toString(36)
@@ -1045,7 +971,7 @@ export function generateOfflineForgeCase(request: ForgeGenerationRequest): Forge
   return {
     id: `forge-${theme.id}-${idSuffix}`,
     schemaVersion: 1,
-    generatorVersion: 'housewire-local-forge-v2',
+    generatorVersion: 'housewire-local-forge-v3',
     providerId: 'housewire-local-forge-v1',
     seed: request.seed,
     effectiveSeed,

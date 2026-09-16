@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { VOICE_NOTE_MAX_BYTES, VOICE_NOTE_MAX_DURATION_MS, VOICE_NOTE_MIME_TYPES } from '../../domain/voice-note';
 
-export const HOUSE_LINE_TTL_MS = 15_000 as const;
-export const HOUSE_LINE_MAX_CLIP_BYTES = 96 * 1024;
-export const HOUSE_LINE_MAX_CLIP_DURATION_MS = 1_900;
+export const HOUSE_LINE_TTL_MS = 90_000 as const;
+export const HOUSE_LINE_MAX_CLIP_BYTES = VOICE_NOTE_MAX_BYTES;
+export const HOUSE_LINE_MAX_CLIP_DURATION_MS = VOICE_NOTE_MAX_DURATION_MS;
 export const HOUSE_LINE_MAX_INBOX_ITEMS = 6;
 export const HOUSE_LINE_FUTURE_SKEW_MS = 5_000;
 
@@ -15,6 +16,14 @@ const safeIdSchema = z
   .max(64)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, 'Use a relay-safe identifier.');
 const timestampSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+
+/** RTT-based clock offsets may contain half milliseconds. Normalize only locally
+ * constructed timestamps; received envelopes must still pass the strict schema. */
+export function houseLineTimestamp(now: number, clockOffsetMs = 0): number {
+  const safeNow = Number.isFinite(now) ? now : 0;
+  const safeOffset = Number.isFinite(clockOffsetMs) ? clockOffsetMs : 0;
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(safeNow + safeOffset)));
+}
 const base64Schema = z
   .string()
   .min(4)
@@ -37,7 +46,7 @@ const clipSchema = commonSchema
         base64: base64Schema,
         byteSize: z.number().int().min(1).max(HOUSE_LINE_MAX_CLIP_BYTES),
         durationMs: z.number().int().min(120).max(HOUSE_LINE_MAX_CLIP_DURATION_MS),
-        mimeType: z.literal('audio/mp4'),
+        mimeType: z.enum(VOICE_NOTE_MIME_TYPES),
       })
       .strict(),
   })

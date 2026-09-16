@@ -1,8 +1,7 @@
-import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 
 import { LanWebSocketTransport } from '@/src/services/transport';
+import { defaultRelayServiceUrl } from '@/src/services/runtime-connections';
 import type {
   DirectDeliveryAck,
   TransportConnectionState,
@@ -17,9 +16,9 @@ import {
   type SessionNode,
 } from './protocol';
 import { LOBBY_PRESENCE_TIMEOUT_MS } from './lobby-presence';
-import { resolveLanRelayUrl } from './join-room';
 import { ReliableSessionOutbox } from './reliable-outbox';
 import { RelayResumeVault } from './relay-resume-vault';
+import { relayCredentialStorage } from './relay-credential-storage';
 import { createRelayId } from './relay-id';
 import {
   advanceServerClockAnchor,
@@ -66,15 +65,7 @@ const PEER_STALE_AFTER_MS = LOBBY_PRESENCE_TIMEOUT_MS;
 const MAXIMUM_DIRECT_SESSION_FEED = 32;
 
 export function deriveLanRelayUrl(): string {
-  return resolveLanRelayUrl({
-    explicit: process.env.EXPO_PUBLIC_HOUSEWIRE_RELAY_URL,
-    expoHostUri: Constants.expoConfig?.hostUri,
-    expoDebuggerHost: Constants.expoGoConfig?.debuggerHost,
-    webHostname:
-      Platform.OS === 'web' && typeof window !== 'undefined'
-        ? window.location.hostname
-        : undefined,
-  });
+  return defaultRelayServiceUrl();
 }
 
 export function useHousewireSession(options: HousewireSessionOptions) {
@@ -84,15 +75,22 @@ export function useHousewireSession(options: HousewireSessionOptions) {
   const reliableOutboxRef = useRef(new ReliableSessionOutbox<HousewireSessionEvent>());
   const flushingOutboxRef = useRef(false);
   const serverClockAnchorRef = useRef<ServerClockAnchor | undefined>(undefined);
-  // Private to this provider lifetime. Credentials never enter Zustand,
-  // session events, race snapshots, logs, or QR join tickets.
-  const resumeVaultRef = useRef(new RelayResumeVault());
+  // Encrypted native storage restores proof before opening the first socket.
+  // Credentials never enter Zustand, events, logs, or QR join tickets.
+  const resumeVaultRef = useRef(new RelayResumeVault(8, relayCredentialStorage));
+  const [resumeReady, setResumeReady] = useState(false);
   const [connectionState, setConnectionState] = useState<TransportConnectionState>('idle');
   const [feed, setFeed] = useState<SessionFeedItem[]>([]);
   const [directFeed, setDirectFeed] = useState<SessionDirectFeedItem[]>([]);
   const [peers, setPeers] = useState<SessionNode[]>([]);
   const [error, setError] = useState<string>();
   const [connectionGeneration, setConnectionGeneration] = useState(0);
+
+  useEffect(() => {
+    let disposed = false;
+    void resumeVaultRef.current.hydrate().then(() => { if (!disposed) setResumeReady(true); });
+    return () => { disposed = true; };
+  }, []);
 
   const flushReliableOutbox = useCallback(async () => {
     const transport = transportRef.current;
@@ -141,6 +139,7 @@ export function useHousewireSession(options: HousewireSessionOptions) {
       setConnectionState('idle');
       return;
     }
+    if (!resumeReady) { setConnectionState('connecting'); return; }
 
     const role = stableNode.id === 'local' ? 'host' : 'guest';
     const resumeIdentity = {
@@ -295,6 +294,7 @@ export function useHousewireSession(options: HousewireSessionOptions) {
     options.enabled,
     options.relayUrl,
     options.sessionId,
+    resumeReady,
     stableNode.id,
   ]);
 

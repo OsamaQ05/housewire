@@ -4,8 +4,8 @@ const expoConfig = require('eslint-config-expo/flat');
 
 module.exports = defineConfig([
   expoConfig,
+  { ignores: ['dist/**', 'dist-*/**', 'tmp/**', 'downloads/**', 'android/**', 'ios/**'] },
   {
-    ignores: ['dist/*'],
     rules: {
       // Housewire's sensor and LAN coordinators intentionally keep mutable,
       // non-rendering state in refs. React Compiler is disabled in app.json,

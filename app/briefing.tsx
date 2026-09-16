@@ -22,13 +22,14 @@ import {
 import { useHousewireSound } from '@/src/hooks/use-housewire-sound';
 import { useHousewireStore, type CrewNode, type MissionId } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
-import { EscapeCaseBriefing } from '@/src/features/cases/EscapeCaseBriefing';
+import { RetiredStoryRoom } from '@/src/features/story-rooms/RetiredStoryRoom';
+import { StoryRoomBriefing } from '@/src/features/story-rooms/StoryRoomBriefing';
+import { isStoryRoomId } from '@/src/features/story-rooms/types';
 
 export default function BriefingScreen() {
   const selectedMission = useHousewireStore((state) => state.selectedMission);
-  if (selectedMission === 'dead-air' || selectedMission === 'night-glass' || selectedMission === 'long-table') {
-    return <EscapeCaseBriefing missionId={selectedMission} />;
-  }
+  if (isStoryRoomId(selectedMission)) return <StoryRoomBriefing roomId={selectedMission} />;
+  if (selectedMission === 'dead-air') return <RetiredStoryRoom />;
   return <Line13BriefingScreen />;
 }
 

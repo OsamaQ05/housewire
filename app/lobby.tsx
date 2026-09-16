@@ -251,7 +251,7 @@ export default function LobbyScreen() {
     if (crewChanged) {
       useHousewireStore.getState().setCrew(normaliseLiveCrew(nextCrew, safeRooms));
     }
-    if (shouldOpenCalibration) router.replace('/calibrate');
+    if (shouldOpenCalibration) router.replace('/briefing');
   }, [
     router,
     safeRooms,
@@ -288,7 +288,7 @@ export default function LobbyScreen() {
     setLocalNodeId('local');
     setCrew(previewCrew);
     play('switch', 0.65);
-    router.push('/calibrate');
+    router.push('/briefing');
   };
 
   const beginLive = async () => {
@@ -303,7 +303,7 @@ export default function LobbyScreen() {
         });
       }
       play('switch', 0.65);
-      router.replace('/calibrate');
+      router.replace('/briefing');
     } catch (error: unknown) {
       setLobbyError(error instanceof Error ? error.message : 'The start signal could not be sent.');
       setStarting(false);
@@ -346,7 +346,7 @@ export default function LobbyScreen() {
             </Text>
             <Text style={[styles.heroText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>
               {sessionMode === 'preview'
-                ? 'You will step through every room.'
+                ? 'Try both viewpoints. Each has different clues and places to fill.'
                 : isGuest
                   ? 'Stay here until the host starts.'
                   : 'On each phone: open Housewire, tap Join game, then scan.'}
@@ -416,10 +416,10 @@ export default function LobbyScreen() {
             </View>
           ) : (
             <View style={[styles.soloBand, { borderColor: theme.colors.warning }]}>
-              <Text style={[styles.soloNumber, { color: theme.colors.warning, fontFamily: theme.typography.families.storyBold }]}>{previewCrew.length}</Text>
+              <Text style={[styles.soloNumber, { color: theme.colors.warning, fontFamily: theme.typography.families.storyBold }]}>1</Text>
               <View style={styles.soloCopy}>
-                <Text style={[styles.soloTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Rooms on one phone</Text>
-                <Text style={[styles.soloText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Swap rooms when the game asks.</Text>
+                <Text style={[styles.soloTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>Phone. Both viewpoints.</Text>
+                <Text style={[styles.soloText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Use You and Partner to switch clues during rehearsal.</Text>
               </View>
             </View>
           )}
@@ -427,7 +427,7 @@ export default function LobbyScreen() {
 
         <View style={styles.section}>
           <SectionLead
-            detail={sessionMode === 'preview' ? 'Solo stand-ins' : `${connectedLiveCrew.length} phone${connectedLiveCrew.length === 1 ? '' : 's'} connected`}
+            detail={sessionMode === 'preview' ? 'Example positions · rehearsal uses You and Partner' : `${connectedLiveCrew.length} phone${connectedLiveCrew.length === 1 ? '' : 's'} connected`}
             index="2"
             title="Who is where"
           />
@@ -456,14 +456,14 @@ export default function LobbyScreen() {
           <SectionLead
             detail={sessionMode === 'preview' ? 'Ready now' : connectedLiveCrew.length >= 2 ? 'Ready when everyone is in place' : 'Connect at least 2 phones'}
             index="3"
-            title="Split up, then start"
+            title="Find a comfortable spot"
           />
           <View style={styles.readyLine}>
             {[0, 1, 2, 3].map((index) => {
               const filled = sessionMode === 'preview' ? index < previewCrew.length : index < connectedLiveCrew.length;
               return <View key={index} style={[styles.readyDot, { backgroundColor: filled ? theme.colors.ready : 'transparent', borderColor: filled ? theme.colors.ready : theme.colors.draft }]} />;
             })}
-            <Text style={[styles.readyText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'preview' ? 'Solo rooms ready' : `${connectedLiveCrew.length} connected · sound on · safe paths clear`}</Text>
+            <Text style={[styles.readyText, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'preview' ? 'Both viewpoints ready' : `${connectedLiveCrew.length} connected · keep private clues on your own screen`}</Text>
           </View>
 
           <View style={styles.actions}>
@@ -473,7 +473,7 @@ export default function LobbyScreen() {
                 haptic="rigid"
                 label="Start solo preview"
                 onPress={beginPreview}
-                overline={`${previewCrew.length} ROOMS · ONE PHONE`}
+                overline="YOU + PARTNER · ONE PHONE"
               />
               <TextAction label="Join a live house" onPress={() => router.push('/join')} />
             </>

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { parseCircuitRaceCheckpoint, serializeCircuitRaceCheckpoint } from './checkpoint';
 
 import type { CircuitRaceSubmission, CompiledCircuitRace } from '@/src/domain/circuit-race';
 import {
   acceptTeamEscapeRaceStart,
   createPracticeTeamEscapeRace,
   createTeamEscapeRaceStartEvent,
+  expireCircuitRace,
   simulatePracticeTeamEscapeRace,
   type TeamEscapeRaceProofRejectionReason,
   type TeamEscapeRaceState,
@@ -39,6 +42,8 @@ import {
 
 const PROOF_RESULT_TIMEOUT_MS = 9_000;
 const SNAPSHOT_REPLAY_INTERVAL_MS = 8_000;
+const CHECKPOINT_KEY = 'housewire-circuit-active-v1';
+let checkpointWrites: Promise<unknown> = Promise.resolve();
 
 export interface UseCircuitRaceCoordinatorOptions {
   raceId: string;
@@ -63,7 +68,7 @@ export type CircuitRaceStartResult =
   | { started: true; operationId: string; undeliveredNodeIds: readonly string[] }
   | {
       started: false;
-      reason: 'WRONG_MODE' | 'NOT_HOST' | 'OFFLINE' | 'ALREADY_STARTED' | 'PLAYERS' | 'INVALID_SETUP';
+      reason: 'WRONG_MODE' | 'NOT_HOST' | 'OFFLINE' | 'ALREADY_STARTED' | 'PLAYERS' | 'INVALID_SETUP' | 'NOT_READY';
     };
 
 export type CircuitRaceSubmitFailureReason =
@@ -96,12 +101,14 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
   const [snapshot, setSnapshot] = useState<CircuitRacePlayerSnapshot>();
   const [lastError, setLastError] = useState<string>();
   const [serverNow, setServerNow] = useState(() => Date.now());
+  const [checkpointReady, setCheckpointReady] = useState(false);
   const authorityStateRef = useRef(authorityState);
   const snapshotRef = useRef(snapshot);
   const processedDirectIdsRef = useRef(new Set<string>());
   const pendingProofsRef = useRef(new Map<string, PendingProof>());
   const snapshotRequestKeyRef = useRef<string | undefined>(undefined);
   const assignmentPlanKey = `${mode}:${options.course.seed}:${options.raceId}:${session.localNodeId}:${session.sessionId}`;
+  const checkpointKey = `${mode}:${options.course.seed}:${options.raceId}:${session.localNodeId}`;
   const liveAssignmentPlanRef = useRef({
     key: assignmentPlanKey,
     seed: createLiveAssignmentSeed(options.course.seed),
@@ -116,6 +123,8 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
   const estimatedServerNow = useCallback(() => toSessionTimestamp(
     Date.now() + (mode === 'live' ? (session.clockEstimate?.offsetMs ?? 0) : 0),
   ), [mode, session.clockEstimate?.offsetMs]);
+  const clockNowRef = useRef(estimatedServerNow);
+  clockNowRef.current = estimatedServerNow;
 
   const commitSnapshot = useCallback((next: CircuitRacePlayerSnapshot | undefined) => {
     if (next) {
@@ -198,7 +207,28 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
     setAuthorityState(undefined);
     setSnapshot(undefined);
     setLastError(undefined);
-  }, [mode, options.course.seed, options.raceId, session.localNodeId, session.sessionId]);
+    setCheckpointReady(false);
+    let cancelled = false;
+    void checkpointWrites.then(() => AsyncStorage.getItem(CHECKPOINT_KEY)).then((serialized) => {
+      if (cancelled || !serialized) return;
+      const saved = parseCircuitRaceCheckpoint(serialized, checkpointKey);
+      if (!saved) return;
+      if (saved.authority && saved.authority.hostNodeId === session.localNodeId) {
+        commitAuthority(expireCircuitRace(saved.authority, clockNowRef.current()));
+      } else {
+        commitSnapshot(saved.snapshot);
+      }
+    }).catch(() => undefined).finally(() => { if (!cancelled) setCheckpointReady(true); });
+    return () => { cancelled = true; };
+  }, [checkpointKey, commitAuthority, commitSnapshot, mode, options.course.seed, options.raceId, session.localNodeId, session.sessionId]);
+
+  useEffect(() => {
+    if (!checkpointReady || !snapshot) return;
+    try {
+      const serialized = serializeCircuitRaceCheckpoint({ version: 1, key: checkpointKey, authority: authorityState, snapshot });
+      checkpointWrites = checkpointWrites.catch(() => undefined).then(() => AsyncStorage.setItem(CHECKPOINT_KEY, serialized)).catch(() => undefined);
+    } catch { /* A corrupt checkpoint must never overwrite the last valid run. */ }
+  }, [authorityState, checkpointKey, checkpointReady, snapshot]);
 
   useEffect(() => {
     const interval = setInterval(() => setServerNow(estimatedServerNow()), 250);
@@ -351,6 +381,19 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
   }, [fanoutSnapshots, mode, session.connectionState, session.isHost]);
 
   useEffect(() => {
+    if (mode !== 'practice' && !session.isHost) return;
+    const interval = setInterval(() => {
+      const current = authorityStateRef.current;
+      if (!current) return;
+      const next = expireCircuitRace(current, estimatedServerNow());
+      if (next === current) return;
+      commitAuthority(next);
+      if (mode === 'live') void fanoutSnapshots(next);
+    }, 250);
+    return () => clearInterval(interval);
+  }, [commitAuthority, estimatedServerNow, fanoutSnapshots, mode, session.isHost]);
+
+  useEffect(() => {
     if (mode !== 'practice') return;
     const interval = setInterval(() => {
       const current = authorityStateRef.current;
@@ -376,6 +419,7 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
     startOptions: CircuitRaceLiveStartOptions = {},
   ): Promise<CircuitRaceStartResult> => {
     if (mode !== 'live') return { started: false, reason: 'WRONG_MODE' };
+    if (!checkpointReady) return { started: false, reason: 'NOT_READY' };
     if (!session.isHost) return { started: false, reason: 'NOT_HOST' };
     if (session.connectionState !== 'connected') return { started: false, reason: 'OFFLINE' };
     if (authorityStateRef.current) return { started: false, reason: 'ALREADY_STARTED' };
@@ -448,10 +492,11 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
     } catch {
       return { started: false, reason: 'INVALID_SETUP' };
     }
-  }, [commitAuthority, estimatedServerNow, fanoutSnapshots, mode, options, session]);
+  }, [checkpointReady, commitAuthority, estimatedServerNow, fanoutSnapshots, mode, options, session]);
 
   const startPractice = useCallback((): CircuitRaceStartResult => {
     if (mode !== 'practice') return { started: false, reason: 'WRONG_MODE' };
+    if (!checkpointReady) return { started: false, reason: 'NOT_READY' };
     if (authorityStateRef.current) return { started: false, reason: 'ALREADY_STARTED' };
     try {
       const now = Date.now();
@@ -474,7 +519,7 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
     } catch {
       return { started: false, reason: 'INVALID_SETUP' };
     }
-  }, [commitAuthority, mode, options, session.localNodeId]);
+  }, [checkpointReady, commitAuthority, mode, options, session.localNodeId]);
 
   const submitStage = useCallback(async (
     submission: CircuitRaceSubmission,
@@ -484,7 +529,7 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
     const revision = currentSnapshot?.revision ?? 0;
     if (!currentSnapshot) return { accepted: false, changed: false, reason: 'NO_RACE', revision };
     const now = estimatedServerNow();
-    if (now < currentSnapshot.startsAt || currentSnapshot.ownTeam.finishedAt !== undefined) {
+    if (now < currentSnapshot.startsAt || currentSnapshot.ownTeam.finishedAt !== undefined || currentSnapshot.ownTeam.failedAt !== undefined) {
       return { accepted: false, changed: false, reason: 'NOT_RUNNING', revision };
     }
     if (mode === 'live' && session.connectionState !== 'connected') {
@@ -506,7 +551,7 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
           observedAt: now,
           requestId,
           submission,
-          revealedHintCount,
+          revealedHintCount: Math.min(2, revealedHintCount),
         });
       } catch {
         return { accepted: false, changed: false, reason: 'INVALID_LOCAL_PROOF', revision };
@@ -544,7 +589,7 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
         observedAt: now,
         requestId,
         submission,
-        revealedHintCount,
+        revealedHintCount: Math.min(2, revealedHintCount),
       });
     } catch {
       return { accepted: false, changed: false, reason: 'INVALID_LOCAL_PROOF', revision };
@@ -591,7 +636,8 @@ export function useCircuitRaceCoordinator(options: UseCircuitRaceCoordinatorOpti
   return {
     /** Full proof state exists only on the live host or the local practice device. */
     authorityState,
-    canHostStart: mode === 'live' && session.isHost && session.connectionState === 'connected' &&
+    checkpointReady,
+    canHostStart: checkpointReady && mode === 'live' && session.isHost && session.connectionState === 'connected' &&
       isCircuitRaceLivePlayerCount(lobbyParticipants.length) && !authorityState,
     connectionState: mode === 'practice' ? 'connected' as const : session.connectionState,
     isHost: mode === 'practice' || session.isHost,

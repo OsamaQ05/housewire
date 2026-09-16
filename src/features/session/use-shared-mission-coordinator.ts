@@ -19,6 +19,7 @@ import {
   createMissionStartEvent,
   createSharedMissionCheckpoint,
   createSharedMissionCoordinatorState,
+  expireSharedMission,
   missionStartTransportEventId,
   reduceSharedMissionFrame,
   type HostStartInput,
@@ -257,6 +258,27 @@ export function useSharedMissionCoordinator() {
     [dispatchLocally, session],
   );
 
+  const reportMistake = useCallback(async (): Promise<boolean> => {
+    const current = stateRef.current;
+    if (!current.operationId || current.failedAt !== undefined || current.finishedAt !== undefined || current.abortedAt !== undefined || !current.requiredNodeIds.includes(session.localNodeId)) return false;
+    const event = housewireSessionEventSchema.parse({ kind: 'mission.mistake', missionId: 'line-13', operationId: current.operationId, nodeId: session.localNodeId, attemptId: createRelayId('attempt'), stageIndex: current.stageIndex, observedAt: toSessionTimestamp(Date.now() + (session.clockEstimate?.offsetMs ?? 0)) });
+    const eventId = createRelayId('mistake');
+    if (!session.enabled) { dispatchLocally(event, eventId); return true; }
+    try { await session.publishReliable(event, { eventId }); return true; } catch { return false; }
+  }, [dispatchLocally, session]);
+
+  useEffect(() => {
+    if (!session.isHost || !session.enabled || session.connectionState !== 'connected') return;
+    const timer = setInterval(() => {
+      const next = expireSharedMission(stateRef.current, Date.now() + (session.clockEstimate?.offsetMs ?? 0));
+      if (next === stateRef.current) return;
+      commit(next);
+      const checkpoint = createSharedMissionCheckpoint(next, createRelayId('expired'));
+      if (checkpoint) void publishAuthority(checkpoint);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [commit, publishAuthority, session.clockEstimate?.offsetMs, session.connectionState, session.enabled, session.isHost]);
+
   const abortOperation = useCallback(async (): Promise<boolean> => {
     const abortedAt = toSessionTimestamp(Date.now() + (session.clockEstimate?.offsetMs ?? 0));
     const event = createMissionAbortEvent(stateRef.current, session.localNodeId, abortedAt);
@@ -304,6 +326,10 @@ export function useSharedMissionCoordinator() {
     startedAt: state.startedAt,
     completedNodeIds: visibleCompletedNodeIds,
     submitLocalCompletion,
+    reportMistake,
+    attemptsUsed: state.mistakeIds.length,
+    failedAt: state.failedAt,
+    failureReason: state.failureReason,
     abortOperation,
     hostStart,
     connectionState: session.connectionState,

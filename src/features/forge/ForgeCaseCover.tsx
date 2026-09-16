@@ -31,8 +31,8 @@ export function ForgeCaseCover({
 }) {
   const { theme } = useHousewireTheme();
   const cutLabel = caseFile.providerId === 'housewire-remote-narrative-v1'
-    ? 'MODEL-RANKED'
-    : 'LOCAL-VALIDATED';
+    ? 'AI STORY'
+    : 'OFFLINE CASE';
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={[styles.cover, { borderColor: caseFile.accent }]}>
@@ -53,7 +53,7 @@ export function ForgeCaseCover({
         </View>
 
         <View style={styles.titleBlock}>
-          <Text style={[styles.theme, { color: caseFile.accent, fontFamily: theme.typography.families.monoMedium }]}>{caseFile.theme.replaceAll('-', ' ').toUpperCase()}</Text>
+          <Text style={[styles.theme, { color: caseFile.accent, fontFamily: theme.typography.families.monoMedium }]}>{caseFile.recipe.customThemePrompt ? 'YOUR CUSTOM WORLD' : caseFile.theme.replaceAll('-', ' ').toUpperCase()}</Text>
           <Text adjustsFontSizeToFit numberOfLines={2} style={[styles.title, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{caseFile.title}</Text>
           <Text style={[styles.tagline, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{caseFile.tagline}</Text>
         </View>
@@ -66,6 +66,12 @@ export function ForgeCaseCover({
           <Metric label="PRESSURE" value={`${caseFile.difficulty}/5`} />
         </View>
       </View>
+
+      {caseFile.recipe.customThemePrompt ? <View style={styles.requestedWorld}>
+        <Text style={{ color: caseFile.accent, fontFamily: theme.typography.families.bodyMedium }}>Your story idea</Text>
+        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.families.body }}>{caseFile.recipe.customThemePrompt}</Text>
+      </View> : null}
+      {cutLabel === 'OFFLINE CASE' ? <Text style={{ color: theme.colors.warning, fontFamily: theme.typography.families.body, fontSize: 13 }}>Built with offline templates. AI did not write this story. Choose “Cut a different version” to retry the AI connection.</Text> : null}
 
       <View style={[styles.premise, { borderColor: theme.colors.draft }]}>
         <Text style={[styles.premiseLabel, { color: caseFile.accent, fontFamily: theme.typography.families.monoMedium }]}>THE INCIDENT</Text>
@@ -144,6 +150,7 @@ const styles = StyleSheet.create({
   playableStamp: { alignItems: 'center', borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 7, paddingVertical: 5 },
   playableText: { fontSize: 7, letterSpacing: 1.2 },
   premise: { borderBottomWidth: 1, borderTopWidth: 1, gap: 7, paddingVertical: 15 },
+  requestedWorld: { gap: 6 },
   premiseLabel: { fontSize: 8, letterSpacing: 1.4 },
   premiseText: { fontSize: 24, lineHeight: 28 },
   sealCount: { fontFamily: 'BarlowCondensed_800ExtraBold', fontSize: 23, position: 'absolute' },

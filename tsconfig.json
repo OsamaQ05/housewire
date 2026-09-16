@@ -8,6 +8,15 @@
       ]
     }
   },
+  "exclude": [
+    "node_modules",
+    "tmp",
+    "dist",
+    "dist-*",
+    "downloads",
+    "android",
+    "ios"
+  ],
   "include": [
     "**/*.ts",
     "**/*.tsx",

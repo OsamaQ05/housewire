@@ -18,21 +18,15 @@ import type {
   ForgeStage,
   ForgeStageSubmission,
   ForgeSubmissionResult,
-  MotionSyncMechanic,
 } from '@/src/domain/case-forge/types';
 import { QrMarker, QrScanner } from '@/src/features/cases/CaseMissionPrimitives';
-import { useAcousticMeter } from '@/src/hooks/use-acoustic-meter';
-import { useTerminalMotion } from '@/src/hooks/use-terminal-motion';
+import { PuzzleAttemptProvider, RiddleSeal } from '@/src/features/cases/RiddleSeal';
+import { attemptCooldownSeconds, routeLandmark } from '@/src/domain/case-forge/route-landmarks';
 import { useHousewireTheme } from '@/src/theme';
+import { useMusicSilence } from '@/src/features/music/HousewireMusic';
 
 import { forgeColors } from './ForgePrimitives';
-import {
-  evaluateForgePose,
-  FORGE_MIC_CALIBRATION_MS,
-  FORGE_POSE_HOLD_MS,
-  forgeVocalCueMatches,
-  forgeVocalHoldMs,
-} from './forge-sensor-evidence';
+import { RouteMap } from './RouteMap';
 
 interface ForgeSyncProof {
   at: number;
@@ -41,10 +35,8 @@ interface ForgeSyncProof {
 
 interface ForgeStageRunnerProps {
   activePlayerId: string;
-  hintsRevealed: number;
   liveMode?: boolean;
   onChangePlayer: (playerId: string) => void;
-  onRevealHint: () => void;
   onSubmit: (submission: ForgeStageSubmission) => ForgeSubmissionResult | Promise<ForgeSubmissionResult>;
   roles: readonly ForgeRole[];
   stage: ForgeStage | ForgePlayerStage;
@@ -52,10 +44,8 @@ interface ForgeStageRunnerProps {
 
 export function ForgeStageRunner({
   activePlayerId,
-  hintsRevealed,
   liveMode = false,
   onChangePlayer,
-  onRevealHint,
   onSubmit,
   roles,
   stage,
@@ -70,6 +60,9 @@ export function ForgeStageRunner({
   const [syncStartedAt, setSyncStartedAt] = useState<number | null>(null);
   const [syncProofs, setSyncProofs] = useState<Record<string, ForgeSyncProof>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+  const wrongAttempts = useRef(0);
   const [spentAudioClueIds, setSpentAudioClueIds] = useState<string[]>([]);
   const stageIdRef = useRef(stage.id);
   stageIdRef.current = stage.id;
@@ -85,9 +78,20 @@ export function ForgeStageRunner({
     setSyncStartedAt(null);
     setSyncProofs({});
     setSubmitting(false);
+    setRetryAfter(0);
+    setCooldown(0);
+    wrongAttempts.current = 0;
     setSpentAudioClueIds([]);
     void Speech.stop();
   }, [routeStartCell, stage.id]);
+
+  useEffect(() => {
+    if (!retryAfter) return;
+    const tick = () => setCooldown(Math.max(0, Math.ceil((retryAfter - Date.now()) / 1_000)));
+    tick();
+    const timer = setInterval(tick, 250);
+    return () => clearInterval(timer);
+  }, [retryAfter]);
 
   useEffect(() => () => {
     void Speech.stop();
@@ -101,26 +105,42 @@ export function ForgeStageRunner({
   const canSubmit = stage.submitterPlayerIds.includes(activePlayerId);
 
   const submit = async (submission: ForgeStageSubmission) => {
-    if (submitting) return;
+    if (submitting || Date.now() < retryAfter) return;
     const submittedStageId = stage.id;
     setSubmitting(true);
     try {
       const result = await onSubmit(submission);
-      if (stageIdRef.current === submittedStageId) setLastResult(result);
+      if (stageIdRef.current === submittedStageId) {
+        setLastResult(result);
+        if (result.code === 'WRONG_VALUE') {
+          wrongAttempts.current += 1;
+          setRetryAfter(Date.now() + attemptCooldownSeconds(wrongAttempts.current) * 1_000);
+        }
+      }
     } finally {
       if (stageIdRef.current === submittedStageId) setSubmitting(false);
     }
   };
 
   return (
+    <PuzzleAttemptProvider onMistake={() => {
+      if (stage.mechanic.kind !== 'motion-sync') return;
+      const assignments = liveMode ? stage.mechanic.assignments.filter((item) => item.playerId === activePlayerId) : stage.mechanic.assignments;
+      // Legacy word seals share the run's authority and budget instead of local infinite retries.
+      void onSubmit({ kind: 'sync', startedAt: 0, completedAt: 0, proofs: assignments.map((assignment) => ({
+        ...assignment,
+        vocalCue: assignment.playerId === activePlayerId ? (assignment.vocalCue === 'NONE' ? 'LOW_HUM' : 'NONE') : assignment.vocalCue,
+        evidenceMode: 'manual',
+      })) });
+    }}>
     <View style={styles.stagePage}>
       <View style={styles.storyBlock}>
         <Text style={[styles.scene, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>SCENE {String(stage.index + 1).padStart(2, '0')} · {stage.durationMinutes} MIN</Text>
         <Text style={[styles.stageTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>{stage.title}</Text>
-        <Text style={[styles.storyBeat, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{stage.storyBeat}</Text>
+        <Text style={[styles.storyBeat, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{stage.mechanic.kind === 'motion-sync' ? 'The final contacts are locked behind words. Each role must solve a seal, then the crew opens the exit together.' : stage.storyBeat}</Text>
         <View style={[styles.directive, { borderColor: forgeColors.ink }]}>
           <Ionicons color={forgeColors.ink} name="navigate-outline" size={18} />
-          <Text style={[styles.directiveText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{stage.instruction}</Text>
+          <Text style={[styles.directiveText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{stage.mechanic.kind === 'motion-sync' ? 'Read your riddle to the others. Find the word, then count down and unlock together. No pressure hold is needed.' : stage.instruction}</Text>
         </View>
       </View>
 
@@ -153,7 +173,7 @@ export function ForgeStageRunner({
         </View>
       </View>
 
-      <View style={styles.cluesBlock}>
+      {stage.mechanic.kind !== 'motion-sync' ? <View style={styles.cluesBlock}>
         <Text style={[styles.sectionLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>ONLY {activeRole?.playerName.toUpperCase()} CAN SEE</Text>
         {clues.length ? clues.map((clue) => (
           <ForgeCluePanel
@@ -162,6 +182,7 @@ export function ForgeStageRunner({
             key={clue.id}
             liveMode={liveMode}
             onSpendAudio={() => setSpentAudioClueIds((current) => current.includes(clue.id) ? current : [...current, clue.id])}
+            routeWidth={stage.mechanic.kind === 'route-grid' ? stage.mechanic.width : undefined}
           />
         )) : (
           <View style={[styles.noClue, { borderColor: theme.colors.draft }]}>
@@ -169,7 +190,7 @@ export function ForgeStageRunner({
             <Text style={[styles.noClueText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>This role has no fragment in this scene. Listen to the others.</Text>
           </View>
         )}
-      </View>
+      </View> : null}
 
       <View style={[styles.workbench, { borderColor: canSubmit ? forgeColors.ink : theme.colors.draft }]}>
         <View style={styles.workbenchTopline}>
@@ -222,7 +243,7 @@ export function ForgeStageRunner({
         {canSubmit ? (
           <Pressable
             accessibilityRole="button"
-            disabled={submitting}
+            disabled={submitting || cooldown > 0 || !workbenchReady(stage, selectedTokens, riddleAnswer, symbolCode, route, relayTokens, syncProofs, activePlayerId, liveMode)}
             onPress={() => {
               switch (stage.mechanic.kind) {
                 case 'distributed-order':
@@ -266,9 +287,9 @@ export function ForgeStageRunner({
                 }
               }
             }}
-            style={({ pressed }) => [styles.commitButton, { backgroundColor: forgeColors.ink }, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.commitButton, { backgroundColor: forgeColors.ink, opacity: cooldown > 0 || !workbenchReady(stage, selectedTokens, riddleAnswer, symbolCode, route, relayTokens, syncProofs, activePlayerId, liveMode) ? 0.45 : 1 }, pressed && styles.pressed]}
           >
-            <Text style={[styles.commitText, { color: forgeColors.dark, fontFamily: theme.typography.families.bodyMedium }]}>{submitting ? 'Sending to the host…' : 'Test the mechanism'}</Text>
+            <Text style={[styles.commitText, { color: forgeColors.dark, fontFamily: theme.typography.families.bodyMedium }]}>{submitting ? 'Checking…' : cooldown > 0 ? `Compare clues · ${cooldown}s` : stage.mechanic.kind === 'route-grid' ? 'Try this route' : stage.mechanic.kind === 'split-riddle' ? 'Lock our answer' : 'Try our solution'}</Text>
             <Ionicons color={forgeColors.dark} name={submitting ? 'radio-outline' : 'key-outline'} size={20} />
           </Pressable>
         ) : null}
@@ -285,23 +306,8 @@ export function ForgeStageRunner({
         ) : null}
       </View>
 
-      <View style={[styles.hints, { borderColor: theme.colors.draft }]}>
-        <View style={styles.hintCopy}>
-          <Text style={[styles.sectionLabel, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>PRESSURE RELEASE</Text>
-          {hintsRevealed === 0 ? (
-            <Text style={[styles.hintText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Stuck? The case can reveal up to three authored nudges.</Text>
-          ) : stage.hints.slice(0, hintsRevealed).map((hint) => (
-            <Text key={hint.level} style={[styles.hintText, { color: theme.colors.text, fontFamily: theme.typography.families.body }]}>{hint.level}. {hint.text}</Text>
-          ))}
-        </View>
-        {hintsRevealed < stage.hints.length ? (
-          <Pressable accessibilityRole="button" onPress={onRevealHint} style={({ pressed }) => [styles.hintButton, { borderColor: theme.colors.warning }, pressed && styles.pressed]}>
-            <Ionicons color={theme.colors.warning} name="flashlight-outline" size={18} />
-            <Text style={[styles.hintButtonText, { color: theme.colors.warning, fontFamily: theme.typography.families.monoMedium }]}>REVEAL {hintsRevealed + 1}</Text>
-          </Pressable>
-        ) : null}
-      </View>
     </View>
+    </PuzzleAttemptProvider>
   );
 }
 
@@ -310,15 +316,18 @@ function ForgeCluePanel({
   clue,
   liveMode,
   onSpendAudio,
+  routeWidth,
 }: {
   audioSpent: boolean;
   clue: ForgeClue;
   liveMode: boolean;
   onSpendAudio: () => void;
+  routeWidth?: 3 | 4;
 }) {
   const { theme } = useHousewireTheme();
   const [revealed, setRevealed] = useState(clue.payload.kind !== 'audio-token');
   const [speaking, setSpeaking] = useState(false);
+  useMusicSilence(speaking);
   const [audioFailed, setAudioFailed] = useState(false);
 
   useEffect(() => {
@@ -372,7 +381,7 @@ function ForgeCluePanel({
             <Text style={[styles.fallbackLink, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Can&apos;t hear it? Reveal the text fallback</Text>
           </Pressable>
         </View>
-      ) : <><CluePayloadView liveMode={liveMode} payload={clue.payload} />{audioFailed ? <Text accessibilityLiveRegion="polite" style={[styles.fallbackLink, { color: theme.colors.warning, fontFamily: theme.typography.families.body }]}>Audio failed, so the text fallback opened automatically.</Text> : null}</>}
+      ) : <><CluePayloadView liveMode={liveMode} payload={clue.payload} routeWidth={routeWidth} />{audioFailed ? <Text accessibilityLiveRegion="polite" style={[styles.fallbackLink, { color: theme.colors.warning, fontFamily: theme.typography.families.body }]}>Audio failed, so the text fallback opened automatically.</Text> : null}</>}
     </View>
   );
 }
@@ -399,11 +408,11 @@ function onePhoneScannerClues(allClues: readonly ForgeClue[], playerId: string):
   return scanners;
 }
 
-function CluePayloadView({ liveMode, payload }: { liveMode: boolean; payload: ForgeCluePayload }) {
+function CluePayloadView({ liveMode, payload, routeWidth }: { liveMode: boolean; payload: ForgeCluePayload; routeWidth?: 3 | 4 }) {
   const { theme } = useHousewireTheme();
   switch (payload.kind) {
     case 'text':
-      return <Text selectable style={[styles.clueHero, { color: forgeColors.ink, fontFamily: theme.typography.families.storyBold }]}>{payload.text}</Text>;
+      return <Text selectable style={[styles.clueHero, { color: forgeColors.ink, fontFamily: theme.typography.families.storyBold }]}>{routeWidth ? payload.text.replace(/cell (\d+)/gi, (_match, cell: string) => routeLandmark(Number(cell)).label) : payload.text}</Text>;
     case 'riddle-fragment':
       return (
         <View style={[styles.riddleClue, { borderColor: forgeColors.ink }]}>
@@ -416,7 +425,7 @@ function CluePayloadView({ liveMode, payload }: { liveMode: boolean; payload: Fo
     case 'mapping':
       return <View style={styles.mapping}>{payload.pairs.map((pair, index) => <View key={`${pair.left}-${index}`} style={styles.mappingRow}><PayloadChip text={pair.left} /><Ionicons color={theme.colors.faint} name="arrow-forward" size={16} /><PayloadChip text={pair.right} /></View>)}</View>;
     case 'grid-edges':
-      return <View style={styles.payloadRow}>{payload.edges.map(([from, to]) => <PayloadChip key={`${from}-${to}`} text={`CELL ${from}—${to}`} />)}</View>;
+      return <RouteMap edges={payload.edges} width={routeWidth ?? 4} />;
     case 'audio-token':
       return <Text selectable style={[styles.clueHero, { color: forgeColors.orange, fontFamily: theme.typography.families.storyBold }]}>{payload.fallbackText}</Text>;
     case 'camera-marker':
@@ -517,32 +526,29 @@ function MechanicWorkbench({
               <Ionicons color={riddleAnswer ? forgeColors.ink : theme.colors.faint} name={riddleAnswer ? 'lock-open' : 'lock-closed'} size={22} />
             </View>
             <View style={styles.riddleLockCopy}>
-              <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Combine every private witness line. Tap the only object that survives all of them.</Text>
+              <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Read your witness lines to each other. Name the one object that fits every line.</Text>
               <Text style={[styles.riddleCount, { color: forgeColors.orange, fontFamily: theme.typography.families.monoMedium }]}>{mechanic.fragmentCount} FRAGMENTS · ONE ANSWER</Text>
             </View>
           </View>
+          <TextInput accessibilityLabel="Our riddle answer" autoCorrect={false} autoCapitalize="none" maxLength={48} onChangeText={onRiddleChange} placeholder="What could it be?" placeholderTextColor={theme.colors.faint} value={riddleAnswer} style={[styles.riddleInput, { color: theme.colors.text, borderColor: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]} />
+          <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Objects found here — a word bank, not an answer key:</Text>
           <View style={styles.riddleCandidateGrid}>
             {mechanic.candidates.map((candidate) => {
               const selected = candidate.id === riddleAnswer;
               return (
-                <Pressable
-                  accessibilityLabel={`${candidate.label}${selected ? ', selected' : ''}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected }}
+                <View
                   key={candidate.id}
-                  onPress={() => onRiddleChange(selected ? '' : candidate.id)}
-                  style={({ pressed }) => [
+                  style={[
                     styles.riddleCandidate,
                     {
                       backgroundColor: selected ? forgeColors.ink : 'transparent',
                       borderColor: selected ? forgeColors.ink : theme.colors.draft,
                     },
-                    pressed && styles.pressed,
                   ]}
                 >
                   <Text style={[styles.riddleSigil, { color: selected ? forgeColors.dark : forgeColors.ink, fontFamily: theme.typography.families.displayHeavy }]}>{candidate.sigil}</Text>
                   <Text style={[styles.riddleCandidateLabel, { color: selected ? forgeColors.dark : theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{candidate.label}</Text>
-                </Pressable>
+                </View>
               );
             })}
           </View>
@@ -584,309 +590,26 @@ function MechanicWorkbench({
       );
     }
     case 'route-grid': {
-      const current = route.at(-1) ?? mechanic.startCell;
-      const currentRow = Math.floor((current - 1) / mechanic.width);
-      const currentColumn = (current - 1) % mechanic.width;
-      const connected = mechanic.cells.filter((candidate) => {
-        const row = Math.floor((candidate - 1) / mechanic.width);
-        const column = (candidate - 1) % mechanic.width;
-        return Math.abs(row - currentRow) + Math.abs(column - currentColumn) === 1;
-      });
       return (
         <View style={styles.assembly}>
-          <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Trace from {cellName(mechanic.startCell, mechanic.width)} to {cellName(mechanic.exitCell, mechanic.width)}. The board accepts any adjacent step; only the crew&apos;s combined route will pass the mechanism.</Text>
-          <View style={[styles.gridBoard, { width: mechanic.width * 55 }]}>
-            {mechanic.cells.map((cell) => {
-              const visitedAt = route.indexOf(cell);
-              const allowed = connected.includes(cell) && !route.includes(cell);
-              const isCurrent = cell === current;
-              return (
-                <Pressable
-                  accessibilityLabel={`Cell ${cellName(cell, mechanic.width)}${allowed ? ', available' : ''}`}
-                  accessibilityRole="button"
-                  disabled={!allowed}
-                  key={cell}
-                  onPress={() => onRouteChange([...route, cell])}
-                  style={[styles.gridCell, { backgroundColor: isCurrent ? forgeColors.ink : visitedAt >= 0 ? '#4D4520' : 'transparent', borderColor: allowed ? forgeColors.ink : theme.colors.draft, width: 51 }]}
-                >
-                  <Text style={[styles.gridCellText, { color: isCurrent ? forgeColors.dark : allowed ? forgeColors.ink : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{cellName(cell, mechanic.width)}</Text>
-                  {visitedAt >= 0 ? <Text style={[styles.gridVisit, { color: isCurrent ? forgeColors.dark : forgeColors.ink }]}>{visitedAt + 1}</Text> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-          {route.length > 1 ? <SmallControl icon="arrow-undo" label="Retrace one cell" onPress={() => onRouteChange(route.slice(0, -1))} /> : null}
+          <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Start at {routeLandmark(mechanic.startCell).label}. Reach {routeLandmark(mechanic.exitCell).label}. Ask everyone which doorways they see, then tap neighboring landmarks to draw your route. A glowing circle is reachable, not necessarily safe.</Text>
+          <RouteMap width={mechanic.width} route={route} startCell={mechanic.startCell} exitCell={mechanic.exitCell} onRouteChange={onRouteChange} />
+          {route.length > 1 ? <SmallControl icon="arrow-undo" label="Undo last step" onPress={() => onRouteChange(route.slice(0, -1))} /> : null}
         </View>
       );
     }
-    case 'motion-sync':
+    case 'motion-sync': {
+      const assignment = mechanic.assignments.find((item) => item.playerId === activePlayerId);
       return (
-        <MotionSyncWorkbench
-          activePlayerId={activePlayerId}
-          liveMode={liveMode}
-          mechanic={mechanic}
-          onSyncProof={onSyncProof}
-          roles={roles}
-          syncProofs={syncProofs}
-        />
+        <View style={styles.assembly}>
+          <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>This saved case now uses word seals instead of pressure holds. Solve each role’s riddle, then unlock together.</Text>
+          {syncProofs[activePlayerId] ? <Text style={[styles.assemblyInstruction, { color: forgeColors.ink, fontFamily: theme.typography.families.bodyMedium }]}>Your seal is ready. Submit it when the crew is ready.</Text> : assignment ? <RiddleSeal accent={forgeColors.ink} puzzleKey={`${stage.id}:${activePlayerId}:${assignment.pose}`} waitForCrew onComplete={() => onSyncProof(activePlayerId, 'manual')} /> : null}
+        </View>
       );
+    }
   }
 }
 
-function MotionSyncWorkbench({
-  activePlayerId,
-  liveMode,
-  mechanic,
-  onSyncProof,
-  roles,
-  syncProofs,
-}: {
-  activePlayerId: string;
-  liveMode: boolean;
-  mechanic: MotionSyncMechanic;
-  onSyncProof: (playerId: string, evidenceMode: ForgeSyncProof['evidenceMode']) => void;
-  roles: readonly ForgeRole[];
-  syncProofs: Record<string, ForgeSyncProof>;
-}) {
-  const { theme } = useHousewireTheme();
-  const assignment = mechanic.assignments.find((item) => item.playerId === activePlayerId);
-  const motion = useTerminalMotion();
-  const acoustic = useAcousticMeter();
-  const [arming, setArming] = useState(false);
-  const [sensorArmed, setSensorArmed] = useState(false);
-  const [sensorError, setSensorError] = useState<string>();
-  const [poseHeldMs, setPoseHeldMs] = useState(0);
-  const [voiceHeldMs, setVoiceHeldMs] = useState(0);
-  const [poseVerified, setPoseVerified] = useState(false);
-  const [voiceVerified, setVoiceVerified] = useState(assignment?.vocalCue === 'NONE');
-  const poseStartedAtRef = useRef<number | null>(null);
-  const voiceStartedAtRef = useRef<number | null>(null);
-  const armedAtRef = useRef(0);
-  const proofSentRef = useRef(false);
-  const stopMotion = motion.stop;
-  const stopAcoustic = acoustic.stop;
-  const readyProof = assignment ? syncProofs[assignment.playerId] : undefined;
-  const poseReading = assignment
-    ? evaluateForgePose(assignment.pose, motion)
-    : { matched: false, sensorVerifiable: false };
-  const sensorsRequested = mechanic.inputMode === 'motion' && poseReading.sensorVerifiable;
-  const needsVoice = assignment?.vocalCue !== 'NONE';
-
-  useEffect(() => {
-    proofSentRef.current = Boolean(readyProof);
-  }, [readyProof]);
-
-  useEffect(() => {
-    setArming(false);
-    setSensorArmed(false);
-    setSensorError(undefined);
-    setPoseHeldMs(0);
-    setVoiceHeldMs(0);
-    setPoseVerified(false);
-    setVoiceVerified(assignment?.vocalCue === 'NONE');
-    poseStartedAtRef.current = null;
-    voiceStartedAtRef.current = null;
-    armedAtRef.current = 0;
-    proofSentRef.current = Boolean(readyProof);
-    void stopMotion();
-    void stopAcoustic();
-  }, [assignment?.playerId, assignment?.vocalCue, readyProof, stopAcoustic, stopMotion]);
-
-  useEffect(() => () => {
-    void stopMotion();
-    void stopAcoustic();
-  }, [stopAcoustic, stopMotion]);
-
-  useEffect(() => {
-    if (!sensorArmed) return;
-    const timeout = setTimeout(() => {
-      setSensorArmed(false);
-      setSensorError('The local proof window expired. Arm again or use the hold fallback.');
-      void stopMotion();
-      void stopAcoustic();
-    }, 20_000);
-    return () => clearTimeout(timeout);
-  }, [sensorArmed, stopAcoustic, stopMotion]);
-
-  useEffect(() => {
-    if (!sensorArmed || !motion.active) return;
-    if (!poseReading.matched) {
-      poseStartedAtRef.current = null;
-      setPoseHeldMs(0);
-      if (poseVerified) setPoseVerified(false);
-      return;
-    }
-    if (poseVerified) return;
-    const now = Date.now();
-    poseStartedAtRef.current ??= now;
-    const heldMs = now - poseStartedAtRef.current;
-    setPoseHeldMs(Math.min(FORGE_POSE_HOLD_MS, heldMs));
-    if (heldMs >= FORGE_POSE_HOLD_MS) setPoseVerified(true);
-  }, [motion.active, motion.flatness, motion.steadiness, motion.tiltX, poseReading.matched, poseVerified, sensorArmed]);
-
-  useEffect(() => {
-    if (!assignment || assignment.vocalCue === 'NONE') {
-      setVoiceVerified(true);
-      return;
-    }
-    if (!sensorArmed || !acoustic.active) return;
-    const now = Date.now();
-    if (now - armedAtRef.current < FORGE_MIC_CALIBRATION_MS) {
-      voiceStartedAtRef.current = null;
-      setVoiceHeldMs(0);
-      return;
-    }
-    const vocalCueMatches = forgeVocalCueMatches(assignment.vocalCue, acoustic.band);
-    if (voiceVerified) {
-      if (assignment.vocalCue === 'LOW_HUM' && !poseVerified && !vocalCueMatches) {
-        setVoiceVerified(false);
-        voiceStartedAtRef.current = null;
-        setVoiceHeldMs(0);
-      }
-      return;
-    }
-    if (!vocalCueMatches) {
-      voiceStartedAtRef.current = null;
-      setVoiceHeldMs(0);
-      return;
-    }
-    voiceStartedAtRef.current ??= now;
-    const targetMs = forgeVocalHoldMs(assignment.vocalCue);
-    const heldMs = now - voiceStartedAtRef.current;
-    setVoiceHeldMs(Math.min(targetMs, heldMs));
-    if (heldMs >= targetMs) setVoiceVerified(true);
-  }, [acoustic.active, acoustic.band, assignment, poseVerified, sensorArmed, voiceVerified]);
-
-  useEffect(() => {
-    if (!assignment || readyProof || proofSentRef.current || !sensorArmed || !poseVerified || !voiceVerified) return;
-    proofSentRef.current = true;
-    setSensorArmed(false);
-    onSyncProof(assignment.playerId, 'sensor');
-    void stopMotion();
-    void stopAcoustic();
-  }, [assignment, onSyncProof, poseVerified, readyProof, sensorArmed, stopAcoustic, stopMotion, voiceVerified]);
-
-  if (!assignment) {
-    return <Text style={[styles.handoffCopy, { color: theme.colors.muted, fontFamily: theme.typography.families.storyBold }]}>This role has no contact in the final formation.</Text>;
-  }
-
-  const armSensors = async () => {
-    if (!sensorsRequested || arming || sensorArmed || readyProof) return;
-    setArming(true);
-    setSensorError(undefined);
-    setPoseHeldMs(0);
-    setVoiceHeldMs(0);
-    setPoseVerified(false);
-    setVoiceVerified(assignment.vocalCue === 'NONE');
-    poseStartedAtRef.current = null;
-    voiceStartedAtRef.current = null;
-    proofSentRef.current = false;
-    const motionStarted = await motion.start();
-    if (!motionStarted) {
-      setSensorError('Motion access failed. Use the hold fallback below.');
-      setArming(false);
-      return;
-    }
-    if (needsVoice) {
-      const microphoneStarted = await acoustic.start(20);
-      if (!microphoneStarted) {
-        await motion.stop();
-        setSensorError('Microphone access failed. Use the hold fallback below.');
-        setArming(false);
-        return;
-      }
-    }
-    armedAtRef.current = Date.now();
-    setSensorArmed(true);
-    setArming(false);
-  };
-
-  const completeManually = () => {
-    if (readyProof || proofSentRef.current) return;
-    proofSentRef.current = true;
-    setSensorArmed(false);
-    onSyncProof(assignment.playerId, 'manual');
-    void motion.stop();
-    void acoustic.stop();
-  };
-
-  // Directional phone poses were removed from the product. Legacy generated
-  // cases remain playable through the tactile proof path.
-  const manualOnly = true;
-  const poseProgress = Math.max(0, Math.min(1, poseHeldMs / FORGE_POSE_HOLD_MS));
-  const voiceTargetMs = forgeVocalHoldMs(assignment.vocalCue);
-  const voiceProgress = voiceTargetMs === 0 ? 1 : Math.max(0, Math.min(1, voiceHeldMs / voiceTargetMs));
-  const issue = sensorError ?? acoustic.error ?? (motion.denied ? 'Motion permission was denied. The fallback still works.' : acoustic.permissionDenied ? 'Microphone permission was denied. The fallback still works.' : undefined);
-
-  return (
-    <View style={styles.assembly}>
-      <Text style={[styles.assemblyInstruction, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{liveMode ? 'Lock this phone, then keep the formation while the other phones arm inside the timing window.' : 'Pass the phone quickly. Each role locks its own private position.'}</Text>
-
-      <View style={[styles.sensorConsole, { borderColor: readyProof ? forgeColors.ink : theme.colors.draft }]}>
-        <View style={styles.sensorTopline}>
-          <Text style={[styles.sensorLabel, { color: readyProof ? forgeColors.ink : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{manualOnly ? 'TACTILE CONTACT' : 'LOCAL SENSOR LOCK'}</Text>
-          <View style={styles.sensorPrivacy}><Ionicons color={theme.colors.faint} name="shield-checkmark-outline" size={13} /><Text style={[styles.sensorPrivacyText, { color: theme.colors.faint, fontFamily: theme.typography.families.monoMedium }]}>RAW DATA NEVER LEAVES</Text></View>
-        </View>
-
-        <View style={styles.syncAssignment}>
-          <Ionicons color={readyProof ? forgeColors.ink : theme.colors.text} name={readyProof ? 'checkmark-circle' : 'phone-portrait-outline'} size={30} />
-          <View style={styles.syncCopy}>
-            <Text style={[styles.syncPlayer, { color: theme.colors.text, fontFamily: theme.typography.families.display }]}>{roleNames([assignment.playerId], roles)}</Text>
-            <Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>CONTACT{needsVoice ? ` · ${assignment.vocalCue.replaceAll('_', ' ')}` : ''}</Text>
-          </View>
-          <Text style={[styles.syncHold, { color: readyProof ? forgeColors.ink : theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>{readyProof ? readyProof.evidenceMode.toUpperCase() : sensorArmed ? 'LISTENING' : 'OPEN'}</Text>
-        </View>
-
-        {!manualOnly && !readyProof ? (
-          <View style={styles.sensorBody}>
-            {sensorArmed ? (
-              <>
-                <SensorProgress label={poseVerified ? 'POSE LOCKED' : poseReading.matched ? 'HOLD POSITION' : 'FIND POSITION'} progress={poseVerified ? 1 : poseProgress} />
-                {needsVoice ? <SensorProgress label={voiceVerified ? 'SOUND LOCKED' : Date.now() - armedAtRef.current < FORGE_MIC_CALIBRATION_MS ? 'CALIBRATING ROOM' : assignment.vocalCue === 'LOW_HUM' ? 'SUSTAIN A SOUND' : 'MAKE ONE SHORT SOUND'} progress={voiceVerified ? 1 : voiceProgress} value={acoustic.band} /> : null}
-                <Text style={[styles.sensorFootnote, { color: theme.colors.faint, fontFamily: theme.typography.families.body }]}>Motion checks posture and steadiness. The mic checks relative level and duration only—not words, pitch, identity, or emotion.</Text>
-              </>
-            ) : (
-              <Pressable accessibilityHint="Requests motion access and, only if this role has a sound cue, microphone access" accessibilityRole="button" disabled={arming || motion.available === false} onPress={() => void armSensors()} style={({ pressed }) => [styles.sensorButton, { borderColor: motion.available === false ? theme.colors.draft : forgeColors.ink, opacity: motion.available === false ? 0.55 : 1 }, pressed && styles.pressed]}>
-                <Ionicons color={motion.available === false ? theme.colors.faint : forgeColors.ink} name={needsVoice ? 'mic-outline' : 'pulse-outline'} size={20} />
-                <Text style={[styles.sensorButtonText, { color: motion.available === false ? theme.colors.faint : forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>{arming ? 'ARMING…' : motion.available === false ? 'MOTION UNAVAILABLE' : needsVoice ? 'ARM MOTION + MIC' : 'ARM DEVICE MOTION'}</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-
-        {issue && !readyProof ? <Text accessibilityLiveRegion="polite" style={[styles.sensorError, { color: theme.colors.warning, fontFamily: theme.typography.families.bodyMedium }]}>{issue}</Text> : null}
-      </View>
-
-      {!readyProof ? (
-        <Pressable
-          accessibilityActions={[{ label: 'Confirm contact', name: 'activate' }]}
-          accessibilityHint="Hold to confirm this role's contact"
-          accessibilityRole="button"
-          delayLongPress={700}
-          onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === 'activate') completeManually();
-          }}
-          onLongPress={completeManually}
-          style={({ pressed }) => [styles.syncPlate, { backgroundColor: pressed ? '#3B3517' : 'transparent', borderColor: theme.colors.draft }]}
-        >
-          <Ionicons color={forgeColors.ink} name="finger-print-outline" size={21} />
-          <View style={styles.syncCopy}><Text style={[styles.manualFallbackTitle, { color: theme.colors.text, fontFamily: theme.typography.families.display }]}>HOLD CONTACT</Text><Text style={[styles.syncPose, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>CONTACT + CUE · 0.7 SEC</Text></View>
-          <Text style={[styles.syncHold, { color: theme.colors.muted, fontFamily: theme.typography.families.monoMedium }]}>HOLD</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-function SensorProgress({ label, progress, value }: { label: string; progress: number; value?: string }) {
-  const { theme } = useHousewireTheme();
-  return (
-    <View style={styles.sensorProgressRow}>
-      <View style={styles.sensorProgressCopy}><Text style={[styles.sensorProgressLabel, { color: theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{label}</Text>{value ? <Text style={[styles.sensorProgressValue, { color: forgeColors.ink, fontFamily: theme.typography.families.monoMedium }]}>{value}</Text> : null}</View>
-      <View style={[styles.sensorTrack, { backgroundColor: theme.colors.draft }]}><View style={[styles.sensorFill, { backgroundColor: forgeColors.ink, width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%` }]} /></View>
-    </View>
-  );
-}
 
 function SubmissionFeedback({
   result,
@@ -901,7 +624,7 @@ function SubmissionFeedback({
     : result.accepted
     ? 'Mechanism accepted. The next scene is unlocked.'
     : result.code === 'INCOMPLETE'
-      ? `The circuit is incomplete${typeof result.expectedLength === 'number' ? ` · ${result.acceptedPrefixLength ?? 0}/${result.expectedLength}` : ''}.`
+      ? 'Finish the whole arrangement before trying the lock.'
       : result.code === 'TIMING_WINDOW'
         ? 'The roles armed too far apart. Reset and move faster.'
         : 'The mechanism rejected that arrangement. Re-check every private fragment.';
@@ -923,11 +646,16 @@ function SmallControl({ icon, label, onPress }: { icon?: keyof typeof Ionicons.g
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.smallControl, { borderColor: theme.colors.draft }, pressed && styles.pressed]}>{icon ? <Ionicons color={forgeColors.ink} name={icon} size={16} /> : null}<Text style={[styles.smallControlText, { color: theme.colors.text, fontFamily: theme.typography.families.monoMedium }]}>{label}</Text></Pressable>;
 }
 
-function cellName(cell: number, width = 4): string {
-  const offset = Math.max(0, cell - 1);
-  const row = Math.floor(offset / width);
-  const column = offset % width;
-  return `${String.fromCharCode(65 + column)}${row + 1}`;
+function workbenchReady(stage: ForgeStage | ForgePlayerStage, sequence: readonly string[], word: string, code: readonly string[], route: readonly number[], relay: Record<number, string>, proofs: Record<string, ForgeSyncProof>, playerId: string, live: boolean): boolean {
+  const mechanic = stage.mechanic;
+  switch (mechanic.kind) {
+    case 'distributed-order': return sequence.length === mechanic.tokens.length;
+    case 'split-riddle': return word.trim().length > 1;
+    case 'symbol-lock': return code.length === mechanic.encodedSequence.length;
+    case 'route-grid': return route.length > 1 && route.at(-1) === mechanic.exitCell;
+    case 'private-relay': return mechanic.rounds.filter((round) => !live || round.recipientPlayerId === playerId).every((round) => !!relay[round.round]?.trim());
+    case 'motion-sync': return mechanic.assignments.filter((assignment) => !live || assignment.playerId === playerId).every((assignment) => !!proofs[assignment.playerId]);
+  }
 }
 
 function poseLabel(pose: string): string {
@@ -1003,6 +731,7 @@ const styles = StyleSheet.create({
   relayRoundText: { fontSize: 20 },
   riddleCandidate: { alignItems: 'center', borderWidth: 1, flexBasis: '47%', flexGrow: 1, gap: 5, justifyContent: 'center', minHeight: 86, padding: 10 },
   riddleCandidateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  riddleInput: { borderWidth: 1.5, borderRadius: 14, padding: 15, minHeight: 54, fontSize: 18 },
   riddleCandidateLabel: { fontSize: 9, letterSpacing: 1.1 },
   riddleClue: { borderBottomWidth: 1, borderTopWidth: 1, gap: 8, paddingVertical: 14 },
   riddleCount: { fontSize: 8, letterSpacing: 1 },

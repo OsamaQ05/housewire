@@ -8,6 +8,7 @@ import {
   createMissionAbortEvent,
   createMissionStartEvent,
   createSharedMissionCoordinatorState,
+  expireSharedMission,
   reduceSharedMissionFrame,
   type LocalCompletionInput,
   type SharedMissionCoordinatorContext,
@@ -158,6 +159,52 @@ function gameForState(state: SharedMissionCoordinatorState) {
 }
 
 describe('host-authoritative shared LINE 13 coordinator', () => {
+  it('ends after three distinct mistakes and restores the terminal answer-review state on another phone', () => {
+    let state = finishCurrentStage(startHost().state, 2).state;
+    let finalSnapshot: HousewireSessionEvent | undefined;
+    for (let index = 0; index < 3; index++) {
+      const event = housewireSessionEventSchema.parse({ kind: 'mission.mistake', missionId: 'line-13', operationId: state.operationId, nodeId: state.requiredNodeIds[0], attemptId: `wrong-${index}`, stageIndex: state.stageIndex, observedAt: 12_000 + index });
+      const next = reduceSharedMissionFrame(state, frame(event, state.requiredNodeIds[0], 10 + index, 12_000 + index), hostContext());
+      expect(next.state.mistakeIds).toHaveLength(index + 1);
+      expect(reduceSharedMissionFrame(next.state, frame(event, state.requiredNodeIds[0], 20 + index, 12_000 + index), hostContext()).state).toEqual(next.state);
+      state = next.state;
+      finalSnapshot = next.outbound.find(item => item.event.kind === 'mission.snapshot')?.event;
+    }
+    expect(state).toMatchObject({ failedAt: 12_002, failureReason: 'attempts', stageIndex: 1 });
+    expect(createLocalCompletionEvent(state, state.requiredNodeIds[0], { evidenceKind: 'WARNING_RECONSTRUCTED', confidence: 1, value: gameForState(state).pin }, 13_000)).toBeUndefined();
+    const restored = reduceSharedMissionFrame(createSharedMissionCoordinatorState(), frame(finalSnapshot!, HOST, 30, 13_000), guestContext()).state;
+    expect(restored).toEqual(state);
+  });
+
+  it('does not charge mistimed, spoofed, foreign-stage, or duplicate mistake events', () => {
+    const state = finishCurrentStage(startHost().state, 2).state;
+    const base = { kind: 'mission.mistake', missionId: 'line-13', operationId: state.operationId, nodeId: state.requiredNodeIds[0], attemptId: 'wrong-one', stageIndex: state.stageIndex, observedAt: 12_000 };
+    for (const [overrides, sender] of [[{ stageIndex: 3 }, base.nodeId], [{ operationId: 'foreign' }, base.nodeId], [{}, 'intruder'], [{ observedAt: 1000 }, base.nodeId]] as const) {
+      const event = housewireSessionEventSchema.parse({ ...base, ...overrides });
+      expect(reduceSharedMissionFrame(state, frame(event, sender, 10, 12_000), hostContext()).state).toEqual(state);
+    }
+    const event = housewireSessionEventSchema.parse(base);
+    expect(reduceSharedMissionFrame(state, frame(event, base.nodeId, 10, 12_000), guestContext()).state).toEqual(state);
+  });
+
+  it('expires at thirteen minutes and ignores late evidence even when the UI timer was suspended', () => {
+    const state = startHost().state;
+    expect(expireSharedMission(state, 789_999)).toBe(state);
+    const expired = expireSharedMission(state, 790_000);
+    expect(expired).toMatchObject({ failedAt: 790_000, failureReason: 'time' });
+    expect(expireSharedMission(expired, 900_000)).toBe(expired);
+    const completion = createLocalCompletionEvent(state, state.requiredNodeIds[0], { evidenceKind: 'LIFTED', confidence: 0.99 }, 790_000)!;
+    expect(reduceSharedMissionFrame(state, frame(completion, state.requiredNodeIds[0], 20, 790_000), hostContext()).state).toEqual(expired);
+  });
+
+  it('does not resurrect a failed case from a later-revision active snapshot', () => {
+    const started = startHost();
+    const expired = expireSharedMission(started.state, 790_000);
+    const oldSnapshot = started.outbound.find(item => item.event.kind === 'mission.snapshot')!.event;
+    const spoof = housewireSessionEventSchema.parse({ ...oldSnapshot, revision: 100 });
+    expect(reduceSharedMissionFrame(expired, frame(spoof, HOST, 40, 790_500), guestContext()).state).toEqual(expired);
+  });
+
   it('broadcasts an authored first stage and reconnectable snapshot at start', () => {
     const started = startHost();
     expect(started.state.startedAt).toBe(10_000);

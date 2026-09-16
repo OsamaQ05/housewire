@@ -21,7 +21,7 @@ export interface ForgeCaseRepository {
 export interface ForgeGenerateOptions {
   /** Defaults to the local provider. */
   providerId?: string;
-  /** A remote/network/provider failure falls back to the deterministic local generator by default. */
+  /** Defaults to fallback for preset cases, but not custom descriptions. True explicitly accepts a template fallback. */
   allowOfflineFallback?: boolean;
 }
 

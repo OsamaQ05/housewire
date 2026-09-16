@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { z } from 'zod';
+import { useFamilyClubStore } from './use-family-club-store';
+import { frequencyRecord } from '../features/family-club/records';
 
 import {
   advanceFamilyTriviaQuestion,
   answerFitsFamilyTriviaQuestion,
   createFamilyTriviaSession,
-  compareFamilyTriviaTeamRates,
   familyTriviaTeamRateBasisPoints,
   familyTriviaAnswerSchema,
   familyTriviaQuestionPackSchema,
@@ -24,6 +25,7 @@ import {
   type FamilyTriviaSetup,
 } from '../domain/family-trivia';
 import type { FamilyFrequencyStyle } from '../features/trivia/family-frequency-ai-client';
+import { buildFrequencyScoreboard } from '../features/trivia/frequency-scoreboard';
 import {
   emptyFamilyFrequencyVarietyLedger,
   parseFamilyFrequencyVarietyLedger,
@@ -54,6 +56,7 @@ interface FamilyFrequencyState {
   format: FamilyFrequencyFormat;
   questionCount: 4 | 8 | 12;
   session?: FamilyTriviaSessionState;
+  gameStartedAt?: number;
   source: 'ai' | 'offline';
   history: FamilyFrequencyResult[];
   activeStyle: FamilyFrequencyStyle;
@@ -113,7 +116,7 @@ const historyResultSchema = z.object({
   format: z.enum(['everyone', 'teams']),
   roundCount: z.number().int().min(1).max(12),
   source: z.enum(['ai', 'offline']),
-  winners: z.array(z.string().trim().min(1).max(24)).min(1).max(4),
+  winners: z.array(z.string().trim().min(1).max(24)).max(4),
   scores: z.array(z.object({
     exactMatches: z.number().int().min(0).max(100).optional(),
     label: z.string().trim().min(1).max(24),
@@ -166,6 +169,7 @@ export const useFamilyFrequencyStore = create<FamilyFrequencyState>()((set, get)
     mutationVersion += 1;
     set({
       session: createFamilyTriviaSession(setup, pack, `frequency-${pack.seed.toString(36)}-${Date.now().toString(36)}`),
+      gameStartedAt: Date.now(),
       source: pack.source.kind === 'ai' ? 'ai' : 'offline',
       activeStyle: style,
       varietyLedger: recordFamilyFrequencyPack(
@@ -230,6 +234,7 @@ export const useFamilyFrequencyStore = create<FamilyFrequencyState>()((set, get)
     mutationVersion += 1;
     if (result.state.phase === 'complete') {
       const summary = summariseResult(result.state, current.source);
+      useFamilyClubStore.getState().record(frequencyRecord(result.state, current.source, current.gameStartedAt));
       set({
         session: result.state,
         history: [summary, ...current.history.filter((entry) => entry.id !== summary.id)].slice(0, 20),
@@ -247,6 +252,7 @@ export const useFamilyFrequencyStore = create<FamilyFrequencyState>()((set, get)
     mutationVersion += 1;
     if (result.state.phase === 'complete') {
       const summary = summariseResult(result.state, current.source);
+      useFamilyClubStore.getState().record(frequencyRecord(result.state, current.source, current.gameStartedAt));
       set({
         session: result.state,
         history: [summary, ...current.history.filter((entry) => entry.id !== summary.id)].slice(0, 20),
@@ -258,7 +264,7 @@ export const useFamilyFrequencyStore = create<FamilyFrequencyState>()((set, get)
   },
   clearGame: () => {
     mutationVersion += 1;
-    set({ session: undefined, source: 'offline' });
+    set({ session: undefined, gameStartedAt: undefined, source: 'offline' });
   },
 }));
 
@@ -292,14 +298,11 @@ function summariseResult(
     : state.playerScores.map((score) => ({
         label: state.setup.players.find((player) => player.id === score.playerId)?.name ?? score.playerId,
         points: score.points,
+        exactMatches: score.exactMatches,
       }));
-  const high = Math.max(0, ...scores.map((score) => score.points));
-  const leadingTeam = state.teamScores.reduce((leader, score) =>
-    !leader || compareFamilyTriviaTeamRates(score, leader) > 0 ? score : leader, undefined as typeof state.teamScores[number] | undefined);
-  const winners = teams.length && leadingTeam
-    ? state.teamScores.filter((score) => compareFamilyTriviaTeamRates(score, leadingTeam) === 0)
-        .map((score) => teams.find((team) => team.id === score.teamId)?.name ?? score.teamId)
-    : scores.filter((score) => score.points === high).map((score) => score.label);
+  // The final screen, saved history, and Family Club share one ranking policy.
+  // Equal individual points stay tied; an all-zero board has no winner.
+  const winners = buildFrequencyScoreboard(state).entries.filter((entry) => entry.rank === 1).map((entry) => entry.label);
   return {
     id: state.id,
     playedAt: new Date().toISOString(),
@@ -318,6 +321,7 @@ interface PersistedFamilyFrequency {
   names: string[];
   questionCount: 4 | 8 | 12;
   session?: FamilyTriviaSessionState;
+  gameStartedAt?: number;
   source: 'ai' | 'offline';
   activeStyle?: FamilyFrequencyStyle;
   varietyLedger?: FamilyFrequencyVarietyLedger;
@@ -350,6 +354,7 @@ useFamilyFrequencyStore.subscribe((state) => {
     names: state.names,
     questionCount: state.questionCount,
     session: state.session,
+    gameStartedAt: state.gameStartedAt,
     source: state.source,
     activeStyle: state.activeStyle,
     varietyLedger: state.varietyLedger,
@@ -376,6 +381,7 @@ function parsePersistedFamilyFrequency(serialized: string | null): Partial<Famil
     names: Array.isArray(record.names) ? restorePersistedNames(record.names) : [...DEFAULT_NAMES],
     questionCount: record.questionCount === 4 || record.questionCount === 12 ? record.questionCount : 8,
     session,
+    gameStartedAt: typeof record.gameStartedAt === 'number' && Number.isFinite(record.gameStartedAt) && record.gameStartedAt > 0 ? record.gameStartedAt : undefined,
     source: session?.pack.source.kind === 'ai' ? 'ai' : 'offline',
     activeStyle: record.activeStyle === 'everyday' || record.activeStyle === 'playful' ? record.activeStyle : 'mixed',
     varietyLedger: parseFamilyFrequencyVarietyLedger(record.varietyLedger),

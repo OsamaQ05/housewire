@@ -19,12 +19,28 @@
       }
     },
     "android": {
+      "versionCode": 2,
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#15223A",
         "foregroundImage": "./assets/images/icon.png"
       },
       "package": "app.housewire.mobile",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "output": "static",
@@ -32,6 +48,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
       [
         "expo-camera",
         {
@@ -42,7 +59,9 @@
         "expo-audio",
         {
           "microphonePermission": "HOUSEWIRE uses the microphone only during an explicit game action: a short one-time whisper or local loudness pattern. Voice is never transcribed or archived.",
-          "recordAudioAndroid": true
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       [
@@ -68,6 +87,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c15fa809-ad61-4d90-8264-e75644bd3fe5"
+      }
+    },
+    "owner": "osama_366"
   }
 }

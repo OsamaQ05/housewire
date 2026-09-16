@@ -4,7 +4,10 @@ import {
   createFamilyTriviaSession,
   createQuickFamilyTriviaSetup,
   generateOfflineFamilyTriviaPack,
+  type FamilyTriviaAnswer,
+  type FamilyTriviaQuestion,
 } from '../src/domain/family-trivia';
+import { frequencyRecord } from '../src/features/family-club/records';
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -26,7 +29,86 @@ function savedSession() {
   return createFamilyTriviaSession(setup, pack, 'frequency-resume-test');
 }
 
+function fixtureAnswer(question: FamilyTriviaQuestion, exact: boolean): FamilyTriviaAnswer {
+  if (question.answerKind === 'choice') return { kind: 'choice', optionId: question.options[exact ? 0 : 1].id };
+  if (question.answerKind === 'ordering') {
+    const optionIds = question.options.map((option) => option.id);
+    return { kind: 'ordering', optionIds: exact ? optionIds : optionIds.reverse() };
+  }
+  if (question.answerKind === 'spectrum') return { kind: 'spectrum', value: exact ? 50 : 0 };
+  return { kind: 'text', value: exact ? 'popcorn' : 'mango' };
+}
+
+async function finishFixtureGame({ tied = false, teams = false } = {}) {
+  asyncStorage.getItem.mockResolvedValue(null);
+  const { useFamilyFrequencyStore } = await import('../src/store/use-family-frequency-store');
+  await vi.waitFor(() => expect(useFamilyFrequencyStore.getState().hydrated).toBe(true));
+  const setup = createQuickFamilyTriviaSetup(teams ? ['Mara', 'Samir', 'Noor', 'Leen'] : ['Mara', 'Samir', 'Noor'], { teams });
+  const generated = generateOfflineFamilyTriviaPack({ questionCount: 4, seed: 125, setup });
+  const pack = teams ? generated : {
+    ...generated,
+    questions: generated.questions.map((question) => ({ ...question, authorityPlayerId: 'player-3', respondentPlayerIds: ['player-1', 'player-2'] })),
+  };
+  useFamilyFrequencyStore.getState().startGame(setup, pack);
+  for (const question of pack.questions) {
+    expect(useFamilyFrequencyStore.getState().submitReference(question.authorityPlayerId, fixtureAnswer(question, true))).toBe(true);
+    for (const playerId of question.respondentPlayerIds) {
+      let answer = fixtureAnswer(question, tied && question.answerKind === 'ordering' && playerId === 'player-1');
+      if (tied && question.answerKind === 'ordering' && playerId === 'player-2') {
+        const optionIds = question.options.map((option) => option.id);
+        [optionIds[0], optionIds[1]] = [optionIds[1], optionIds[0]];
+        answer = { kind: 'ordering', optionIds };
+      }
+      expect(useFamilyFrequencyStore.getState().submitGuess(playerId, answer)).toBe(true);
+    }
+    expect(useFamilyFrequencyStore.getState().reveal()).toBe(true);
+    if (question.answerKind === 'text') {
+      for (const playerId of question.respondentPlayerIds) {
+        expect(useFamilyFrequencyStore.getState().reviewTextGuess(playerId, tied && playerId === 'player-2' ? 'close' : 'miss')).toBe(true);
+      }
+    }
+    expect(useFamilyFrequencyStore.getState().advance()).toBe(true);
+  }
+  expect(useFamilyFrequencyStore.getState().session?.phase).toBe('complete');
+  return useFamilyFrequencyStore;
+}
+
 describe('Family Frequency store persistence', () => {
+  it('keeps equal-point winners tied in history and Club despite different exact counts', async () => {
+    const store = await finishFixtureGame({ tied: true });
+    const state = store.getState();
+    expect(state.session?.playerScores).toEqual([
+      { playerId: 'player-1', points: 4, exactMatches: 1 },
+      { playerId: 'player-2', points: 4, exactMatches: 0 },
+      { playerId: 'player-3', points: 1, exactMatches: 0 },
+    ]);
+    expect(state.history[0].winners).toEqual(['Mara', 'Samir']);
+    expect(frequencyRecord(state.session!, 'offline').participants.map((player) => player.won)).toEqual([true, true, false]);
+  });
+
+  it.each([false, true])('records no winner for an all-zero completed game (teams=%s)', async (teams) => {
+    const store = await finishFixtureGame({ teams });
+    const state = store.getState();
+    expect(state.history[0].winners).toEqual([]);
+    expect(state.history[0].scores.every((score) => score.points === 0)).toBe(true);
+    const club = frequencyRecord(state.session!, 'offline');
+    expect(club.participants.every((player) => player.won === false)).toBe(true);
+    expect(club.standings?.every((standing) => standing.won === false) ?? true).toBe(true);
+
+    await vi.waitFor(() => {
+      const call = asyncStorage.setItem.mock.calls.findLast(([key]) => key === 'housewire-family-frequency-v1');
+      const saved = JSON.parse(String(call?.[1] ?? '{}')) as { history?: { winners: string[] }[] };
+      expect(saved.history?.[0].winners).toEqual([]);
+    });
+    const serialized = String(asyncStorage.setItem.mock.calls.findLast(([key]) => key === 'housewire-family-frequency-v1')![1]);
+    vi.resetModules();
+    asyncStorage.getItem.mockImplementation((key) => Promise.resolve(key === 'housewire-family-frequency-v1' ? serialized : null));
+    const restored = await import('../src/store/use-family-frequency-store');
+    await vi.waitFor(() => expect(restored.useFamilyFrequencyStore.getState().hydrated).toBe(true));
+    expect(restored.useFamilyFrequencyStore.getState().history).toEqual(state.history);
+    expect(restored.useFamilyFrequencyStore.getState().session?.phase).toBe('complete');
+  });
+
   it('uses real sample names so generated third-person copy stays grammatical', async () => {
     asyncStorage.getItem.mockResolvedValue(JSON.stringify({
       version: 1,

@@ -1,4 +1,4 @@
-import { useAudioPlayer } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +8,9 @@ import type { useAcousticMeter } from '@/src/hooks/use-acoustic-meter';
 import type { DirectDeliveryAck, TransportConnectionState } from '@/src/services/transport';
 import type { SessionDirectFeedItem } from '@/src/features/session/use-housewire-session';
 import { createRelayId } from '@/src/features/session/relay-id';
+import { VoiceCaptureLease } from './voice-capture-lease';
+import { useMusicSilence } from '@/src/features/music/HousewireMusic';
+import { musicFocus } from '@/src/features/music/music-focus';
 
 import {
   HOUSE_LINE_MAX_CLIP_DURATION_MS,
@@ -16,6 +19,7 @@ import {
   appendHouseLineInbox,
   fanOutHouseLineMessage,
   houseLineMessageSchema,
+  houseLineTimestamp,
   parseHouseLineMessage,
   selectHouseLineRecipients,
   validateIncomingHouseLineMessage,
@@ -82,6 +86,7 @@ export interface HouseLineController {
   playIncoming(frameMessageId: string): Promise<boolean>;
   recording: boolean;
   recordingDurationMs: number;
+  preparing: boolean;
   sendSignal(signal: HouseLineSignal): Promise<boolean>;
   sending: boolean;
   setTargetId(targetId: HouseLineTargetId): void;
@@ -110,11 +115,14 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
     trustedPeerIds,
   } = options;
   const playback = useAudioPlayer(null);
+  const playbackStatus = useAudioPlayerStatus(playback);
+  useMusicSilence(playbackStatus.playing);
   const nowRef = useRef(options.now ?? Date.now);
   nowRef.current = options.now ?? Date.now;
   const [targetId, setTargetIdState] = useState<HouseLineTargetId>('ALL');
   const [recording, setRecording] = useState(false);
   const [sending, setSending] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [incoming, setIncoming] = useState<HouseLineInboxItem[]>([]);
   const [delivery, setDelivery] = useState<HouseLineDeliveryState>(EMPTY_DELIVERY);
   const [error, setError] = useState<string>();
@@ -122,6 +130,18 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
   const recordingPromiseRef = useRef<Promise<boolean> | undefined>(undefined);
   const ownsRecordingRef = useRef(false);
   const temporaryFilesRef = useRef(new Set<string>());
+  const captureRecipientsRef = useRef<readonly string[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const playbackMusicRef = useRef<(() => void) | undefined>(undefined);
+  const finishTalkingRef = useRef<() => Promise<boolean>>(async () => false);
+  const cancelTalkingRef = useRef<() => Promise<void>>(async () => undefined);
+  const mountedRef = useRef(true);
+  const finishingRef = useRef(false);
+  const captureLeaseRef = useRef(new VoiceCaptureLease());
+  const captureTokenRef = useRef(0);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   const connected = enabled && session.connectionState === 'connected';
   const recipientIds = useMemo(
@@ -133,18 +153,23 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
     [localNodeId, peers, trustedPeerIds],
   );
   const peerMap = useMemo(() => new Map(peers.map((peer) => [peer.id, peer])), [peers]);
-  const canTalk = connected && Boolean(channelId) && recipientIds.length > 0 && !sending;
+  const canTalk = connected && Boolean(channelId) && recipientIds.length > 0 && !sending && !preparing;
 
   useEffect(() => {
     if (targetId !== 'ALL' && !trustedPeerIds.includes(targetId)) setTargetIdState('ALL');
   }, [targetId, trustedPeerIds]);
 
   useEffect(() => {
+    void cancelTalkingRef.current();
     processedFrameIdsRef.current.clear();
     setIncoming([]);
     setDelivery(EMPTY_DELIVERY);
     setError(undefined);
   }, [channelId]);
+
+  useEffect(() => {
+    if (!enabled) void cancelTalkingRef.current();
+  }, [enabled]);
 
   const sendReceipt = useCallback(
     async (item: HouseLineInboxItem, status: 'played' | 'dismissed') => {
@@ -156,7 +181,7 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
         transmissionId: createRelayId('line-receipt'),
         sourceTransmissionId: item.message.transmissionId,
         status,
-        sentAt: nowRef.current() + clockOffsetMs,
+        sentAt: houseLineTimestamp(nowRef.current(), clockOffsetMs),
         ttlMs: HOUSE_LINE_TTL_MS,
       });
       await session.publishDirect(item.senderId, message).catch(() => undefined);
@@ -215,21 +240,30 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = nowRef.current() + clockOffsetMs;
+      const now = houseLineTimestamp(nowRef.current(), clockOffsetMs);
       setIncoming((current) => current.filter((item) => now - item.message.sentAt <= item.message.ttlMs));
     }, 1_000);
     return () => clearInterval(timer);
   }, [clockOffsetMs]);
 
-  useEffect(() => () => {
-    for (const uri of temporaryFilesRef.current) {
-      void FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
-    }
-    temporaryFilesRef.current.clear();
+  useEffect(() => {
+    mountedRef.current = true;
+    const temporaryFiles = temporaryFilesRef.current;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(recordingTimerRef.current);
+      clearTimeout(playbackTimerRef.current);
+      playbackMusicRef.current?.();
+      void cancelTalkingRef.current();
+      for (const uri of temporaryFiles) {
+        void FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+      }
+      temporaryFiles.clear();
+    };
   }, []);
 
   const publishMessage = useCallback(
-    async (message: HouseLineMessage): Promise<boolean> => {
+    async (message: HouseLineMessage, selectedRecipients: readonly string[] = recipientIds): Promise<boolean> => {
       if (!canTalk) {
         setError(session.connectionState === 'connected'
           ? 'Choose a connected player before using the house line.'
@@ -243,11 +277,11 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
         failedCount: 0,
         playedBy: [],
         status: 'sending',
-        targetCount: recipientIds.length,
+        targetCount: selectedRecipients.length,
         transmissionId: message.transmissionId,
       });
       try {
-        const result = await fanOutHouseLineMessage(session.publishDirect, recipientIds, message);
+        const result = await fanOutHouseLineMessage(session.publishDirect, selectedRecipients, message);
         const deliveredCount = result.deliveredRecipientIds.length;
         const failedCount = result.failedRecipientIds.length;
         const status: HouseLineDeliveryStatus = deliveredCount === 0
@@ -260,7 +294,7 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
           failedCount,
           playedBy: [],
           status,
-          targetCount: recipientIds.length,
+          targetCount: selectedRecipients.length,
           transmissionId: message.transmissionId,
         });
         if (status === 'failed') setError('No selected phone received the transmission.');
@@ -274,18 +308,33 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
   );
 
   const beginTalking = useCallback(async (): Promise<boolean> => {
-    if (!canTalk || acoustic.active || recordingPromiseRef.current) {
+    if (!canTalk || acoustic.active || recordingPromiseRef.current || ownsRecordingRef.current || finishingRef.current) {
       if (acoustic.active) setError('Finish the current sound puzzle before opening the house line.');
       else if (!canTalk) setError('The house line needs at least one connected phone.');
       return false;
     }
     setError(undefined);
+    playback.pause();
+    setPreparing(true);
+    captureRecipientsRef.current = [...recipientIds];
+    const token = captureLeaseRef.current.begin();
+    captureTokenRef.current = token;
     const attempt = acoustic.start(HOUSE_LINE_MAX_CLIP_DURATION_MS / 1_000);
     recordingPromiseRef.current = attempt;
     try {
       const armed = await attempt;
+      if (!mountedRef.current || !captureLeaseRef.current.canSend(token, enabledRef.current)) {
+        ownsRecordingRef.current = false;
+        if (armed) await acoustic.finishWhisper();
+        return false;
+      }
       ownsRecordingRef.current = armed;
       setRecording(armed);
+      if (armed) {
+        clearTimeout(recordingTimerRef.current);
+        // The native recording limit remains a second guard if JS is busy.
+        recordingTimerRef.current = setTimeout(() => void finishTalkingRef.current(), HOUSE_LINE_MAX_CLIP_DURATION_MS + 100);
+      }
       if (!armed) setError('Microphone access is off. Use one of the signal keys instead.');
       return armed;
     } catch (cause: unknown) {
@@ -293,42 +342,60 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
       return false;
     } finally {
       recordingPromiseRef.current = undefined;
+      if (mountedRef.current) setPreparing(false);
     }
-  }, [acoustic, canTalk]);
+  }, [acoustic, canTalk, playback, recipientIds]);
 
   const endTalking = useCallback(async (): Promise<boolean> => {
     if (recordingPromiseRef.current) await recordingPromiseRef.current;
-    if (!ownsRecordingRef.current) return false;
+    if (!ownsRecordingRef.current || finishingRef.current) return false;
+    clearTimeout(recordingTimerRef.current);
+    finishingRef.current = true;
+    const token = captureTokenRef.current;
     ownsRecordingRef.current = false;
     setRecording(false);
-    const clip = await acoustic.finishWhisper();
-    if (!clip || !channelId) {
-      setError(acoustic.error ?? 'The voice burst was empty. Hold LINE, speak, then release.');
+    setPreparing(true);
+    try {
+      const clip = await acoustic.finishWhisper();
+      if (!mountedRef.current || !captureLeaseRef.current.canSend(token, enabledRef.current)) return false;
+      if (!clip || !channelId) {
+        setError(acoustic.error ?? 'The voice note was empty. Tap Record, speak, then tap Stop & send.');
+        return false;
+      }
+      const parsed = houseLineMessageSchema.safeParse({
+        kind: 'housewire.line.clip.v1',
+        protocolVersion: 1,
+        channelId,
+        transmissionId: createRelayId('line-clip'),
+        sentAt: houseLineTimestamp(nowRef.current(), clockOffsetMs),
+        ttlMs: HOUSE_LINE_TTL_MS,
+        clip,
+      });
+      if (!parsed.success) {
+        setError('That voice note could not be sent. Try a shorter recording (up to 30 seconds).');
+        return false;
+      }
+      return await publishMessage(parsed.data, captureRecipientsRef.current);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'The voice note could not be sent.');
       return false;
+    } finally {
+      finishingRef.current = false;
+      if (mountedRef.current) setPreparing(false);
     }
-    const parsed = houseLineMessageSchema.safeParse({
-      kind: 'housewire.line.clip.v1',
-      protocolVersion: 1,
-      channelId,
-      transmissionId: createRelayId('line-clip'),
-      sentAt: nowRef.current() + clockOffsetMs,
-      ttlMs: HOUSE_LINE_TTL_MS,
-      clip,
-    });
-    if (!parsed.success) {
-      setError('That burst was too large for the house line. Keep it under two seconds.');
-      return false;
-    }
-    return publishMessage(parsed.data);
   }, [acoustic, channelId, clockOffsetMs, publishMessage]);
+  finishTalkingRef.current = endTalking;
 
   const cancelTalking = useCallback(async () => {
+    captureLeaseRef.current.cancel();
+    clearTimeout(recordingTimerRef.current);
+    if (mountedRef.current) setRecording(false);
     if (recordingPromiseRef.current) await recordingPromiseRef.current;
     if (!ownsRecordingRef.current) return;
     ownsRecordingRef.current = false;
-    setRecording(false);
     await acoustic.finishWhisper().catch(() => undefined);
   }, [acoustic]);
+  cancelTalkingRef.current = cancelTalking;
 
   const sendSignal = useCallback(async (signal: HouseLineSignal): Promise<boolean> => {
     if (!channelId) return false;
@@ -337,7 +404,7 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
       protocolVersion: 1,
       channelId,
       transmissionId: createRelayId('line-signal'),
-      sentAt: nowRef.current() + clockOffsetMs,
+      sentAt: houseLineTimestamp(nowRef.current(), clockOffsetMs),
       ttlMs: HOUSE_LINE_TTL_MS,
       signal,
     });
@@ -345,26 +412,41 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
   }, [channelId, clockOffsetMs, publishMessage]);
 
   const playIncoming = useCallback(async (frameMessageId: string): Promise<boolean> => {
+    if (recording || preparing) {
+      setError('Finish your recording before playing a received note.');
+      return false;
+    }
     const item = incoming.find((candidate) => candidate.frameMessageId === frameMessageId);
     if (!item || item.message.kind !== 'housewire.line.clip.v1') return false;
     const { clip } = item.message;
     try {
+      playbackMusicRef.current?.();
+      playbackMusicRef.current = musicFocus.acquire();
+      clearTimeout(playbackTimerRef.current);
+      // A previous note's timeout must never stop the next note mid-sentence.
+      playback.pause();
+      const finishPlayback = () => {
+        playback.replace(null);
+        playbackMusicRef.current?.(); playbackMusicRef.current = undefined;
+        setIncoming((current) => current.filter((candidate) => candidate.frameMessageId !== frameMessageId));
+        for (const uri of temporaryFilesRef.current) {
+          void FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+        }
+        temporaryFilesRef.current.clear();
+      };
       if (Platform.OS === 'web') {
         playback.replace({ uri: `data:${clip.mimeType};base64,${clip.base64}` });
         playback.play();
-        setTimeout(() => playback.replace(null), clip.durationMs + 1_500);
+        playbackTimerRef.current = setTimeout(finishPlayback, clip.durationMs + 1_500);
       } else {
         if (!FileSystem.cacheDirectory) throw new Error('No temporary audio directory is available.');
-        const uri = `${FileSystem.cacheDirectory}housewire-line-${item.message.transmissionId}.m4a`;
+        const extension = clip.mimeType === 'audio/mp4' ? 'm4a' : clip.mimeType === 'audio/webm' ? 'webm' : 'ogg';
+        const uri = `${FileSystem.cacheDirectory}housewire-line-${item.message.transmissionId}.${extension}`;
         temporaryFilesRef.current.add(uri);
         await FileSystem.writeAsStringAsync(uri, clip.base64, { encoding: FileSystem.EncodingType.Base64 });
         playback.replace({ uri });
         playback.play();
-        setTimeout(() => {
-          playback.replace(null);
-          temporaryFilesRef.current.delete(uri);
-          void FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
-        }, clip.durationMs + 1_500);
+        playbackTimerRef.current = setTimeout(finishPlayback, clip.durationMs + 1_500);
       }
       setIncoming((current) => current.map((candidate) => candidate.frameMessageId === frameMessageId
         ? { ...candidate, played: true }
@@ -372,10 +454,11 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
       void sendReceipt(item, 'played');
       return true;
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : 'This phone could not play that burst.');
+      playbackMusicRef.current?.(); playbackMusicRef.current = undefined;
+      setError(cause instanceof Error ? cause.message : 'This phone could not play that voice note.');
       return false;
     }
-  }, [incoming, playback, sendReceipt]);
+  }, [incoming, playback, preparing, recording, sendReceipt]);
 
   const dismissIncoming = useCallback((frameMessageId: string) => {
     const item = incoming.find((candidate) => candidate.frameMessageId === frameMessageId);
@@ -384,9 +467,10 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
   }, [incoming, sendReceipt]);
 
   const setTargetId = useCallback((nextTargetId: HouseLineTargetId) => {
+    if (ownsRecordingRef.current || recordingPromiseRef.current || finishingRef.current || sending) return;
     if (nextTargetId !== 'ALL' && !trustedPeerIds.includes(nextTargetId)) return;
     setTargetIdState(nextTargetId);
-  }, [trustedPeerIds]);
+  }, [sending, trustedPeerIds]);
 
   return {
     beginTalking,
@@ -403,6 +487,7 @@ export function useHouseLine(options: UseHouseLineOptions): HouseLineController 
     playIncoming,
     recording,
     recordingDurationMs: acoustic.durationMs,
+    preparing,
     sendSignal,
     sending,
     setTargetId,

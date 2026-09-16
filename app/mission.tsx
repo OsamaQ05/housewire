@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -29,6 +30,8 @@ import Animated, {
 import QRCode from 'react-native-qrcode-svg';
 
 import { GlyphMark, ScreenShell } from '@/src/components';
+import { AnswerReview, type AnswerReviewItem } from '@/src/components/AnswerReview';
+import { escapeAttemptLimit } from '@/src/domain/attempt-rules';
 import {
   generateLine13Game,
   isCorrectCircuit,
@@ -42,7 +45,7 @@ import {
 } from '@/src/domain/line-13-game';
 import { assessStagePressure } from '@/src/domain/director';
 import type { EvidenceKind } from '@/src/domain/types';
-import { AdaptiveGuideButton, AdaptiveGuidePanel } from '@/src/features/director';
+import { AdaptiveGuideButton, GuideChat, guideMechanicFor, lineGuideContext } from '@/src/features/director';
 import { HouseLineDock, useHouseLine } from '@/src/features/comms';
 import { useHousewireSessionContext, useSharedMissionCoordinator } from '@/src/features/session';
 import { useAcousticMeter } from '@/src/hooks/use-acoustic-meter';
@@ -51,7 +54,9 @@ import { useTerminalMotion, type TerminalMotionSnapshot } from '@/src/hooks/use-
 import { useHousewireStore, type CrewNode } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 import { formatClock } from '@/src/utils/format';
-import { EscapeCaseMission } from '@/src/features/cases/EscapeCaseMission';
+import { RetiredStoryRoom } from '@/src/features/story-rooms/RetiredStoryRoom';
+import { StoryRoomMission } from '@/src/features/story-rooms/StoryRoomMission';
+import { isStoryRoomId } from '@/src/features/story-rooms/types';
 
 type StageKind = 'answer' | 'cipher' | 'lens' | 'route' | 'finale';
 
@@ -115,9 +120,8 @@ export default function MissionScreen() {
   const selectedMission = useHousewireStore((state) => state.selectedMission);
   const missionInProgressId = useHousewireStore((state) => state.missionInProgressId);
   const activeMission = missionInProgressId ?? selectedMission;
-  if (activeMission === 'dead-air' || activeMission === 'night-glass' || activeMission === 'long-table') {
-    return <EscapeCaseMission missionId={activeMission} />;
-  }
+  if (isStoryRoomId(activeMission)) return <StoryRoomMission roomId={activeMission} />;
+  if (activeMission === 'dead-air') return <RetiredStoryRoom />;
   return <Line13MissionScreen />;
 }
 
@@ -174,10 +178,12 @@ function Line13MissionScreen() {
   );
   const [secondsLeft, setSecondsLeft] = useState(MISSION_SECONDS);
   const [paused, setPaused] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(!sharedActive && persistedRetries >= escapeAttemptLimit('line-13'));
   const [hintLevel, setHintLevel] = useState(0);
   const [lineOpen, setLineOpen] = useState(false);
   const [retries, setRetries] = useState(sharedActive ? 0 : persistedRetries);
+  const retryCountRef = useRef(retries);
+  retryCountRef.current = retries;
   const [stageRetries, setStageRetries] = useState(0);
   const [directorTick, setDirectorTick] = useState(Date.now());
   const [submittedStageIndex, setSubmittedStageIndex] = useState<number | null>(null);
@@ -188,6 +194,7 @@ function Line13MissionScreen() {
   const stageEnteredAtRef = useRef(Date.now());
   const autoHintedStageRef = useRef<string | undefined>(undefined);
   const pressureRef = useRef(0);
+  const faultGateRef = useRef(0);
   const finaleWindowRef = useRef(false);
   const startedAtRef = useRef(missionStartedAt ?? Date.now());
   const stage = STAGES[stageIndex];
@@ -260,6 +267,16 @@ function Line13MissionScreen() {
   }, [finish, shared.finishedAt, sharedActive]);
 
   useEffect(() => {
+    if (!sharedActive) return;
+    setRetries(shared.attemptsUsed);
+    if (shared.failedAt !== undefined) setFailed(true);
+  }, [shared.attemptsUsed, shared.failedAt, sharedActive]);
+
+  useEffect(() => {
+    if (!sharedActive && retries >= escapeAttemptLimit('line-13')) setFailed(true);
+  }, [retries, sharedActive]);
+
+  useEffect(() => {
     if (!sharedActive || shared.startedAt !== undefined) {
       setRecoveryTimedOut(false);
       return;
@@ -273,8 +290,6 @@ function Line13MissionScreen() {
     const handoffExpired = stage.kind === 'lens' && localNodeId === game.courierNodeId && shared.handoffExpired;
     const timeout = setTimeout(() => {
       setSubmittedStageIndex((current) => current === stageIndex ? null : current);
-      setRetries((current) => current + 1);
-      setStageRetries((current) => current + 1);
       appendEvent(handoffExpired ? 'The courier handoff expired; its lens reopened.' : 'No authority receipt returned; local proof reopened.');
     }, handoffExpired ? 0 : 5_000);
     return () => clearTimeout(timeout);
@@ -309,7 +324,7 @@ function Line13MissionScreen() {
   }, [game, shared, stageIndex]);
 
   const advanceStage = useCallback((event: string, evidence?: CompletionEvidence, force = false) => {
-    if (completedRef.current || (!force && (paused || failed)) || Date.now() - stageEnteredAtRef.current < 320) return;
+    if (completedRef.current || failed || (!force && paused) || retryCountRef.current >= escapeAttemptLimit('line-13') || Date.now() - stageEnteredAtRef.current < 320) return;
     if (sharedActive) {
       if (submittedStageIndex === stageIndex || !shared.requiredNodeIds.includes(shared.localNodeId)) return;
       setSubmittedStageIndex(stageIndex);
@@ -318,8 +333,6 @@ function Line13MissionScreen() {
       void publishSharedCompletion(evidence).then((accepted) => {
         if (accepted) return;
         setSubmittedStageIndex((current) => current === stageIndex ? null : current);
-        setRetries((current) => current + 1);
-        setStageRetries((current) => current + 1);
       });
       return;
     }
@@ -338,12 +351,18 @@ function Line13MissionScreen() {
   }, [appendEvent, failed, finish, paused, play, publishSharedCompletion, settings.haptics, shared.localNodeId, shared.requiredNodeIds, sharedActive, stageIndex, submittedStageIndex]);
 
   const registerFault = useCallback((event: string) => {
+    if (failed || completedRef.current || Date.now() < faultGateRef.current) return;
+    faultGateRef.current = Date.now() + 1000;
     appendEvent(event);
-    setRetries((current) => current + 1);
+    if (sharedActive) void shared.reportMistake();
+    else {
+      retryCountRef.current = Math.min(escapeAttemptLimit('line-13'), retryCountRef.current + 1);
+      setRetries(retryCountRef.current);
+    }
     setStageRetries((current) => current + 1);
     play('warning', 0.5);
     if (settings.haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
-  }, [appendEvent, play, settings.haptics]);
+  }, [appendEvent, failed, play, settings.haptics, shared, sharedActive]);
 
   const handleEvidence = useCallback((evidence: { kind: string; confidence: number; observedAt: number }) => {
     if (paused || failed || evidence.observedAt < stageEnteredAtRef.current) return;
@@ -398,10 +417,7 @@ function Line13MissionScreen() {
   useEffect(() => {
     if (!pressure.offerHint || autoHintedStageRef.current === stage.id) return;
     autoHintedStageRef.current = stage.id;
-    setHintLevel((current) => Math.max(1, current));
-    play('warning', 0.18);
-    if (settings.haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    appendEvent('The local adaptive director opened hint one.');
+    appendEvent('The guide is available if the crew wants to ask a question.');
   }, [appendEvent, play, pressure.offerHint, settings.haptics, stage.id]);
 
   useEffect(() => {
@@ -454,12 +470,6 @@ function Line13MissionScreen() {
     if (sharedActive && shared.abortedAt !== undefined) leaveOperation();
   }, [leaveOperation, shared.abortedAt, sharedActive]);
 
-  const recoverTime = () => {
-    previewDeadlineRef.current += 60_000;
-    setFailed(false);
-    setRetries((current) => current + 1);
-  };
-
   const sharedRequired = !sharedActive || shared.requiredNodeIds.includes(shared.localNodeId);
   const sharedLocalComplete = shared.completedNodeIds.includes(shared.localNodeId);
   const awaitingAuthority = sharedActive && (!shared.startedAt || !sharedRequired || sharedLocalComplete || submittedStageIndex === stageIndex);
@@ -469,6 +479,7 @@ function Line13MissionScreen() {
     <ScreenShell padded={false} texture={false}>
       <View style={[styles.screen, compact && styles.screenCompact, sharedActive && styles.screenWithLine]}>
         <MissionHeader compact={compact} failed={failed} onPause={() => setPauseState(true)} preview={!sharedActive} secondsLeft={secondsLeft} stageIndex={stageIndex} />
+        <Text accessibilityLiveRegion="polite" style={{ color: retries >= 2 ? theme.colors.warning : theme.colors.muted, fontFamily: theme.typography.families.bodyMedium, fontSize: 12, textAlign: 'center' }}>{Math.max(0, escapeAttemptLimit('line-13') - retries)} mistakes left · for the whole room</Text>
         <Animated.View entering={settings.reducedMotion ? undefined : SlideInRight.duration(340)} key={`${stage.id}-${awaitingAuthority ? 'waiting' : 'active'}`} style={styles.scene}>
           <View style={[styles.sceneTitleRow, compact && styles.sceneTitleRowCompact]}>
             <View>
@@ -489,8 +500,7 @@ function Line13MissionScreen() {
           </View>
         </Animated.View>
         {!sharedActive ? <MissionDock assessment={pressure} compact={compact} completedNodeIds={shared.completedNodeIds} crew={crew} hintLevel={hintLevel} localNodeId={localNodeId} onHint={() => {
-          setHintLevel((current) => current >= 3 ? 0 : current + 1);
-          if (hintLevel === 0) appendEvent(`A hint opened during ${stage.id}.`);
+          setHintLevel(1);
         }} sharedActive={sharedActive} /> : null}
         {sharedActive && !paused && !failed ? (
           <HouseLineDock
@@ -502,13 +512,8 @@ function Line13MissionScreen() {
             onGuidePress={() => setHintLevel((current) => Math.max(1, current))}
           />
         ) : null}
-        {hintLevel > 0 ? <AdaptiveGuidePanel accent={theme.colors.wire} assessment={pressure} hint={stage.hints[hintLevel - 1]} level={hintLevel} onClose={() => setHintLevel(0)} onNext={() => setHintLevel((current) => Math.min(3, current + 1))} /> : null}
-        {paused || failed ? <InterruptionSheet failed={failed} live={sharedActive} onBypass={() => {
-          setPauseState(false);
-          setFailed(false);
-          registerFault(`Accessible bypass used on ${stage.id}.`);
-          advanceStage('The phase closed through its fallback.', undefined, true);
-        }} onEnd={endOperation} onRecover={recoverTime} onResume={() => setPauseState(false)} /> : null}
+        <GuideChat context={lineGuideContext(game, stage.kind, localNodeId, stage.title, stage.objective)} hideLauncher open={hintLevel > 0} onOpenChange={(open) => setHintLevel(open ? 1 : 0)} runId={`line-13:${shared.operationId ?? startedAtRef.current}`} stageId={stage.id} mechanic={guideMechanicFor(stage.kind)} roleLabel={localNodeId} accent={theme.colors.wire} onQuestion={() => appendEvent(`The crew asked the guide about ${stage.id}.`)} />
+        {paused || failed ? <InterruptionSheet failed={failed} live={sharedActive} attemptsExhausted={retries >= escapeAttemptLimit('line-13')} review={line13AnswerReview(game).slice(stageIndex)} onEnd={endOperation} onResume={() => setPauseState(false)} /> : null}
       </View>
     </ScreenShell>
   );
@@ -768,6 +773,7 @@ function LensScanner({ markers, motion, onFault, onSolved, play, preview }: {
   const [manual, setManual] = useState(Platform.OS === 'web');
   const [scanLocked, setScanLocked] = useState(false);
   const [cameraError, setCameraError] = useState<string>();
+  const lastRejectedScanRef = useRef<string | undefined>(undefined);
   const acceptedTokensRef = useRef(new Set<string>());
   const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const expected = markers[index];
@@ -783,9 +789,14 @@ function LensScanner({ markers, motion, onFault, onSolved, play, preview }: {
   }, []);
   const handleScan = ({ data }: BarcodeScanningResult) => {
     if (scanLocked || !expected || acceptedTokensRef.current.has(data)) return;
+    if (!markers.some(marker => marker.qrToken === data)) return;
+    if (lastRejectedScanRef.current === `${index}:${data}`) return;
     setScanLocked(true);
     if (data === expected.qrToken) accept();
-    else onFault(`Lens saw the wrong marker for position ${expected.position}.`);
+    else {
+      lastRejectedScanRef.current = `${index}:${data}`;
+      onFault(`Lens saw the wrong marker for position ${expected.position}.`);
+    }
     if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
     unlockTimerRef.current = setTimeout(() => {
       unlockTimerRef.current = undefined;
@@ -923,11 +934,8 @@ function RouteScene({ compact, crew, game, localNodeId, onComplete, onFault, pre
       onComplete();
       return;
     }
-    let prefix = 0;
-    while (prefix < attempt.length && attempt[prefix] === game.circuitOrder[prefix]) prefix += 1;
-    setAttempt(attempt.slice(0, prefix));
     setRejected(true);
-    onFault('The route reached a false exit; its correct prefix stayed wired.');
+    onFault('The circuit did not close. Recheck every tile before another attempt.');
     setTimeout(() => setRejected(false), 900);
   };
   return (
@@ -1217,23 +1225,34 @@ function MissionDock({ assessment, compact, completedNodeIds, crew, hintLevel, l
   );
 }
 
-function InterruptionSheet({ failed, live, onBypass, onEnd, onRecover, onResume }: {
+function line13AnswerReview(game: Line13Game): AnswerReviewItem[] {
+  return [
+    { title: 'Answer the call', answer: 'Open the ringing receiver.', explanation: 'Only the ringing phone opens the call; the other players wait for its signal.' },
+    { title: 'The four-digit warning', answer: game.pin, explanation: `Read the knock positions in order: ${game.cipher.map((glyph) => `${glyph} = ${game.digitDecoder[glyph]}`).join(' · ')}.` },
+    { title: 'Lens seals', answer: game.lensMarkers.map(marker => marker.glyph).join(' → '), explanation: 'The Courier scans the seals in the warning order. The destination player confirms arrival after the Courier.' },
+    { title: 'Close the circuit', answer: game.circuitOrder.join(' → '), explanation: `Start at Source, follow the ${game.phase.toLowerCase()} exits on each private tile, and connect the final exit back to Source.` },
+    { title: 'Close the call', answer: 'All players close their contacts within 1.6 seconds.', explanation: 'Agree on a countdown before pressing. Permission or connection problems do not use an attempt.' },
+  ];
+}
+
+function InterruptionSheet({ failed, live, attemptsExhausted, review, onEnd, onResume }: {
   failed: boolean;
   live: boolean;
-  onBypass: () => void;
+  attemptsExhausted: boolean;
+  review: readonly AnswerReviewItem[];
   onEnd: () => void;
-  onRecover: () => void;
   onResume: () => void;
 }) {
   const { theme } = useHousewireTheme();
   return (
     <View style={styles.interruptionBackdrop}>
-      <Animated.View entering={FadeInDown.duration(220)} style={[styles.interruption, { backgroundColor: theme.colors.surfaceRaised, borderColor: failed ? theme.colors.fault : theme.colors.draft }]}>
+      <Animated.View entering={FadeInDown.duration(220)} style={[styles.interruption, { backgroundColor: theme.colors.surfaceRaised, borderColor: failed ? theme.colors.fault : theme.colors.draft, maxHeight: '90%' }]}>
+        <ScrollView contentContainerStyle={{ gap: 16 }}>
         <Seal label={failed ? 'LINE LOST' : 'PAUSED'} tone={failed ? 'fault' : 'warning'} />
-        <Text style={[styles.interruptionTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{failed ? 'Time caught the call.' : live ? 'Your screen is paused.' : 'The house is waiting.'}</Text>
-        {!failed ? <PrimaryButton icon="play" label="Resume" onPress={onResume} /> : !live ? <PrimaryButton icon="time-outline" label="Add one minute" onPress={onRecover} /> : null}
-        <QuietButton icon="accessibility-outline" label="Skip this puzzle" onPress={onBypass} />
-        <QuietButton icon="exit-outline" label="End game" onPress={onEnd} />
+        <Text style={[styles.interruptionTitle, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{failed ? attemptsExhausted ? 'Three misses. Line closed.' : 'Time caught the call.' : live ? 'Your screen is paused.' : 'The house is waiting.'}</Text>
+        {failed ? <AnswerReview items={review} /> : <PrimaryButton icon="play" label="Resume" onPress={onResume} />}
+        <QuietButton icon="exit-outline" label={failed ? 'Back to games' : 'End game'} onPress={onEnd} />
+        </ScrollView>
       </Animated.View>
     </View>
   );

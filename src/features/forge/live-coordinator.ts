@@ -1,6 +1,10 @@
 import {
   projectForgeCaseForPlayer,
   validateForgeSubmission,
+  FORGE_MAX_ATTEMPTS,
+  forgeFailureReview,
+  forgeResultSpendsAttempt,
+  type ForgeAnswerReview,
   type ForgeCase,
   type ForgePlayerCase,
   type ForgeStageSubmission,
@@ -20,7 +24,10 @@ export interface ForgeLiveRuntimeState {
   title: string;
   accent: string;
   playerCount: number;
-  status: 'waiting' | 'playing' | 'finished' | 'aborted';
+  status: 'waiting' | 'playing' | 'finished' | 'aborted' | 'failed';
+  attemptsUsed: number;
+  failureReview: readonly ForgeAnswerReview[];
+  failedAt?: number;
   revision: number;
   stageIndex: number;
   assignments: readonly ForgeLiveAssignment[];
@@ -65,6 +72,8 @@ export function createForgeLiveRuntime(
     accent: game.accent,
     playerCount: game.playerCount,
     status: 'waiting',
+    attemptsUsed: 0,
+    failureReview: [],
     revision: 0,
     stageIndex: 0,
     assignments: [{
@@ -157,6 +166,7 @@ export function reduceForgeLiveSubmission(
   if (
     state.caseId !== game.id ||
     state.status !== 'playing' ||
+    state.attemptsUsed >= FORGE_MAX_ATTEMPTS ||
     !stage ||
     submittedStageIndex !== state.stageIndex
   ) return unchanged(state, { accepted: false, code: 'INVALID_STAGE' });
@@ -167,15 +177,15 @@ export function reduceForgeLiveSubmission(
   }
 
   if (stage.solution.kind === 'sync') {
-    return reduceSynchronizedProof(state, game, assignment.playerId, submission, acceptedAt);
+    return countWrongSubmission(reduceSynchronizedProof(state, game, assignment.playerId, submission, acceptedAt), game, acceptedAt);
   }
 
   if (stage.solution.kind === 'relay') {
-    return reducePrivateRelayAnswer(state, game, assignment.playerId, submission, acceptedAt);
+    return countWrongSubmission(reducePrivateRelayAnswer(state, game, assignment.playerId, submission, acceptedAt), game, acceptedAt);
   }
 
   const result = validateForgeSubmission(game, state.stageIndex, submission);
-  if (!result.accepted) return unchanged(state, result);
+  if (!result.accepted) return countWrongSubmission(unchanged(state, result), game, acceptedAt);
   return {
     result,
     state: advanceForgeStage(state, game, acceptedAt),
@@ -214,7 +224,7 @@ export function abortForgeLiveRun(
   senderNodeId: string,
   abortedAt: number,
 ): ForgeLiveRuntimeState {
-  if (senderNodeId !== state.hostNodeId || state.status === 'finished' || state.status === 'aborted') return state;
+  if (senderNodeId !== state.hostNodeId || state.status === 'finished' || state.status === 'aborted' || state.status === 'failed') return state;
   return {
     ...state,
     status: 'aborted',
@@ -235,6 +245,9 @@ export function forgeLiveSnapshot(state: ForgeLiveRuntimeState): ForgeSnapshotEv
     accent: state.accent,
     playerCount: state.playerCount,
     status: state.status,
+    attemptsUsed: state.attemptsUsed,
+    failedAt: state.failedAt,
+    failureReview: state.status === 'failed' ? state.failureReview : [],
     revision: state.revision,
     stageIndex: state.stageIndex,
     assignments: [...state.assignments],
@@ -257,6 +270,9 @@ export function forgeLiveRuntimeFromSnapshot(snapshot: ForgeSnapshotEvent): Forg
     accent: snapshot.accent,
     playerCount: snapshot.playerCount,
     status: snapshot.status,
+    attemptsUsed: snapshot.attemptsUsed,
+    failedAt: snapshot.failedAt,
+    failureReview: snapshot.status === 'failed' ? snapshot.failureReview : [],
     revision: snapshot.revision,
     stageIndex: snapshot.stageIndex,
     assignments: snapshot.assignments,
@@ -449,6 +465,24 @@ function unchanged(
   result: ForgeSubmissionResult,
 ): ForgeLiveSubmissionReduction {
   return { result, state, changed: false, advanced: false };
+}
+
+function countWrongSubmission(reduced: ForgeLiveSubmissionReduction, game: ForgeCase, now: number): ForgeLiveSubmissionReduction {
+  if (!forgeResultSpendsAttempt(reduced.result)) return reduced;
+  const attemptsUsed = Math.min(FORGE_MAX_ATTEMPTS, reduced.state.attemptsUsed + 1);
+  const failed = attemptsUsed >= FORGE_MAX_ATTEMPTS;
+  return {
+    ...reduced,
+    changed: true,
+    state: {
+      ...reduced.state,
+      attemptsUsed,
+      status: failed ? 'failed' : reduced.state.status,
+      failedAt: failed ? now : undefined,
+      failureReview: failed ? forgeFailureReview(game, reduced.state.stageIndex) : [],
+      revision: reduced.state.revision + 1,
+    },
+  };
 }
 
 function cleanName(value: string): string {

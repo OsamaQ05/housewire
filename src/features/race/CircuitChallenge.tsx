@@ -22,6 +22,7 @@ import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
 
 import type { CircuitRaceDisplayStage } from './course-projection';
+import { signalVerse } from '../director/guide-context';
 const EMBER = '#FF6846';
 const MINT = '#5FE0D0';
 const GOLD = '#F2C14E';
@@ -296,16 +297,11 @@ function GroundChallenge({ accent, onSubmit, stage }: ExtractProps<'flat-phone'>
 }
 
 function GroundSignalStation({ accent, signalSequence }: { accent: string; signalSequence: readonly CircuitMotionMove[] }) {
-  const { theme } = useHousewireTheme();
   return (
     <View style={styles.challenge}>
-      <RoleStation accent={accent} icon="disc-outline" label="Signal keeper" text="Call these three symbols in order. Your teammate enters them on a board only they can touch." />
-      <View accessibilityLabel={`Secret signal ${signalSequence.map(signalLabel).join(', ')}`} accessible style={[styles.flightPlan, { borderColor: accent }]}>
-        <Text style={[styles.orientationLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Private signal · call in order</Text>
-        <View style={styles.flightMoves}>{signalSequence.map((signal, index) => <View key={`${signal}-${index}`} style={styles.flightMove}><View style={[styles.flightArrow, { borderColor: accent }]}><Ionicons color={accent} name={signalIcon(signal)} size={28} /></View><Text style={[styles.flightIndex, { color: GOLD, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(signal)}</Text></View>)}</View>
-        <View style={[styles.landingStrip, { backgroundColor: accent }]}><Ionicons color="#08100F" name="finger-print-outline" size={25} /><Text style={[styles.landingText, { fontFamily: theme.typography.families.displayHeavy }]}>THEN HOLD THE SEAL</Text></View>
-      </View>
-      <WaitingForTeammate accent={accent} text="Keep the signal private. Their completed seal advances both phones." />
+      <RoleStation accent={accent} icon="book-outline" label="The verse keeper" text="You have the words. They have the symbols. Read each verse aloud; agree on what it describes." />
+      <SignalVerses accent={accent} signals={signalSequence} />
+      <WaitingForTeammate accent={accent} text="The other phone enters your three answers in verse order. Compare all three before trying the lock." />
     </View>
   );
 }
@@ -321,14 +317,10 @@ function GroundActionStation({ accent, challenge, onSubmit }: {
   onSubmit(submission: CircuitRaceSubmission): boolean;
 }) {
   const { theme } = useHousewireTheme();
-  const [manualStartedAt, setManualStartedAt] = useState<number>();
   const [manualMoves, setManualMoves] = useState<CircuitMotionMove[]>([]);
   const [wrong, setWrong] = useState(false);
   const fallbackDone = () => {
-    if (!manualStartedAt) return;
-    const heldMs = Date.now() - manualStartedAt;
-    setManualStartedAt(undefined);
-    const submission: CircuitFlatPhoneSubmission = { mechanic: 'flat-phone', mode: 'manual-hold', heldMs, signalSequence: manualMoves };
+    const submission: CircuitFlatPhoneSubmission = { mechanic: 'flat-phone', mode: 'decoded-signal', signalSequence: manualMoves };
     if (!onSubmit(submission)) {
       setWrong(true);
       setManualMoves([]);
@@ -341,38 +333,34 @@ function GroundActionStation({ accent, challenge, onSubmit }: {
   };
   return (
     <View style={styles.challenge}>
-      {challenge.station === 'GROUND' ? <RoleStation accent={accent} icon="grid-outline" label="Signal operator" text="Listen for three symbol names. Tap them in order, then keep one finger on the seal." /> : <RoleStation accent={accent} icon="grid-outline" label="Signal board" text="Copy the three-symbol key into the board, then hold the seal to close the contact." />}
+      <RoleStation accent={accent} icon="grid-outline" label="The verse lock" text="Three verses describe three symbols. Solve them together, then enter the answers in the order you heard them." />
       {challenge.station === 'FULL' ? (
-        <View accessibilityLabel={`Signal key ${challenge.tiltSequence.map(signalLabel).join(', ')}`} accessible style={[styles.flightPlan, { borderColor: accent }]}>
-          <Text style={[styles.orientationLabel, { color: theme.colors.faint, fontFamily: theme.typography.families.bodyMedium }]}>Your signal key</Text>
-          <View style={styles.flightMoves}>{challenge.tiltSequence.map((signal, index) => <View key={`${signal}-${index}`} style={styles.flightMove}><Ionicons color={accent} name={signalIcon(signal)} size={27} /><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(signal)}</Text></View>)}</View>
-        </View>
+        <SignalVerses accent={accent} signals={challenge.tiltSequence} />
       ) : null}
       <View style={styles.moveRail}>
         {Array.from({ length: challenge.moveCount }, (_, index) => {
           const entered = manualMoves[index];
           return <View key={index} style={[styles.moveSlot, { backgroundColor: entered ? accent : theme.colors.surface, borderColor: entered ? accent : theme.colors.draft }]}>{entered ? <Ionicons color="#08100F" name={signalIcon(entered)} size={22} /> : <Text style={[styles.moveSlotText, { color: theme.colors.faint, fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text>}</View>;
         })}
-        <Ionicons color={manualMoves.length >= challenge.moveCount ? accent : theme.colors.faint} name="add" size={20} />
-        <View style={[styles.moveSlot, { backgroundColor: manualStartedAt ? accent : theme.colors.surface, borderColor: manualMoves.length === challenge.moveCount ? accent : theme.colors.draft }]}><Ionicons color={manualStartedAt ? '#08100F' : theme.colors.faint} name="finger-print-outline" size={22} /></View>
       </View>
       <View style={[styles.fallback, { borderColor: theme.colors.draft }]}>
-          <Text style={[styles.fallbackText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{challenge.station === 'FULL' ? 'Read the private key above. Tap the matching symbols below.' : 'Your teammate has the private key. Enter only what they call.'}</Text>
+          <Text style={[styles.fallbackText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>Choose one symbol for each verse. No movement or hold is needed.</Text>
           <View style={styles.manualDirections}>{SIGNALS.map((move) => <Pressable accessibilityLabel={signalLabel(move)} accessibilityRole="button" disabled={manualMoves.length >= challenge.moveCount} key={move} onPress={() => addManualMove(move)} style={[styles.manualDirection, { borderColor: accent }]}><Ionicons color={accent} name={signalIcon(move)} size={25} /><Text style={[styles.flightLabel, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{signalLabel(move)}</Text></Pressable>)}</View>
           <Pressable accessibilityRole="button" disabled={!manualMoves.length} onPress={() => { setManualMoves((current) => current.slice(0, -1)); setWrong(false); }}><Text style={[styles.accessibleLink, { color: theme.colors.muted, fontFamily: theme.typography.families.bodyMedium }]}>Undo last symbol</Text></Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={manualMoves.length !== challenge.moveCount}
-            onPressIn={() => { setManualStartedAt(Date.now()); setWrong(false); }}
-            onPressOut={fallbackDone}
-            style={({ pressed }) => [styles.holdButton, { borderColor: accent, backgroundColor: pressed ? accent : theme.colors.surface }, manualMoves.length !== challenge.moveCount && styles.disabled]}
-          >
-            <Text style={[styles.holdText, { color: manualStartedAt ? '#08100F' : accent, fontFamily: theme.typography.families.displayHeavy }]}>HOLD SEAL {((challenge.fallback.minimumHoldMs) / 1_000).toFixed(1)}s</Text>
-          </Pressable>
+          <SubmitBar accent={accent} disabled={manualMoves.length !== challenge.moveCount} label="TRY THE VERSE LOCK" onPress={fallbackDone} />
       </View>
-      {wrong ? <ErrorLine text="That signal did not match. Ask the keeper to call all three symbols again." /> : null}
+      {wrong ? <ErrorLine text="Not quite. Re-read the verses together; each wrong attempt adds time to your race." /> : null}
     </View>
   );
+}
+
+function SignalVerses({ accent, signals }: { accent: string; signals: readonly CircuitMotionMove[] }) {
+  const { theme } = useHousewireTheme();
+  return <View style={styles.riddleStack}>{signals.map((signal, index) => <View key={`${signal}-${index}`} style={[styles.riddleCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.draft }]}><View style={[styles.riddleIndex, { backgroundColor: accent }]}><Text style={[styles.riddleIndexText, { fontFamily: theme.typography.families.displayHeavy }]}>{index + 1}</Text></View><Text style={[styles.riddleText, { color: theme.colors.text, fontFamily: theme.typography.families.storyBold }]}>{signalRiddle(signal)}</Text></View>)}</View>;
+}
+
+function signalRiddle(signal: CircuitMotionMove): string {
+  return signalVerse(signal);
 }
 
 function BreakerChallenge({ accent, fragments, onSubmit, stage }: {

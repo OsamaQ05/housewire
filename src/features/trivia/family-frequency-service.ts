@@ -219,19 +219,11 @@ export function adaptAiPack(
 }
 
 async function familyFrequencyServiceUrl(): Promise<string> {
-  const explicit = process.env.EXPO_PUBLIC_HOUSEWIRE_FORGE_URL?.trim();
-  if (explicit) return explicit;
   // Keep the Expo/native dependency out of this pure service boundary until the
   // app actually needs automatic LAN discovery. Tests and cloud builds can pass
   // an explicit HTTPS base URL without loading React Native modules.
-  const { deriveLanRelayUrl } = await import('../session/use-housewire-session');
-  const relay = new URL(deriveLanRelayUrl());
-  relay.protocol = relay.protocol === 'wss:' ? 'https:' : 'http:';
-  relay.port = '8788';
-  relay.pathname = '';
-  relay.search = '';
-  relay.hash = '';
-  return relay.toString().replace(/\/$/, '');
+  const { defaultAiServiceUrl } = await import('../../services/runtime-connections');
+  return defaultAiServiceUrl();
 }
 
 function normalizeFamilyFrequencyServiceUrl(value: string): string {

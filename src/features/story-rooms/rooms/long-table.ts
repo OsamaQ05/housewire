@@ -1,0 +1,70 @@
+import type { StoryRoom } from '../types';
+import { at, before, evidenceStage, nextTo, slots } from './catalog-evidence';
+import { TABLE_CHARACTERS } from './table-characters';
+
+export const LONG_TABLE_ROOM: StoryRoom = {
+  id: 'long-table', title: 'The Long Table', subtitle: 'Build, carry, and discover the surprise.',
+  opening: 'Mina has hidden a surprise above the dinner table. Mend the family photograph, build her marble contraption, carry dessert together, and turn a little lamp into a rooftop invitation.',
+  ending: 'The shadows become a rooftop garden: “Dessert on the roof. Bring everyone.” The photograph, the little machine, the careful journey across the table—every pair of hands helped get the family here.',
+  accent: '#D56644', paper: '#FFF4DC', minutes: 20, attemptLimit: 5,
+  roles: ['Photo keeper', 'Maker', 'Table setter', 'Lamp keeper'],
+  stages: [
+    evidenceStage({
+      id: 'long-table-guests', title: 'Who sat where?', kind: 'table', layout: 'table',
+      interaction: { kind: 'table-scene', mode: 'seating' },
+      story: 'Four people fit on the bench, but the photograph is torn. Put their place cards back using everyone’s scraps.',
+      objective: 'Put one guest in each seat.',
+      instruction: 'Tap a seat marked YOU, then a guest. The bench runs from Door to Kitchen. Ask your family for their photo scraps.',
+      slots: slots('Door end', 'Flower side', 'Window side', 'Kitchen end'),
+      options: [
+        { id: 'mina', label: TABLE_CHARACTERS.mina.name, detail: TABLE_CHARACTERS.mina.detail, icon: 'person' },
+        { id: 'sami', label: TABLE_CHARACTERS.sami.name, detail: TABLE_CHARACTERS.sami.detail, icon: 'person' },
+        { id: 'khalid', label: TABLE_CHARACTERS.khalid.name, detail: TABLE_CHARACTERS.khalid.detail, icon: 'camera' },
+        { id: 'noor', label: TABLE_CHARACTERS.noor.name, detail: TABLE_CHARACTERS.noor.detail, icon: 'person' },
+        { id: 'leila', label: TABLE_CHARACTERS.leila.name, detail: TABLE_CHARACTERS.leila.detail, icon: 'person' },
+      ],
+      answer: ['noor', 'sami', 'leila', 'mina'],
+      revelation: 'The photograph is whole again. Mina points to a box of ramps, a funnel, a spring and a bell: “Before dessert, can we make this work?”',
+      explanation: 'Mina is at Kitchen and Sami sits by Flowers. Noor is doorward of Sami, so Noor takes Door. Leila sits next to Sami, leaving Window. Khalid took the photo rather than sitting on the bench.',
+      hints: ['Two scraps give exact seats. Place those people first.', 'Use “next to” only after placing the person named in that clue.'],
+    }, [
+      { id: 'guest-sami', title: 'A scarf beside the flowers', medium: 'note', lines: ['Sami’s striped scarf touches the flower vase.', 'Sami sits at Flower side.'], rules: [at('sami', 1)] },
+      { id: 'guest-leila', title: 'The blue watch', medium: 'note', lines: ['Leila sits right next to Sami.', 'No one sits between them. The scrap does not show which side.'], rules: [nextTo('sami', 'leila')] },
+      { id: 'guest-mina', title: 'A green sleeve by the kitchen', medium: 'note', lines: ['Mina’s green sleeve is closest to the kitchen doorway.', 'Mina sits at the Kitchen end.'], rules: [at('mina', 3)] },
+      { id: 'guest-noor', title: 'The edge of the photograph', medium: 'note', lines: ['Noor is nearer the Door than Sami.', 'Khalid is taking the photograph, not sitting on the bench.'], rules: [before('noor', 'sami')] },
+    ]),
+    {
+      id: 'long-table-marble', title: 'Make the bell ring', kind: 'table',
+      story: 'Mina’s little machine is already built, but the parts are out of line. Everyone has one adjustment. Can you send the marble all the way to the bell?',
+      objective: 'Guide the marble through all four parts to ring the bell.',
+      instruction: 'Raise or lower your part. Release the marble and watch where the hand-off misses. The spring can bounce gently or more firmly.',
+      slots: slots('Ramp', 'Funnel', 'Spring', 'Bell'), interaction: { kind: 'marble-machine' },
+      options: [], constraints: [], answer: [], clues: [],
+      revelation: 'Ding! Dessert is ready. Now comes the tricky part: getting the wobbly serving tray across a very crowded table.',
+      explanation: 'Each part stays on its own short rail. One working setup: ramp, funnel and spring at their top stops; bell at its second stop from the top; spring on Gentle. Release the marble. Several other setups work too: follow each hand-off rather than guessing a code.',
+      hints: ['Tune the first hand-off before the rest: does the marble reach the funnel?', 'The spring must catch the next drop from the funnel. Adjust their heights together.', 'Watch the bounce. Move the bell onto that arc or change the spring’s strength.'],
+    },
+    {
+      id: 'long-table-serving', title: 'Steady with the dessert', kind: 'table',
+      story: 'The table is crowded, the tray wobbles, and everyone has a handle. Bring Mina’s dessert to the gold serving mat without tipping it.',
+      objective: 'Carry dessert to the gold mat.',
+      instruction: 'Choose a clear route. Opposite handle owners agree on a direction, then the tray slides one step. You never need to tap at the same time.',
+      slots: slots('Rose handle', 'Mint handle', 'Honey handle', 'Plum handle'), interaction: { kind: 'serving-tray' },
+      options: [], constraints: [], answer: [], clues: [],
+      revelation: 'Safely delivered. Under the mat is a little lamp and three paper cut-outs. Mina has one last surprise to show you.',
+      explanation: 'Rose and Mint move sideways; Honey and Plum move lengthways. Both opposite handles must choose the same direction. Dishes block the tray. One clear route is two steps toward the window, three toward the dessert mat, two toward the window, and three toward the dessert mat. This passes the green checkpoint mat, which also recentres a slipping dessert. Opposite pulls can tip dessert, but it is caught safely and you can try again.',
+      hints: ['Look for an open route around the teapot and vase. You do not have to use the shortest route.', 'Wait for your opposite handle. Two pulls in different directions tilt the tray.', 'The green mat in the centre steadies the dessert and saves your progress.'],
+    },
+    {
+      id: 'long-table-shadows', title: 'A room made of shadows', kind: 'table',
+      story: 'The lamp keeper sees the wall. Everyone else holds a paper cut-out. Make their shadows become the place where the surprise is waiting.',
+      objective: 'Build the rooftop picture with shadows.',
+      instruction: 'The lamp keeper describes the gold outlines. Slide, resize and turn your cut-out until its shadow fits. Moving the lamp changes all three shadows.',
+      slots: slots('Lamp', 'Roof cut-out', 'House cut-out', 'Plant cut-out'), interaction: { kind: 'shadow-play' },
+      options: [], constraints: [], answer: [], clues: [],
+      revelation: 'A rooftop garden appears, with lights strung above the plants. “Dessert on the roof. Bring everyone.” The whole family found the surprise together.',
+      explanation: 'The wall’s gold outlines show the required position, scale and orientation. One build: lamp at its second rail stop; roof and house at their third tabletop positions, both large and upright; plant at its sixth position, medium and upright. The lamp keeper describes the wall while each cut-out owner adjusts their physical piece. Another lamp position also works.',
+      hints: ['Work on size and which way is up before tiny position changes.', 'Moving the lamp shifts every shadow. Agree on its position before fine-tuning all the cut-outs.', 'The house doorway belongs at the bottom. The roof point and plant leaves point upward.'],
+    },
+  ],
+};

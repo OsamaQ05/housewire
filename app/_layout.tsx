@@ -22,10 +22,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useCircuitRaceStore } from '@/src/store/use-circuit-race-store';
+import { useConnectionSettingsStore } from '@/src/store/use-connection-settings-store';
 import { HousewireThemeProvider } from '@/src/theme';
 import { HousewireSessionProvider } from '@/src/features/session';
 import { CircuitRaceRuntimeProvider } from '@/src/features/race';
 import { HousewireSoundProvider } from '@/src/hooks/use-housewire-sound';
+import { ClubHistorySync } from '@/src/features/family-club/ClubHistorySync';
+import { StoryRoomRuntime } from '@/src/features/story-rooms/StoryRoomRuntime';
+import { HousewireMusic } from '@/src/features/music/HousewireMusic';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -37,6 +41,7 @@ export default function RootLayout() {
   const settings = useHousewireStore((state) => state.settings);
   const hydrated = useHousewireStore((state) => state.hydrated);
   const raceHydrated = useCircuitRaceStore((state) => state.hydrated);
+  const connectionsHydrated = useConnectionSettingsStore((state) => state.hydrated);
   const [fontsLoaded, fontError] = useFonts({
     BarlowCondensed_700Bold,
     BarlowCondensed_800ExtraBold,
@@ -47,16 +52,16 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && hydrated && raceHydrated) {
+    if ((fontsLoaded || fontError) && hydrated && raceHydrated && connectionsHydrated) {
       void SplashScreen.hideAsync();
     }
-  }, [fontError, fontsLoaded, hydrated, raceHydrated]);
+  }, [fontError, fontsLoaded, hydrated, raceHydrated, connectionsHydrated]);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(settings.daylight ? '#F7EEDB' : '#15223A');
   }, [settings.daylight]);
 
-  if ((!fontsLoaded && !fontError) || !hydrated || !raceHydrated) return null;
+  if ((!fontsLoaded && !fontError) || !hydrated || !raceHydrated || !connectionsHydrated) return null;
 
   const navigationTheme = {
     ...DarkTheme,
@@ -78,9 +83,12 @@ export default function RootLayout() {
         reduceMotion={settings.reducedMotion}
       >
         <HousewireSoundProvider>
+          <HousewireMusic />
           <HousewireSessionProvider>
+            <StoryRoomRuntime />
             <CircuitRaceRuntimeProvider>
               <ThemeProvider value={navigationTheme}>
+                <ClubHistorySync />
                 <Stack
                   screenOptions={{
                     animation: settings.reducedMotion ? 'none' : 'fade',

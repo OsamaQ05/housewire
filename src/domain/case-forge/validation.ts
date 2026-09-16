@@ -343,8 +343,11 @@ export function validateForgeCase(value: unknown): ForgeCaseValidation {
     if (new Set(mechanicKinds).size !== mechanicKinds.length || !mechanicKinds.includes('split-riddle')) {
       issue(issues, 'MECHANIC_VARIETY', 'stages', 'A version-two cut needs five distinct mechanics including one canonical split riddle.');
     }
-    if (mechanicKinds.at(-1) !== 'motion-sync') {
+    if (game.generatorVersion === 'housewire-local-forge-v2' && mechanicKinds.at(-1) !== 'motion-sync') {
       issue(issues, 'FINALE_MECHANIC', 'stages', 'The synchronized physical proof must remain the finale.');
+    }
+    if (game.generatorVersion === 'housewire-local-forge-v3' && mechanicKinds.at(-1) !== 'distributed-order') {
+      issue(issues, 'FINALE_MECHANIC', 'stages', 'Version-three cases finish with a cooperative reconstruction.');
     }
   }
   const clueIds = game.stages.flatMap((stage) => stage.clues.map((clue) => clue.id));
@@ -402,16 +405,14 @@ export function assertPlayableForgeCase(value: unknown): ForgeCase {
 }
 
 function prefixResult<T>(expected: readonly T[], submitted: readonly T[], stageId: string): ForgeSubmissionResult {
+  if (submitted.length < expected.length) return { accepted: false, code: 'INCOMPLETE', stageId, expectedLength: expected.length };
   let acceptedPrefixLength = 0;
   const comparableLength = Math.min(expected.length, submitted.length);
   while (acceptedPrefixLength < comparableLength && expected[acceptedPrefixLength] === submitted[acceptedPrefixLength]) {
     acceptedPrefixLength += 1;
   }
   if (acceptedPrefixLength < comparableLength || submitted.length > expected.length) {
-    return { accepted: false, code: 'WRONG_VALUE', stageId, acceptedPrefixLength, expectedLength: expected.length };
-  }
-  if (submitted.length < expected.length) {
-    return { accepted: false, code: 'INCOMPLETE', stageId, acceptedPrefixLength, expectedLength: expected.length };
+    return { accepted: false, code: 'WRONG_VALUE', stageId, expectedLength: expected.length };
   }
   return { accepted: true, code: 'ACCEPTED', stageId, acceptedPrefixLength, expectedLength: expected.length };
 }
@@ -429,7 +430,7 @@ export function validateForgeSubmission(
     case 'sequence':
       return prefixResult(solution.answer, (submission as Extract<ForgeStageSubmission, { kind: 'sequence' }>).value, stage.id);
     case 'word': {
-      const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'word' }>).value.trim().toLowerCase();
+      const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'word' }>).value.trim().toLowerCase().replace(/^(a|an|the)\s+/, '').replace(/[\s_]+/g, '-');
       return submitted === solution.answer
         ? { accepted: true, code: 'ACCEPTED', stageId: stage.id }
         : { accepted: false, code: submitted ? 'WRONG_VALUE' : 'INCOMPLETE', stageId: stage.id };
@@ -437,13 +438,10 @@ export function validateForgeSubmission(
     case 'code': {
       const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'code' }>).value.trim();
       if (submitted === solution.answer) return { accepted: true, code: 'ACCEPTED', stageId: stage.id, acceptedPrefixLength: submitted.length, expectedLength: solution.answer.length };
-      const acceptedPrefixLength = [...submitted].findIndex((character, index) => solution.answer[index] !== character);
-      const prefix = acceptedPrefixLength < 0 ? Math.min(submitted.length, solution.answer.length) : acceptedPrefixLength;
       return {
         accepted: false,
-        code: solution.answer.startsWith(submitted) ? 'INCOMPLETE' : 'WRONG_VALUE',
+        code: submitted.length < solution.answer.length ? 'INCOMPLETE' : 'WRONG_VALUE',
         stageId: stage.id,
-        acceptedPrefixLength: prefix,
         expectedLength: solution.answer.length,
       };
     }
@@ -472,8 +470,13 @@ export function validateForgeSubmission(
       }
       return { accepted: true, code: 'ACCEPTED', stageId: stage.id, acceptedPrefixLength, expectedLength: solution.rounds.length };
     }
-    case 'route':
-      return prefixResult(solution.answer, (submission as Extract<ForgeStageSubmission, { kind: 'route' }>).value, stage.id);
+    case 'route': {
+      const submitted = (submission as Extract<ForgeStageSubmission, { kind: 'route' }>).value;
+      const atExit = stage.mechanic.kind === 'route-grid' && submitted.at(-1) === stage.mechanic.exitCell;
+      const completeMatch = sameArray(solution.answer, submitted);
+      if (completeMatch) return { accepted: true, code: 'ACCEPTED', stageId: stage.id };
+      return { accepted: false, code: atExit ? 'WRONG_VALUE' : 'INCOMPLETE', stageId: stage.id };
+    }
     case 'sync': {
       const submitted = submission as Extract<ForgeStageSubmission, { kind: 'sync' }>;
       if (

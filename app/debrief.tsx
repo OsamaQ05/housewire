@@ -6,6 +6,7 @@ import { missions } from '@/src/data/campaigns';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 import { formatClock } from '@/src/utils/format';
+import { ClubLink } from '@/src/features/family-club/ClubLink';
 
 const CASE_ART = {
   'line-13': require('../assets/art/line13-house-v2.png'),
@@ -98,6 +99,7 @@ export default function DebriefScreen() {
         </View>
 
         <View style={styles.actions}>
+          <ClubLink label="See your family standings" />
           <BreakerButton haptic="rigid" label="Play again" onPress={replay} overline="NEW PUZZLE SEED" />
           <BreakerButton label="Back home" onPress={() => router.replace('/home')} variant="secondary" />
         </View>

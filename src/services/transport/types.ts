@@ -15,7 +15,8 @@ export interface PublishOptions {
   clientSentAt?: number;
 }
 
-export const MAXIMUM_RELAY_MESSAGE_BYTES = 140 * 1024;
+// A bounded 512 KiB voice note plus base64 expansion and transport envelopes.
+export const MAXIMUM_RELAY_MESSAGE_BYTES = 768 * 1024;
 
 export function utf8ByteLength(value: string): number {
   let bytes = 0;

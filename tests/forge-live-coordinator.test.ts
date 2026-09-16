@@ -23,6 +23,7 @@ import {
   parseForgeLiveDirectMessage,
 } from '../src/features/forge/live-protocol';
 import { housewireSessionEventSchema } from '../src/features/session/protocol';
+import { withLegacySyncFinale } from './legacy-forge-fixture';
 
 function makeGame(playerCount = 3): ForgeCase {
   const playerIds = Array.from({ length: playerCount }, (_, index) => `player-${index + 1}`);
@@ -116,7 +117,7 @@ describe('generated live Case Forge coordinator', () => {
     if (orderMechanic) expect(orderMechanic).not.toHaveProperty('adjacentConstraints');
     if (routeMechanic) expect(routeMechanic).not.toHaveProperty('openEdges');
     expect(riddleMechanic?.kind).toBe('split-riddle');
-    expect(syncMechanic?.kind).toBe('motion-sync');
+    expect(syncMechanic).toBeUndefined();
     if (syncMechanic?.kind === 'motion-sync') {
       expect(syncMechanic.assignments).toHaveLength(1);
       expect(syncMechanic.assignments[0]?.playerId).toBe(projection.role.playerId);
@@ -182,7 +183,7 @@ describe('generated live Case Forge coordinator', () => {
   });
 
   it('collects one synchronized proof per assigned phone and expires stale proof windows', () => {
-    const game = makeGame();
+    const game = withLegacySyncFinale(makeGame());
     const syncIndex = game.stages.findIndex((stage) => stage.mechanic.kind === 'motion-sync');
     if (syncIndex < 0) throw new Error('Expected the generated sync finale.');
     let state = readyRuntime(game);

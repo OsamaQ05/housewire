@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 24.5.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "environment": "preview",
+      "node": "24.11.0",
+      "env": {
+        "HOUSEWIRE_ALLOW_LAN": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "developmentClient": false,
+      "environment": "production",
+      "node": "24.11.0",
+      "env": {
+        "HOUSEWIRE_ALLOW_LAN": "0"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

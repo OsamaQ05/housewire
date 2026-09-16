@@ -9,6 +9,7 @@ node_modules/
 dist/
 dist-web/
 dist-android*/
+dist-ios/
 web-build/
 expo-env.d.ts
 
@@ -53,3 +54,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Downloaded install packages and build-inspection output
+/downloads/
+/dist-downloadable/
+/dist-story-rooms/
+/dist-story-ios/
+/dist-variety-review/
+*.apk
+*.aab

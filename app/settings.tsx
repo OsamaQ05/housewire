@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { BreakerButton, OperationalLabel, ScreenShell, SectionHeader } from '@/src/components';
 import { clearAllForgeStorage } from '@/src/features/forge/forge-storage';
+import { ConnectionSettingsPanel } from '@/src/features/settings/ConnectionSettingsPanel';
 import { useHousewireStore } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 
@@ -20,7 +21,8 @@ export default function SettingsScreen() {
     { key: 'reducedMotion' as const, label: 'Reduce movement', detail: 'Replaces traveling signals with immediate state changes.' },
     { key: 'highContrast' as const, label: 'High contrast', detail: 'Strengthens all labels, routes and fault states.' },
     { key: 'haptics' as const, label: 'Haptic signals', detail: 'Tactile cues always keep visual equivalents.' },
-    { key: 'sound' as const, label: 'House audio', detail: 'Original mechanical cues and distributed tones.' },
+    { key: 'sound' as const, label: 'Sound effects', detail: 'Mechanical cues, puzzle tones and feedback.' },
+    { key: 'music' as const, label: 'Background music', detail: 'A different original score for each game. Pauses for voice notes.' },
   ];
 
   return (
@@ -65,10 +67,12 @@ export default function SettingsScreen() {
           })}
         </View>
 
+        <ConnectionSettingsPanel />
+
         <View style={[styles.privacy, { borderColor: theme.colors.draft }]}>
           <OperationalLabel indicator status="ready">privacy circuit closed</OperationalLabel>
           <Text style={[styles.privacyText, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>
-            Camera frames are processed live and never stored. DEAD AIR uses the microphone only for local sound levels or a 1.8-second private audio burst; recorded audio is removed after playback. Solo play needs no account, API key or backend.
+            Camera frames are processed live and never stored. The microphone is used only when you choose to record. Voice notes can last up to 30 seconds and expire after playback or 90 seconds. Music stays on your phone and needs no account or connection.
           </Text>
         </View>
 
@@ -91,7 +95,7 @@ export default function SettingsScreen() {
           <View style={[styles.resetDialog, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.fault }]}>
             <OperationalLabel tone="fault">LOCAL RESET</OperationalLabel>
             <Text accessibilityRole="header" style={[styles.resetTitle, { color: theme.colors.text, fontFamily: theme.typography.families.displayHeavy }]}>Replay the first wake?</Text>
-            <Text style={[styles.resetBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>This clears every local case result, current run, room choice, setting, and tutorial state. It cannot be undone.</Text>
+            <Text style={[styles.resetBody, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>This resets the escape setup, generated casebook, room choices, settings, and tutorial. Your Family Club player cards and game history are kept.</Text>
             <View style={styles.resetActions}>
               <Pressable
                 accessibilityRole="button"
@@ -101,7 +105,7 @@ export default function SettingsScreen() {
                 <Text style={[styles.dialogButtonText, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>Keep my casebook</Text>
               </Pressable>
               <Pressable
-                accessibilityHint="Permanently clears all local HOUSEWIRE progress"
+                accessibilityHint="Resets escape setup and tutorials while keeping Family Club history"
                 accessibilityRole="button"
                 onPress={() => {
                   setConfirmingReset(false);
@@ -112,7 +116,7 @@ export default function SettingsScreen() {
                 }}
                 style={({ pressed }) => [styles.dialogButton, { backgroundColor: theme.colors.fault, borderColor: theme.colors.fault }, pressed && styles.pressed]}
               >
-                <Text style={[styles.dialogButtonText, { color: theme.colors.textInverse, fontFamily: theme.typography.families.bodyMedium }]}>Clear everything</Text>
+                <Text style={[styles.dialogButtonText, { color: theme.colors.textInverse, fontFamily: theme.typography.families.bodyMedium }]}>Reset setup</Text>
               </Pressable>
             </View>
           </View>

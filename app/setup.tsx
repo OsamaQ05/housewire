@@ -10,12 +10,13 @@ import {
   type HouseRoom,
 } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
+import { HostPlayerPicker } from '@/src/features/family-club/PlayerPicker';
 
 const CASE_ROOM_COPY = {
   'line-13': 'No stairs or obstacles. Keep at least two clear stations.',
   'dead-air': 'No stairs or obstacles. Keep at least two quiet stations.',
   'night-glass': 'No stairs or obstacles. Keep at least two well-lit stations.',
-  'long-table': 'Clear one shared table or floor area, plus a safe path to household objects.',
+  'long-table': 'Choose comfortable places to sit. You can play around one table or talk between rooms.',
 } as const;
 
 export default function SetupScreen() {
@@ -164,10 +165,11 @@ export default function SetupScreen() {
           </View>
           <View style={styles.playModeCopy}>
             <Text style={[styles.playModeTitle, { color: theme.colors.text, fontFamily: theme.typography.families.bodyMedium }]}>{sessionMode === 'lan' ? 'Playing together on nearby phones' : 'Trying every role on this phone'}</Text>
-            <Text style={[styles.playModeMeta, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{sessionMode === 'lan' ? 'The next screen shows one QR for everyone.' : 'The app will tell you when to pass the phone.'}</Text>
+            <Text style={[styles.playModeMeta, { color: theme.colors.muted, fontFamily: theme.typography.families.body }]}>{sessionMode === 'lan' ? 'The next screen shows one QR for everyone.' : 'Switch between You and Partner to explore both sets of clues.'}</Text>
           </View>
         </View>
 
+        {sessionMode === 'lan' ? <HostPlayerPicker /> : null}
         <PrimaryAction
           disabled={safeRooms.length < 2}
           label={sessionMode === 'lan' ? 'Show the join QR' : 'Start the case'}

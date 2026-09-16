@@ -27,14 +27,14 @@ const PAGES = [
     note: 'No account or setup quiz.',
   },
   {
-    title: 'One phone hosts.',
-    body: 'For multiplayer games, the host shows a QR. Everyone else scans it and receives a private role.',
-    note: 'You can preview every game on one phone.',
+    title: 'Different clues. One team.',
+    body: 'One person opens a game. Everyone else joins with its QR. In escape rooms, describe your private clues and build the answer together.',
+    note: 'Or try both viewpoints on one phone.',
   },
   {
-    title: 'Help appears when needed.',
-    body: 'The AI Guide notices when you are stuck and offers a small hint. Camera or microphone access appears only inside a puzzle that needs it.',
-    note: 'Permissions are optional.',
+    title: 'Ask when you need a nudge.',
+    body: 'In a case, open Guide chat and ask about the clue you are working on. It helps you reason without handing over the solution.',
+    note: 'Camera and microphone are always your choice.',
   },
 ] as const;
 

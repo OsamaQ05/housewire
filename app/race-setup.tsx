@@ -11,6 +11,7 @@ import { useCircuitRaceStore } from '@/src/store/use-circuit-race-store';
 import { useHousewireStore, type CrewNode } from '@/src/store/use-housewire-store';
 import { useHousewireTheme } from '@/src/theme';
 import { decorativeAccessibilityProps } from '@/src/utils/accessibility';
+import { HostPlayerPicker } from '@/src/features/family-club/PlayerPicker';
 
 const EMBER = '#FF6846';
 const MINT = '#5FE0D0';
@@ -30,10 +31,12 @@ export default function RaceSetupScreen() {
   const setSeed = useCircuitRaceStore((state) => state.setSeed);
 
   const hostLive = () => {
+    const house = useHousewireStore.getState();
+    const currentPlayer = house.crew.find((p) => p.id === house.localNodeId);
     const host: CrewNode = {
       id: 'local',
-      name: 'Host phone',
-      initials: 'H',
+      name: currentPlayer?.name ?? 'You',
+      initials: currentPlayer?.initials ?? 'Y',
       nodeNumber: 1,
       role: 'relay',
       roomId: safeRoom?.id ?? 'living',
@@ -87,6 +90,7 @@ export default function RaceSetupScreen() {
           <Rule accent="#F2C14E" icon="link-outline" label="Finish" value="Teammates combine private pieces to close the breaker." />
         </Animated.View>
 
+        <View style={{ paddingHorizontal: 20 }}><HostPlayerPicker /></View>
         <View style={styles.actions}>
           <Pressable accessibilityHint="Creates a nearby race room and QR code" accessibilityRole="button" onPress={hostLive} style={({ pressed }) => [styles.liveButton, pressed && styles.pressed]}>
             <View style={[styles.liveHalf, styles.liveHalfLeft, { backgroundColor: EMBER }]} />

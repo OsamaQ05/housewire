@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type {
   ForgeCase,
@@ -32,6 +33,7 @@ import {
   parseForgeLiveDirectMessage,
   type ForgeLiveDirectMessage,
 } from './live-protocol';
+import { forgeLiveCheckpointKey, parseForgeLiveCheckpoint } from './live-checkpoint';
 
 interface UseLiveForgeCoordinatorOptions {
   caseId: string;
@@ -55,11 +57,18 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
   const processedDirectIdsRef = useRef(new Set<string>());
   const pendingRef = useRef(new Map<string, PendingRequest>());
   const joinRequestKeyRef = useRef<string | undefined>(undefined);
+  const checkpointKey = forgeLiveCheckpointKey(session.sessionId, caseId, session.localNodeId);
+  const [hydratedKey, setHydratedKey] = useState('');
+  const writesRef = useRef(Promise.resolve());
 
   const commit = useCallback((next: ForgeLiveRuntimeState | undefined) => {
     stateRef.current = next;
     setState(next);
-  }, []);
+    if (next) {
+      const serialized = JSON.stringify(forgeLiveSnapshot(next));
+      writesRef.current = writesRef.current.then(() => AsyncStorage.setItem(checkpointKey, serialized)).catch(() => undefined);
+    }
+  }, [checkpointKey]);
 
   const publishSnapshot = useCallback(async (next: ForgeLiveRuntimeState) => {
     if (!session.isHost || session.connectionState !== 'connected') return;
@@ -103,10 +112,19 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
     commit(undefined);
     setProjection(undefined);
     setLastError(undefined);
-  }, [caseId, commit, session.localNodeId, session.sessionId]);
+    setHydratedKey('');
+    let cancelled = false;
+    void writesRef.current.then(() => AsyncStorage.getItem(checkpointKey)).then((serialized) => {
+      if (cancelled || !serialized) return;
+      const restored = parseForgeLiveCheckpoint(serialized, caseId, session.localNodeId);
+      const current = stateRef.current;
+      if (restored && (!current || (restored.operationId === current.operationId && restored.revision > current.revision))) commit(restored);
+    }).catch(() => undefined).finally(() => { if (!cancelled) setHydratedKey(checkpointKey); });
+    return () => { cancelled = true; };
+  }, [caseId, commit, session.localNodeId, session.sessionId, checkpointKey]);
 
   useEffect(() => {
-    if (!session.enabled || session.feed.length === 0) return;
+    if (!session.enabled || session.feed.length === 0 || hydratedKey !== checkpointKey) return;
     for (const item of session.feed) {
       if (processedEventIdsRef.current.has(item.eventId)) continue;
       processedEventIdsRef.current.add(item.eventId);
@@ -159,10 +177,10 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
     if (processedEventIdsRef.current.size > 768) {
       processedEventIdsRef.current = new Set(session.feed.map((item) => item.eventId));
     }
-  }, [caseId, commit, game, publishSnapshot, sendProjection, session]);
+  }, [caseId, commit, game, publishSnapshot, sendProjection, session, hydratedKey, checkpointKey]);
 
   useEffect(() => {
-    if (!session.enabled || session.directFeed.length === 0) return;
+    if (!session.enabled || session.directFeed.length === 0 || hydratedKey !== checkpointKey) return;
     for (const item of session.directFeed) {
       if (processedDirectIdsRef.current.has(item.messageId)) continue;
       processedDirectIdsRef.current.add(item.messageId);
@@ -256,7 +274,7 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
     if (processedDirectIdsRef.current.size > 128) {
       processedDirectIdsRef.current = new Set(session.directFeed.map((item) => item.messageId));
     }
-  }, [caseId, commit, game, publishSnapshot, session]);
+  }, [caseId, commit, game, publishSnapshot, session, hydratedKey, checkpointKey]);
 
   useEffect(() => {
     if (
@@ -264,6 +282,7 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
       !session.isHost ||
       !game ||
       session.connectionState !== 'connected' ||
+      hydratedKey !== checkpointKey ||
       state !== undefined
     ) return;
     const timer = setTimeout(() => {
@@ -280,7 +299,7 @@ export function useLiveForgeCoordinator({ caseId, game, localName }: UseLiveForg
       void publishSnapshot(next);
     }, 450);
     return () => clearTimeout(timer);
-  }, [commit, game, localName, publishSnapshot, session, state]);
+  }, [commit, game, localName, publishSnapshot, session, state, hydratedKey, checkpointKey]);
 
   useEffect(() => {
     if (
